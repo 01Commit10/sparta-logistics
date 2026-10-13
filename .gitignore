@@ -39,4 +39,5 @@ out/
 ### 환경 변수 ###
 .env
 
-### application yml ***
+### postgreSQL 로컬 데이터 ***
+pgdata/

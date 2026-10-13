@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:18
+    env_file:
+      - .env
+    container_name: sparta-logistics-postgres
+    ports:
+      - "${DB_PORT}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      TZ: Asia/Seoul
+    volumes:
+      # 로컬의 pgdata 폴더와 도커 내부 데이터를 동기화 (영구 저장)
+      - ./pgdata:/var/lib/postgresql/data
