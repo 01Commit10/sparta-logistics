@@ -1,0 +1,5 @@
+description = 'order-service'
+
+dependencies {
+    // 필요한 종속성 필요에 따라 추가. 기본 종속성은 root 경로의 build.gradle에서 가져옴.
+}

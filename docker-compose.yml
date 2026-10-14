@@ -1,8 +1,6 @@
 services:
   postgres:
     image: postgres:18
-    env_file:
-      - .env
     container_name: sparta-logistics-postgres
     ports:
       - "${DB_PORT}:5432"
@@ -13,4 +11,10 @@ services:
       TZ: Asia/Seoul
     volumes:
       # 로컬의 pgdata 폴더와 도커 내부 데이터를 동기화 (영구 저장)
-      - ./pgdata:/var/lib/postgresql/data
+      - ./pgdata:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10

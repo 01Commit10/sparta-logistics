@@ -1,1 +1,19 @@
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
+}
+
 rootProject.name = 'sparta_logistics'
+
+// 공통
+include 'common'
+
+// 인프라
+include 'eureka-server'
+include 'gateway-server'
+
+// 도메인 서비스
+include 'company-service'
+include 'delivery-service'
+include 'hub-service'
+include 'order-service'
+include 'user-service'

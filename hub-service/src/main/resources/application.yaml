@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: hub-service
+  profiles:
+    include: common
+
+
+server:
+  port: 19093
+
+db:
+  schema: hub
