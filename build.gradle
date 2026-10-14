@@ -55,7 +55,7 @@ subprojects {
 }
 
 // 도메인 서비스 공통
-configure(subprojects.findAll { it.name.endsWith('-service') }) {
+configure(subprojects.findAll { it.name.endsWith('-ms') }) {
     apply plugin: 'org.springframework.boot'
 
     dependencies {
