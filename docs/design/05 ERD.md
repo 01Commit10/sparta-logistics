@@ -102,9 +102,10 @@ erDiagram
         VARCHAR slack_id "(80)"
         VARCHAR role "(20) CK MASTER/USER"
         BOOLEAN is_delivery_manager "DEFAULT false"
-        VARCHAR organization_type "(20) CK COMPANY/HUB"
+        VARCHAR organization_type "(20) CK COMPANY/HUB/HQ"
         VARCHAR organization_name "(150)"
-        UUID organization_uuid "REF 업체 또는 허브, NULL=미연결"
+        UUID organization_id "REF 업체 또는 허브, NULL=미연결"
+        BOOLEAN password_change_required "DEFAULT false"
     }
 
     %% ───────── hub ─────────
@@ -246,7 +247,7 @@ erDiagram
     p_orders ||..o{ p_delivery_histories : "원본 주문"
 ```
 
-> `p_users.organization_uuid`는 `organization_type`에 따라 `p_companies.id` 또는 `p_hubs.id`를 가리키는 **조건부 REF**라서 다이어그램에는 관계선으로 그리지 않았습니다.
+> `p_users.organization_id`는 `organization_type`에 따라 `p_companies.id` 또는 `p_hubs.id`를 가리키는 **조건부 REF**라서 다이어그램에는 관계선으로 그리지 않았습니다.
 
 ---
 
@@ -256,10 +257,10 @@ erDiagram
 
 | 테이블 | 역할 | 핵심 제약 |
 |---|---|---|
-| `p_users` | 계정, 권한(MASTER/USER), 배송담당 여부, 소속 조직 | `username` UNIQUE · `role`·`organization_type` CHECK |
+| `p_users` | 계정, 권한(MASTER/USER), 배송담당 여부, 소속 조직 | `username` UNIQUE · `slack_id` 부분 UNIQUE · `role`·`organization_type` CHECK |
 
 - 배송담당자는 별도 엔티티 없이 `is_delivery_manager` 플래그로 구분합니다.
-- 가입 시 소속 유형·이름만 받고, 조직 확인 후 `organization_uuid`를 연결합니다(그전까지 NULL).
+- 가입 시 소속 유형·이름만 받고, 조직 확인 후 `organization_id`를 연결합니다(그전까지 NULL).
 
 ### hub — Hub/Inventory Service
 
@@ -332,7 +333,7 @@ erDiagram
 | p_delivery_routes | delivery_manager_id | p_users | REF | N:0..1 |
 | p_delivery_histories | delivery_id | p_deliveries | FK | N:0..1 |
 | p_delivery_histories | order_id | p_orders | REF | N:1 |
-| p_users | organization_uuid | p_companies / p_hubs | REF (조건부) | N:0..1 |
+| p_users | organization_id | p_companies / p_hubs | REF (조건부) | N:0..1 |
 
 ---
 

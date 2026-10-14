@@ -10,21 +10,32 @@
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 회원가입 | POST | `/auth/signup` | 비회원 | 회원 및 소속 정보 | 201 |
-| 로그인 | POST | `/auth/login` | 비회원 | username, password | 200 |
+| 회원가입 | POST | `/auth/signup` | 비회원 | 회원 및 소속 정보 (organizationType: COMPANY·HUB) | 201 |
+| ID 중복 확인 | GET | `/auth/check-username` | 비회원 | username | 200 (available) |
+| 로그인 | POST | `/auth/login` | 비회원 | username, password | 200 (accessToken, refreshToken, passwordChangeRequired) |
+| 토큰 재발급 | POST | `/auth/reissue` | 비회원 | refreshToken | 200 (accessToken, refreshToken) |
+| 로그아웃 | POST | `/auth/logout` | 로그인 | - | 204 |
+
+*토큰 정책과 Gateway 검증 순서는 [[SYS-01 게이트웨이 인증 인가 설계]]를 따릅니다.*
 
 ## User
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
 | 내 정보 조회 | GET | `/users/me` | 로그인 | - | 200 |
-| 내 정보 수정 | PATCH | `/users/me` | 로그인 | name, slackId | 200 |
-| 사용자 목록 조회 | GET | `/users` | MASTER | 검색·페이지 조건 | 200 |
+| 내 정보 수정 | PATCH | `/users/me` | 로그인 | slackId | 200 |
+| 비밀번호 변경 | PATCH | `/users/me/password` | 로그인 | currentPassword, newPassword | 204 |
+| 회원탈퇴 | DELETE | `/users/me` | 로그인 | password | 204 |
+| 사용자 생성 | POST | `/users` | MASTER | 회원가입 항목 + role, isDeliveryManager | 201 |
+| 사용자 목록 조회 | GET | `/users` | MASTER | username, name, role, isDeliveryManager, organizationType, includeDeleted, page, size, sort | 200 |
 | 사용자 상세 조회 | GET | `/users/{userId}` | MASTER | userId | 200 |
+| 사용자 정보 수정 | PATCH | `/users/{userId}` | MASTER | name, slackId, organizationType, organizationName | 200 |
 | 사용자 권한 변경 | PATCH | `/users/{userId}/role` | MASTER | role | 200 |
 | 배송담당자 지정 | PATCH | `/users/{userId}/delivery-manager` | MASTER | isDeliveryManager | 200 |
-| 사용자 소속 연결 | PATCH | `/users/{userId}/organization` | MASTER | organizationType, organizationUuid | 200 |
+| 사용자 소속 연결 | PATCH | `/users/{userId}/organization` | MASTER | organizationType, organizationId (COMPANY·HUB만) | 200 |
 | 사용자 비활성화 | DELETE | `/users/{userId}` | MASTER | userId | 204 |
+| 사용자 재활성화 | POST | `/users/{userId}/restore` | MASTER | userId | 200 |
+| 비밀번호 초기화 | POST | `/users/{userId}/password-reset` | MASTER | userId (오프라인 문의 후 실행) | 200 (temporaryPassword, 1회만 노출) |
 
 ## Hub
 
@@ -121,17 +132,21 @@
 
 | 기능 | Method | Endpoint | 호출 목적 |
 |---|---|---|---|
-| 사용자 검증 | GET | `/users/{userId}` | 사용자·배송담당자 확인 |
+| 사용자 검증 | GET | `/users/{userId}` | 사용자·배송담당자 확인. 응답: id, name, role, isDeliveryManager, slackId, active. 삭제된 사용자는 404 |
 | 허브 검증 | GET | `/hubs/{hubId}` | 허브 존재 여부 확인 |
 | 상품 검증 | GET | `/products/{productId}` | 상품·공급업체 확인 |
 | 업체 검증 | GET | `/companies/{companyId}` | 업체·관리 허브 확인 |
 | 재고 차감 | POST | `/inventories/decrease` | 주문 시 원자적 재고 차감 |
 | 재고 복원 | POST | `/inventories/restore` | Saga 실패 시 보상 트랜잭션 |
+| 허브 경로 조회 | GET | `/hub-routes?departureHubId={id}&arrivalHubId={id}` | 배송 구간 자동 생성 시 거리·예상 소요시간 확인 |
 | 배송 생성 | POST | `/deliveries` | 주문에 연결된 배송 생성 |
+| 배송 취소 | POST | `/deliveries/{deliveryId}/cancel` | 주문 취소 시 배송·구간 취소 (Saga 보상) |
 | 주문 완료 처리 | POST | `/orders/{orderId}/complete` | Saga 완료 상태 반영 |
 | 주문 실패 처리 | POST | `/orders/{orderId}/fail` | Saga 실패 상태 반영 |
 
 *내부 API는 일반 사용자에게 공개하지 않으며 서비스 간 인증이 필요합니다.*
+
+*주문 완료·실패 처리 API는 비동기 Saga에서만 필요합니다. Order Service가 동기로 오케스트레이션하는 초기 구현에서는 생략할 수 있습니다.*
 
 ---
 
@@ -153,19 +168,3 @@
 | 내부 API 보호 | 서비스 인증 및 네트워크 접근 제한 |
 
 **주의:** 경로, DTO, 권한 및 응답 코드는 예상 설계입니다. 실제 구현 전 확정해야 하며, 특히 배송 상태값과 주문 취소 가능 조건은 별도의 비즈니스 규칙이 필요합니다.
-
-|  도메인  |  Method  |  Endpoint  |  기능  |  권한  |  응답  |
-|---|---|---|---|---|---|
-| 사용자 | `POST` | `/api/users/signup` | 회원가입 | 공개 | `201` |
-| 사용자 | `POST` | `/api/users/login` | 로그인·JWT 발급 | 공개 | `200` |
-| 사용자 | `POST` | `/api/users/refresh` | Access Token 재발급 | Refresh Token 필요 | `200` |
-| 메뉴 | `POST` | `/api/menus` | 메뉴 등록 | OWNER | `201` |
-| 메뉴 | `GET` | `/api/menus` | 메뉴 목록 조회 | 공개 | `200` |
-| 메뉴 | `GET` | `/api/menus/{menuId}` | 메뉴 상세 조회 | 공개 | `200` |
-| 메뉴 | `PUT` | `/api/menus/{menuId}` | 본인 메뉴 수정 | OWNER | `200` |
-| 메뉴 | `DELETE` | `/api/menus/{menuId}` | 본인 메뉴 논리 삭제 | OWNER | `204` |
-| 주문 | `POST` | `/api/orders` | 주문 생성 | CUSTOMER | `201` |
-| 주문 | `GET` | `/api/orders` | 사용자별 주문 목록 | 로그인 필요 | `200` |
-| 주문 | `PATCH` | `/api/orders/{orderId}/cancel` | 본인 주문 취소 | CUSTOMER | `204` |
-| 주문 | `PATCH` | `/api/orders/{orderId}/status` | 주문 수락·배달 완료 | OWNER | `204` |
-| 결제 | `POST` | `/api/orders/{orderId}/payments` | 카드 결제 처리 | CUSTOMER | `201` |
