@@ -1,5 +1,6 @@
 plugins {
     id 'java-library'
+    id 'java-test-fixtures' // 테스트 전용 리소스
 }
 
 dependencies {

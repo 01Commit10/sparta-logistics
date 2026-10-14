@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:${db.schema};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        hbm2ddl:
+          create_namespaces: true   # default_schema(db.schema)를 H2에 생성
+
+eureka:
+  client:
+    enabled: false
