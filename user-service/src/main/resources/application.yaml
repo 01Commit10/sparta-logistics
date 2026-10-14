@@ -9,3 +9,5 @@ server:
 
 db:
   schema: auth
+  username: ${AUTH_DB_USER}
+  password: ${AUTH_DB_PASSWORD}

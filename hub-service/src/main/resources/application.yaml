@@ -10,3 +10,5 @@ server:
 
 db:
   schema: hub
+  username: ${HUB_DB_USER}
+  password: ${HUB_DB_PASSWORD}

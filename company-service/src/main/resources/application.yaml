@@ -11,3 +11,5 @@ server:
 
 db:
   schema: company
+  username: ${COMPANY_DB_USER}
+  password: ${COMPANY_DB_PASSWORD}

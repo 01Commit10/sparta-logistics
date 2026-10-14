@@ -9,3 +9,5 @@ server:
 
 db:
   schema: delivery
+  username: ${DELIVERY_DB_USER}
+  password: ${DELIVERY_DB_PASSWORD}

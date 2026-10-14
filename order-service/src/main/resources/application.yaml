@@ -9,3 +9,5 @@ server:
 
 db:
   schema: orders
+  username: ${ORDER_DB_USER}
+  password: ${ORDER_DB_PASSWORD}

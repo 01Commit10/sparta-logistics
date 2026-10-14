@@ -5,8 +5,8 @@ spring:
       - optional:file:../.env[.properties]
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
+    username: ${db.username}
+    password: ${db.password}
   jpa:
     open-in-view: false
     hibernate:
@@ -15,8 +15,6 @@ spring:
     properties:
       hibernate:
         default_schema: ${db.schema}
-        hbm2ddl:
-          create_namespaces: true   # init SQL이 안 돌았어도 스키마 자동 생성
 
 eureka:
   client:
