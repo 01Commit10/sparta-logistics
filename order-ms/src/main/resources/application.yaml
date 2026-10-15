@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: order-ms
+  profiles:
+    include: common
+
+server:
+  port: 19094
+
+db:
+  schema: orders
+  username: ${ORDER_DB_USER}
+  password: ${ORDER_DB_PASSWORD}

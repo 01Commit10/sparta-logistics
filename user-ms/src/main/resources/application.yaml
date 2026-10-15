@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: user-ms
+  profiles:
+    include: common
+
+server:
+  port: 19095
+
+db:
+  schema: auth
+  username: ${AUTH_DB_USER}
+  password: ${AUTH_DB_PASSWORD}

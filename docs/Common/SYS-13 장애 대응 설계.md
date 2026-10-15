@@ -88,7 +88,7 @@ stateDiagram-v2
 
 ### 4.2 단위
 
-- **대상 서비스 단위**로 하나씩 둡니다(`hub-service`, `delivery-service` 등). 메서드마다 두면 같은 서비스가 죽어도 메서드별로 따로 실패가 쌓여 늦게 열립니다.
+- **대상 서비스 단위**로 하나씩 둡니다(`hub-ms`, `delivery-ms` 등). 메서드마다 두면 같은 서비스가 죽어도 메서드별로 따로 실패가 쌓여 늦게 열립니다.
 - Feign은 기본이 메서드 단위이므로 `spring.cloud.openfeign.circuitbreaker.group.enabled: true`로 클라이언트 단위로 묶습니다.
 
 ### 4.3 실패로 세는 것 / 세지 않는 것
@@ -191,7 +191,7 @@ stateDiagram-v2
 | 재시도 | 하지 않음 |
 
 - Gateway의 Circuit Breaker는 **인증 필터 다음**에 동작합니다. 토큰이 없는 요청은 서비스 장애와 상관없이 401입니다.
-- user-service가 죽으면 로그인·재발급만 실패하고, 이미 로그인한 사용자의 다른 요청은 계속 동작합니다(Gateway는 JWT와 Redis만 확인).
+- user-ms가 죽으면 로그인·재발급만 실패하고, 이미 로그인한 사용자의 다른 요청은 계속 동작합니다(Gateway는 JWT와 Redis만 확인).
 
 ---
 
@@ -206,7 +206,7 @@ Client ──①──▶ Gateway ──①──▶ Order ──②──▶ Hu
 
 | 층 | 보호 구간 | 설정 위치 | 담당 |
 |---|---|---|---|
-| ① Gateway | 클라이언트 → 서비스 | `gateway-server/src/main/resources/application.yaml` | 대진 |
+| ① Gateway | 클라이언트 → 서비스 | `gateway-edge/src/main/resources/application.yaml` | 대진 |
 | ② Feign **공통 기본값** | 모든 서비스 → 서비스 | `common/src/main/resources/application-common.yaml` (각 서비스가 `profiles.include: common`으로 읽음) | 대진 |
 | ② Feign **서비스별 예외** | 특정 호출만 | 호출하는 서비스의 `application.yaml` | 각 서비스 담당 |
 | 실패 시 업무 처리 | - | 호출하는 서비스의 코드 (8장) | 각 서비스 담당 |
@@ -219,16 +219,16 @@ Client ──①──▶ Gateway ──①──▶ Order ──②──▶ Hu
 
 | 서비스 | 설정 | 이유 | 담당 |
 |---|---|---|---|
-| order-service | `delivery-service` read-timeout 5초 | 배송 생성 안에서 Hub 경로 조회를 다시 호출 | 다울 |
+| order-ms | `delivery-ms` read-timeout 5초 | 배송 생성 안에서 Hub 경로 조회를 다시 호출 | 다울 |
 
 ```yaml
-# order-service/src/main/resources/application.yaml
+# order-ms/src/main/resources/application.yaml
 spring:
   cloud:
     openfeign:
       client:
         config:
-          delivery-service:
+          delivery-ms:
             read-timeout: 5000
 ```
 
@@ -274,7 +274,7 @@ management:
         include: health, info, circuitbreakers, circuitbreakerevents
 ```
 
-### 11.2 Gateway — `gateway-server/application.yaml`
+### 11.2 Gateway — `gateway-edge/application.yaml`
 
 ```yaml
 spring:
@@ -286,8 +286,8 @@ spring:
             connect-timeout: 2000
             response-timeout: 5s
           routes:
-            - id: order-service
-              uri: lb://order-service
+            - id: order-ms
+              uri: lb://order-ms
               predicates:
                 - Path=/api/v1/orders/**
               metadata:
@@ -295,7 +295,7 @@ spring:
               filters:
                 - name: CircuitBreaker
                   args:
-                    name: order-service
+                    name: order-ms
                     fallbackUri: forward:/fallback
 ```
 
@@ -312,7 +312,7 @@ spring:
 | 3 | Delivery 재시작 후 10초 대기 | HALF_OPEN → 시험 호출 성공 → CLOSED, 주문 정상 처리 |
 | 4 | 재고 부족 주문 10건 | 409로 실패하지만 Circuit Breaker는 **열리지 않음** |
 | 5 | Hub에 응답 지연 주입 (테스트용 sleep) | 2초 후 타임아웃 → 재시도 → 복원 → FAILED, 재고 수량 원래대로 |
-| 6 | user-service 중지 | 로그인은 503, 기존 토큰으로 다른 서비스 요청은 정상 |
+| 6 | user-ms 중지 | 로그인은 503, 기존 토큰으로 다른 서비스 요청은 정상 |
 
 ---
 

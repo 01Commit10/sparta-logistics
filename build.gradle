@@ -55,7 +55,7 @@ subprojects {
 }
 
 // 도메인 서비스 공통
-configure(subprojects.findAll { it.name.endsWith('-service') }) {
+configure(subprojects.findAll { it.name.endsWith('-ms') }) {
     apply plugin: 'org.springframework.boot'
 
     dependencies {
@@ -74,5 +74,10 @@ configure(subprojects.findAll { it.name.endsWith('-service') }) {
         runtimeOnly 'org.postgresql:postgresql'
 
         testRuntimeOnly 'com.h2database:h2'
+        testImplementation testFixtures(project(':common')) // test code 작성을 위한 yaml 의존성 추가.
+    }
+
+    tasks.named('test') {
+        systemProperty 'spring.profiles.active', 'test'
     }
 }
