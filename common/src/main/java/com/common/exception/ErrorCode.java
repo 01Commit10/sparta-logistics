@@ -4,7 +4,9 @@ import org.springframework.http.HttpStatus;
 
 /**
  * 모든 에러 코드 enum이 구현하는 인터페이스.
- * 공통 코드는 {@link CommonErrorCode}, 서비스별 코드는 각 서비스에서 enum으로 정의한다. (예: OrderErrorCode)
+ * 에러 코드는 공통({@link CommonErrorCode}), 서비스별(예: OrderErrorCode) 모두 common 모듈의 이 패키지에서 일괄 관리.
+ * 서비스 간 Feign 호출 시 원격 서비스가 내려준 code 문자열을 ErrorCode로 복원해야 하기 때문이다. (SYS-13 5장)
+ * code 값은 전체 enum에서 유일해야 한다. (ErrorCodeUniquenessTest에서 검증)
  */
 public interface ErrorCode {
 
