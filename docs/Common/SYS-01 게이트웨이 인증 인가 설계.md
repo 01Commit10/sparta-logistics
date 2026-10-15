@@ -187,7 +187,7 @@ sequenceDiagram
 | Gateway | ✅ 토큰 서명·만료·무효화 검증 | ✅ 경로 단위 역할 (MASTER 전용 경로) |
 | 각 서비스 | ❌ 하지 않음. `X-User-Id`·`X-User-Role` 헤더만 읽음 | ✅ 본인 데이터 확인 + MASTER 기능의 역할 재확인 |
 
-- 서비스에는 JWT 라이브러리와 Spring Security 필터 체인이 필요 없습니다. user-service도 비밀번호 해시용 `spring-security-crypto`만 사용합니다.
+- 서비스에는 JWT 라이브러리와 Spring Security 필터 체인이 필요 없습니다. user-ms도 비밀번호 해시용 `spring-security-crypto`만 사용합니다.
 - 데이터를 봐야 아는 권한(업체 관리자, 배송 담당자, 주문자 본인)은 Gateway가 판단할 수 없으므로 반드시 서비스에서 검사합니다.
 
 ### 5.2 서비스가 헤더를 신뢰하기 위한 전제
