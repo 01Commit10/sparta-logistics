@@ -43,9 +43,9 @@ class ArchitectureTest {
                     .should().dependOnClassesThat().resideInAnyPackage(PRESENTATION, INFRASTRUCTURE);
 
     @ArchTest
-    static final ArchRule presentation은_infrastructure에_의존하지_않는다 =
+    static final ArchRule presentation은_domain과_infrastructure에_의존하지_않는다 =
             noClasses().that().resideInAPackage(PRESENTATION)
-                    .should().dependOnClassesThat().resideInAPackage(INFRASTRUCTURE);
+                    .should().dependOnClassesThat().resideInAnyPackage(DOMAIN, INFRASTRUCTURE);
 
     @ArchTest
     static final ArchRule infrastructure는_presentation과_application에_의존하지_않는다 =

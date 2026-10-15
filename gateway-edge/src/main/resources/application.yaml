@@ -47,3 +47,10 @@ eureka:
     registry-fetch-interval-seconds: ${EUREKA_FETCH_INTERVAL:5}   # 기본 30초 (GW-02)
   instance:
     prefer-ip-address: true
+
+# 경로 정책 (docs/plan/gateway/GW-03, GW-06). 경로가 바뀌면 이 목록만 고친다.
+gateway:
+  policy:
+    blocked:
+      - /internal/**
+      - /api/v1/internal/**
