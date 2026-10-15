@@ -55,13 +55,15 @@ class InternalBlockIntegrationTest {
             "/api/v1/internal/anything",
             "/INTERNAL/v1/users/1",
     })
-    @DisplayName("라우트가 있어도 내부 API 경로는 404이고 하위 서비스에 도착하지 않는다")
+    @DisplayName("라우트가 있어도 내부 API 경로는 404 RESOURCE_NOT_FOUND이고 하위 서비스에 도착하지 않는다")
     void internalPath_isBlocked(String path) {
         services.get("user-ms").stubFor(any(anyUrl()).willReturn(aResponse().withStatus(200)));
 
         client.get().uri(path)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().isNotFound()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("RESOURCE_NOT_FOUND");   // 라우트 없음과 같은 응답 (내부 경로 존재를 숨김)
 
         services.get("user-ms").verify(0, anyRequestedFor(anyUrl()));
     }
