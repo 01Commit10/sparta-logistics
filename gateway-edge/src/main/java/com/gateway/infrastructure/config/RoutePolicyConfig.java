@@ -13,6 +13,9 @@ public class RoutePolicyConfig {
     public RoutePolicy routePolicy(RoutePolicyProperties properties) {
         return RoutePolicy.builder()
                 .blocked(properties.blocked())
+                .publicRules(properties.publicRules())
+                .masterExcludeRules(properties.masterExclude())
+                .masterRules(properties.master())
                 .build();
     }
 }

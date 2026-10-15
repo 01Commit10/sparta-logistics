@@ -1,5 +1,6 @@
 package com.gateway.routing;
 
+import com.gateway.support.TestTokenFactory;
 import com.gateway.support.WireMockServices;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -10,6 +11,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -41,8 +43,15 @@ class RoutingIntegrationTest {
         services.registerInstances(registry);
     }
 
-    @Autowired
     WebTestClient client;
+
+    /** 라우팅·오류 응답만 확인하므로 유효한 MASTER 토큰을 기본으로 붙인다 (인증은 AuthenticationIntegrationTest) */
+    @Autowired
+    void setClient(WebTestClient client) {
+        this.client = client.mutate()
+                .defaultHeader(HttpHeaders.AUTHORIZATION, TestTokenFactory.bearer("MASTER"))
+                .build();
+    }
 
     @AfterEach
     void reset() {
