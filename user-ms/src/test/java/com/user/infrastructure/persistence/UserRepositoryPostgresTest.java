@@ -41,7 +41,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 @Tag("container")
 @Testcontainers
-@DataJpaTest
+// 컨테이너가 컨텍스트보다 먼저 멈추므로 종료 시 drop(create-drop)을 하지 않는다 (30초 연결 대기 방지)
+@DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=create")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({UserRepositoryImpl.class, UserSchemaInitializer.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)   // 동시성 확인을 위해 테스트가 직접 트랜잭션을 연다

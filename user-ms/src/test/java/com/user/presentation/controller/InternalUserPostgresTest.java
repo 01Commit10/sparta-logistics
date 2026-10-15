@@ -30,7 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @Tag("container")
 @Testcontainers
-@SpringBootTest
+// 컨테이너가 컨텍스트보다 먼저 멈추므로 종료 시 drop(create-drop)을 하지 않는다 (30초 연결 대기 방지)
+@SpringBootTest(properties = "spring.jpa.hibernate.ddl-auto=create")
 @AutoConfigureMockMvc
 class InternalUserPostgresTest {
 
