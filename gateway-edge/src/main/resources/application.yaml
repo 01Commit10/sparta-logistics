@@ -21,7 +21,7 @@ spring:
             - id: hub-ms
               uri: lb://hub-ms
               predicates:
-                - Path=/api/v1/hubs/**, /api/v1/hub-routes/**
+                - Path=/api/v1/hubs/**, /api/v1/hub-routes/**, /api/v1/inventories/**
             - id: order-ms
               uri: lb://order-ms
               predicates:
@@ -29,7 +29,10 @@ spring:
             - id: delivery-ms
               uri: lb://delivery-ms
               predicates:
-                - Path=/api/v1/deliveries/**
+                - Path=/api/v1/deliveries/**, /api/v1/delivery-routes/**
+    loadbalancer:
+      cache:
+        ttl: ${LB_CACHE_TTL:5s}   # 기본 35s. 새로 뜬 서비스를 빨리 찾도록 줄임 (GW-02)
 
 server:
   port: 19090
@@ -41,5 +44,13 @@ eureka:
   client:
     service-url:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: ${EUREKA_FETCH_INTERVAL:5}   # 기본 30초 (GW-02)
   instance:
     prefer-ip-address: true
+
+# 경로 정책 (docs/plan/gateway/GW-03, GW-06). 경로가 바뀌면 이 목록만 고친다.
+gateway:
+  policy:
+    blocked:
+      - /internal/**
+      - /api/v1/internal/**

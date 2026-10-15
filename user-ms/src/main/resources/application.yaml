@@ -11,3 +11,16 @@ db:
   schema: auth
   username: ${AUTH_DB_USER}
   password: ${AUTH_DB_PASSWORD}
+
+
+# USR-19 초기 MASTER (값은 .env, 비어 있으면 만들지 않음)
+initial-master:
+  username: ${MASTER_USERNAME:}
+  password: ${MASTER_PASSWORD:}
+  name: ${MASTER_NAME:}
+  slack-id: ${MASTER_SLACK_ID:}
+
+# 개발 확인용 GET /api/v1/auth/routing-check (제출·운영 시 false)
+app:
+  routing-check:
+    enabled: ${ROUTING_CHECK_ENABLED:true}
