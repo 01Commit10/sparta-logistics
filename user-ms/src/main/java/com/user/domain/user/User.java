@@ -9,6 +9,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -25,14 +26,19 @@ import java.util.UUID;
  */
 @Getter
 @Entity
-@Table(name = "p_users")
+@Table(name = "p_users", uniqueConstraints = @UniqueConstraint(name = User.UK_USERNAME, columnNames = "username"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User extends AuditableEntity {
+
+    /** 탈퇴 포함 username 유일 제약 이름. 저장 시 위반을 DUPLICATE_USERNAME으로 바꿀 때 쓴다 */
+    public static final String UK_USERNAME = "uk_p_users_username";
+    /** 활성 사용자 사이 slack_id 부분 UNIQUE 인덱스 이름 (PostgreSQL, UserSchemaInitializer가 만든다) */
+    public static final String UK_SLACK_ID_ACTIVE = "uk_p_users_slack_id_active";
 
     @Id
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 10)
+    @Column(nullable = false, length = 10)
     private String username;
 
     @Column(nullable = false, length = 100)
