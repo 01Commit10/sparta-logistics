@@ -1,0 +1,35 @@
+package com.common.config;
+
+import com.common.audit.UserIdAuditorAware;
+import jakarta.persistence.EntityManager;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.data.domain.AuditorAware;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+
+import java.util.UUID;
+
+/**
+ * BaseEntity의 Audit 컬럼을 채우는 JPA Auditing 설정.
+ * - 실행 시: META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
+ * - @DataJpaTest 슬라이스 테스트 시: META-INF/spring/org.springframework.boot.test.autoconfigure.orm.jpa.AutoConfigureDataJpa.imports
+ *
+ * 서비스에서 @EnableJpaAuditing을 직접 선언하면 jpaAuditingHandler 빈이 중복되므로,
+ * 이미 선언된 경우엔 이 설정 전체를 건너뛴다(그때는 서비스가 AuditorAware도 직접 제공).
+ */
+@AutoConfiguration(after = HibernateJpaAutoConfiguration.class)
+@ConditionalOnClass({EntityManager.class, EnableJpaAuditing.class})
+@ConditionalOnMissingBean(name = "jpaAuditingHandler")
+@EnableJpaAuditing
+public class CommonJpaAuditingAutoConfiguration {
+
+    // 서비스에서 작업자 결정 방식을 바꾸려면 AuditorAware 빈을 등록해 덮어쓰기 가능.
+    @Bean
+    @ConditionalOnMissingBean(AuditorAware.class)
+    public AuditorAware<UUID> userIdAuditorAware() {
+        return new UserIdAuditorAware();
+    }
+}

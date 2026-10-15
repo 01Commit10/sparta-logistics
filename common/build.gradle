@@ -22,6 +22,10 @@ dependencies {
     // Redis 직렬화 검증용
     testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
     testImplementation 'org.springframework.boot:spring-boot-starter-cache'
+
+    // BaseEntity·JPA Auditing 검증용
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testRuntimeOnly 'com.h2database:h2'
 }
 
 // 도메인 서비스(Spring Boot 플러그인 적용)와 동일하게 파라미터 이름을 보존.

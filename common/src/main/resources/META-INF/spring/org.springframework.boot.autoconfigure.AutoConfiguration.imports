@@ -1,2 +1,3 @@
 com.common.config.CommonExceptionAutoConfiguration
 com.common.config.CommonRedisAutoConfiguration
+com.common.config.CommonJpaAuditingAutoConfiguration
