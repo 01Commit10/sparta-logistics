@@ -1,7 +1,7 @@
 package com.user.infrastructure.persistence;
 
-import com.user.domain.user.User;
-import com.user.domain.user.UserRole;
+import com.user.domain.entity.User;
+import com.user.domain.vo.UserRole;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;

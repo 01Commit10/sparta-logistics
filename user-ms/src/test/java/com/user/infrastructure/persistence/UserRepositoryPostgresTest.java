@@ -2,11 +2,11 @@ package com.user.infrastructure.persistence;
 
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
-import com.user.domain.user.OrganizationType;
-import com.user.domain.user.User;
-import com.user.domain.user.UserRepository;
-import com.user.domain.user.UserRole;
-import com.user.domain.user.Username;
+import com.user.domain.entity.User;
+import com.user.domain.repository.UserRepository;
+import com.user.domain.vo.OrganizationType;
+import com.user.domain.vo.UserRole;
+import com.user.domain.vo.Username;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;

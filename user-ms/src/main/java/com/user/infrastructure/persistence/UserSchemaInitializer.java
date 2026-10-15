@@ -1,6 +1,6 @@
 package com.user.infrastructure.persistence;
 
-import com.user.domain.user.User;
+import com.user.domain.entity.User;
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -8,9 +8,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
+import javax.sql.DataSource;
 
 /**
  * JPA(ddl-auto)가 만들지 못하는 p_users 제약을 기동 시 추가한다 (docs/design/06 테이블 명세서 p_users).

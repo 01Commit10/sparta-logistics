@@ -2,10 +2,10 @@ package com.user.infrastructure.persistence;
 
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
-import com.user.domain.user.OrganizationType;
-import com.user.domain.user.User;
-import com.user.domain.user.UserRepository;
-import com.user.domain.user.Username;
+import com.user.domain.entity.User;
+import com.user.domain.repository.UserRepository;
+import com.user.domain.vo.OrganizationType;
+import com.user.domain.vo.Username;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
