@@ -1,9 +1,11 @@
 package com.user.infrastructure.persistence;
 
-import com.user.domain.user.OrganizationType;
-import com.user.domain.user.User;
-import com.user.domain.user.UserRepository;
-import com.user.domain.user.Username;
+import com.common.exception.BusinessException;
+import com.common.exception.UserErrorCode;
+import com.user.domain.entity.User;
+import com.user.domain.repository.UserRepository;
+import com.user.domain.vo.OrganizationType;
+import com.user.domain.vo.Username;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 기본 테스트 DB(H2, PostgreSQL 모드)로 확인한다.
@@ -105,5 +108,15 @@ class UserRepositoryImplTest {
 
         assertThat(userRepository.existsActiveMaster()).isFalse();
         assertThat(userRepository.countActiveMastersForUpdate()).isZero();
+    }
+
+    @Test
+    @DisplayName("중복 확인을 동시에 통과해도 DB UNIQUE가 막고, 409 DUPLICATE_USERNAME으로 바꾼다 (500이 아님)")
+    void usernameUniqueViolationIsBusinessError() {
+        userRepository.save(user("user01", "U001"));
+
+        assertThatThrownBy(() -> userRepository.save(user("user01", "U002")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(UserErrorCode.DUPLICATE_USERNAME));
     }
 }

@@ -1,7 +1,7 @@
 package com.user.fake;
 
-import com.user.domain.user.User;
-import com.user.domain.user.UserRepository;
+import com.user.domain.entity.User;
+import com.user.domain.repository.UserRepository;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;

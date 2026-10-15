@@ -1,10 +1,12 @@
 package com.user.infrastructure.persistence;
 
-import com.user.domain.user.OrganizationType;
-import com.user.domain.user.User;
-import com.user.domain.user.UserRepository;
-import com.user.domain.user.UserRole;
-import com.user.domain.user.Username;
+import com.common.exception.BusinessException;
+import com.common.exception.UserErrorCode;
+import com.user.domain.entity.User;
+import com.user.domain.repository.UserRepository;
+import com.user.domain.vo.OrganizationType;
+import com.user.domain.vo.UserRole;
+import com.user.domain.vo.Username;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -82,7 +84,8 @@ class UserRepositoryPostgresTest {
         tx().executeWithoutResult(s -> userRepository.save(user("user01", "U001")));
 
         assertThatThrownBy(() -> tx().executeWithoutResult(s -> userRepository.save(user("user02", "U001"))))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(UserErrorCode.DUPLICATE_SLACK_ID));
     }
 
     @Test
@@ -109,7 +112,26 @@ class UserRepositoryPostgresTest {
         });
 
         assertThatThrownBy(() -> tx().executeWithoutResult(s -> userRepository.save(user("user01", "U002"))))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(UserErrorCode.DUPLICATE_USERNAME));
+    }
+
+    @Test
+    @DisplayName("예전 이름의 username UNIQUE(ddl-auto update로 남은 것)에 걸려도 DUPLICATE_USERNAME으로 바꾼다")
+    void legacyUsernameConstraint() {
+        jdbc.execute("alter table auth.p_users drop constraint uk_p_users_username");
+        jdbc.execute("alter table auth.p_users add constraint uk1legacyhibernatename unique (username)");
+        try {
+            tx().executeWithoutResult(s -> userRepository.save(user("user01", "U001")));
+
+            assertThatThrownBy(() -> tx().executeWithoutResult(s -> userRepository.save(user("user01", "U002"))))
+                    .isInstanceOfSatisfying(BusinessException.class,
+                            e -> assertThat(e.getErrorCode()).isEqualTo(UserErrorCode.DUPLICATE_USERNAME));
+        } finally {
+            jdbc.update("delete from auth.p_users");
+            jdbc.execute("alter table auth.p_users drop constraint uk1legacyhibernatename");
+            jdbc.execute("alter table auth.p_users add constraint uk_p_users_username unique (username)");
+        }
     }
 
     @Test

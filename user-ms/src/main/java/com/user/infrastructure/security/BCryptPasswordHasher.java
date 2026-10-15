@@ -1,6 +1,6 @@
 package com.user.infrastructure.security;
 
-import com.user.domain.user.PasswordHasher;
+import com.user.domain.service.PasswordHasher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 

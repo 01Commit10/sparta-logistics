@@ -1,0 +1,46 @@
+# MASTER 전용 경로 정책표 (docs/design/04 API 명세서, docs/plan/gateway/GW-06 4장)
+# method,path,requiresMaster
+# 정책이 바뀌면 이 표와 application.yaml gateway.policy.master를 함께 고친다 (RoutePolicyPropertiesTest가 대조한다).
+# --- User (MASTER)
+POST,/api/v1/users,true
+GET,/api/v1/users,true
+GET,/api/v1/users/u-1,true
+PATCH,/api/v1/users/u-1,true
+DELETE,/api/v1/users/u-1,true
+PATCH,/api/v1/users/u-1/role,true
+PATCH,/api/v1/users/u-1/delivery-manager,true
+PATCH,/api/v1/users/u-1/organization,true
+POST,/api/v1/users/u-1/restore,true
+POST,/api/v1/users/u-1/password-reset,true
+# --- User (로그인만: 본인)
+GET,/api/v1/users/me,false
+PATCH,/api/v1/users/me,false
+DELETE,/api/v1/users/me,false
+PATCH,/api/v1/users/me/password,false
+# --- User (같은 경로 다른 메서드)
+PUT,/api/v1/users,false
+POST,/api/v1/users/u-1,false
+GET,/api/v1/users/u-1/role,false
+GET,/api/v1/users/u-1/restore,false
+# --- Hub
+PATCH,/api/v1/hubs/h-1,true
+GET,/api/v1/hubs/h-1,false
+GET,/api/v1/hubs,false
+POST,/api/v1/hub-routes,true
+GET,/api/v1/hub-routes,false
+PATCH,/api/v1/hub-routes/r-1,true
+DELETE,/api/v1/hub-routes/r-1,true
+GET,/api/v1/hub-routes/r-1,false
+# --- Company (PATCH는 MASTER·업체관리자라 서비스가 판단)
+POST,/api/v1/companies,true
+GET,/api/v1/companies,false
+DELETE,/api/v1/companies/c-1,true
+PATCH,/api/v1/companies/c-1,false
+GET,/api/v1/companies/c-1,false
+POST,/api/v1/companies/c-1/products,false
+# --- 그 외 (로그인만, 소유권은 서비스가 판단)
+POST,/api/v1/orders,false
+POST,/api/v1/orders/o-1/cancel,false
+PATCH,/api/v1/deliveries/d-1/status,false
+PATCH,/api/v1/inventories/i-1,false
+POST,/api/v1/auth/logout,false

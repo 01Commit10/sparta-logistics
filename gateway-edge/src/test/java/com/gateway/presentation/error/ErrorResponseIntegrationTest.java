@@ -1,10 +1,12 @@
 package com.gateway.presentation.error;
 
+import com.gateway.support.TestTokenFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -18,8 +20,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 @AutoConfigureWebTestClient
 class ErrorResponseIntegrationTest {
 
-    @Autowired
     WebTestClient client;
+
+    /** 라우팅·오류 응답만 확인하므로 유효한 MASTER 토큰을 기본으로 붙인다 (인증은 AuthenticationIntegrationTest) */
+    @Autowired
+    void setClient(WebTestClient client) {
+        this.client = client.mutate()
+                .defaultHeader(HttpHeaders.AUTHORIZATION, TestTokenFactory.bearer("MASTER"))
+                .build();
+    }
 
     @Test
     @DisplayName("없는 경로 → 404 RESOURCE_NOT_FOUND")

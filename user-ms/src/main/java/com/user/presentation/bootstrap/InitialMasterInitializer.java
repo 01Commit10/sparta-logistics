@@ -1,8 +1,8 @@
 package com.user.presentation.bootstrap;
 
-import com.user.application.user.UserCommandService;
-import com.user.application.user.dto.InitialMasterCommand;
-import com.user.application.user.dto.InitialMasterResult;
+import com.user.application.dto.InitialMasterCommand;
+import com.user.application.dto.InitialMasterResult;
+import com.user.application.service.UserCommandService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;

@@ -1,11 +1,11 @@
 package com.user.presentation.bootstrap;
 
-import com.user.application.user.UserCommandService;
-import com.user.application.user.dto.InitialMasterCommand;
-import com.user.application.user.dto.InitialMasterResult;
-import com.user.domain.user.PasswordHasher;
-import com.user.domain.user.User;
-import com.user.domain.user.UserRepository;
+import com.user.application.dto.InitialMasterCommand;
+import com.user.application.dto.InitialMasterResult;
+import com.user.application.service.UserCommandService;
+import com.user.domain.entity.User;
+import com.user.domain.repository.UserRepository;
+import com.user.domain.service.PasswordHasher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

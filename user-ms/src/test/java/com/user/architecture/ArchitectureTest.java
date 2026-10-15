@@ -4,6 +4,10 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+import jakarta.persistence.Entity;
+import jakarta.persistence.MappedSuperclass;
+import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.RestController;
 
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
@@ -59,6 +63,37 @@ class ArchitectureTest {
             classes().that().implement(resideInAPackage(DOMAIN))
                     .and().resideOutsideOfPackage(DOMAIN)
                     .should().resideInAPackage(INFRASTRUCTURE);
+
+    // 팀 공통 패키지 구조 (presentation/controller·dto, application/service·dto, domain/entity·vo·repository)
+    @ArchTest
+    static final ArchRule Controller는_presentation_controller에_있다 =
+            classes().that().areAnnotatedWith(RestController.class)
+                    .should().resideInAPackage("com.user.presentation.controller..");
+
+    @ArchTest
+    static final ArchRule Request_Response는_presentation_dto에_있다 =
+            classes().that().haveSimpleNameEndingWith("Request").or().haveSimpleNameEndingWith("Response")
+                    .should().resideInAnyPackage("com.user.presentation.dto.request..", "com.user.presentation.dto.response..");
+
+    @ArchTest
+    static final ArchRule Service는_application_service나_facade에_있다 =
+            classes().that().areAnnotatedWith(Service.class)
+                    .should().resideInAnyPackage("com.user.application.service..", "com.user.application.facade..");
+
+    @ArchTest
+    static final ArchRule Command_Result는_application_dto에_있다 =
+            classes().that().haveSimpleNameEndingWith("Command").or().haveSimpleNameEndingWith("Result")
+                    .should().resideInAPackage("com.user.application.dto..");
+
+    @ArchTest
+    static final ArchRule 엔티티는_domain_entity에_있다 =
+            classes().that().areAnnotatedWith(Entity.class).or().areAnnotatedWith(MappedSuperclass.class)
+                    .should().resideInAPackage("com.user.domain.entity..");
+
+    @ArchTest
+    static final ArchRule 저장소_Port는_domain_repository에_있다 =
+            classes().that().resideInAPackage(DOMAIN).and().haveSimpleNameEndingWith("Repository")
+                    .should().resideInAPackage("com.user.domain.repository..").andShould().beInterfaces();
 
     @ArchTest
     static final ArchRule 다른_서비스의_코드를_import하지_않는다 =
