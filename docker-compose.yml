@@ -29,3 +29,21 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: sparta-logistics-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    environment:
+      TZ: Asia/Seoul
+      REDISCLI_AUTH: ${REDIS_PASSWORD}  # healthcheck의 redis-cli 인증용
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD를 .env에 설정해주세요} --appendonly yes
+    volumes:
+      # 로컬의 redisdata 폴더와 도커 내부 데이터를 동기화 (AOF 영구 저장)
+      - ./redisdata:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10

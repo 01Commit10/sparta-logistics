@@ -33,6 +33,7 @@ subprojects {
 
     dependencyManagement {
         imports {
+            // 앞에 org.springframework.boot를 지울 시 참조 경로가 달라져 에러가 발생하니 경로 변경x
             mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
             mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
         }
@@ -66,6 +67,8 @@ configure(subprojects.findAll { it.name.endsWith('-ms') }) {
         implementation 'org.springframework.boot:spring-boot-starter-validation'
         implementation 'org.springframework.boot:spring-boot-starter-actuator'
         implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+        implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+        implementation 'org.springframework.boot:spring-boot-starter-cache'
 
         // Spring security
 //        implementation 'org.springframework.boot:spring-boot-starter-security'
