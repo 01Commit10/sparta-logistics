@@ -2,9 +2,9 @@ package com.user.infrastructure.persistence;
 
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
-import com.user.domain.user.User;
-import com.user.domain.user.UserRepository;
-import com.user.domain.user.UserRole;
+import com.user.domain.entity.User;
+import com.user.domain.repository.UserRepository;
+import com.user.domain.vo.UserRole;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 

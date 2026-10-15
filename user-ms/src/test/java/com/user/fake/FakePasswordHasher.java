@@ -1,6 +1,6 @@
 package com.user.fake;
 
-import com.user.domain.user.PasswordHasher;
+import com.user.domain.service.PasswordHasher;
 
 /** 테스트용: 해시 대신 접두사만 붙인다. */
 public class FakePasswordHasher implements PasswordHasher {
