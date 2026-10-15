@@ -2,7 +2,7 @@ package com.common.auth.web;
 
 import com.common.auth.AuthContract;
 import com.common.auth.AuthRole;
-import com.common.auth.CurrentUser;
+import com.common.auth.AuthUser;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Collections;
@@ -27,7 +27,7 @@ public final class CurrentUserHeaderParser {
     public record Absent() implements Result {
     }
 
-    public record Valid(CurrentUser user) implements Result {
+    public record Valid(AuthUser user) implements Result {
     }
 
     public record Invalid() implements Result {
@@ -50,7 +50,7 @@ public final class CurrentUserHeaderParser {
         if (uuid.isEmpty() || authRole.isEmpty()) {
             return INVALID;
         }
-        return new Valid(new CurrentUser(uuid.get(), authRole.get()));
+        return new Valid(new AuthUser(uuid.get(), authRole.get()));
     }
 
     /** 같은 헤더가 여러 번 오면 어느 값을 믿을지 모호하므로 {@link Invalid} */

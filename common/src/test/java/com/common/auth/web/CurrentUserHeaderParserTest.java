@@ -2,7 +2,7 @@ package com.common.auth.web;
 
 import com.common.auth.AuthContract;
 import com.common.auth.AuthRole;
-import com.common.auth.CurrentUser;
+import com.common.auth.AuthUser;
 import com.common.auth.web.CurrentUserHeaderParser.Absent;
 import com.common.auth.web.CurrentUserHeaderParser.Invalid;
 import com.common.auth.web.CurrentUserHeaderParser.Result;
@@ -39,26 +39,26 @@ class CurrentUserHeaderParserTest {
         }
 
         @Test
-        @DisplayName("둘 다 올바르면 Valid(CurrentUser)")
+        @DisplayName("둘 다 올바르면 Valid(AuthUser)")
         void valid() {
             assertThat(CurrentUserHeaderParser.parse(ID.toString(), "MASTER"))
-                    .isEqualTo(new Valid(new CurrentUser(ID, AuthRole.MASTER)));
+                    .isEqualTo(new Valid(new AuthUser(ID, AuthRole.MASTER)));
             assertThat(CurrentUserHeaderParser.parse(ID.toString(), "USER"))
-                    .isEqualTo(new Valid(new CurrentUser(ID, AuthRole.USER)));
+                    .isEqualTo(new Valid(new AuthUser(ID, AuthRole.USER)));
         }
 
         @Test
         @DisplayName("앞뒤 공백은 지우고 판정한다")
         void trims() {
             assertThat(CurrentUserHeaderParser.parse("  " + ID + " ", " USER\t"))
-                    .isEqualTo(new Valid(new CurrentUser(ID, AuthRole.USER)));
+                    .isEqualTo(new Valid(new AuthUser(ID, AuthRole.USER)));
         }
 
         @Test
         @DisplayName("UUID는 대문자로 와도 같은 사용자다")
         void uppercaseUuid() {
             assertThat(CurrentUserHeaderParser.parse(ID.toString().toUpperCase(), "USER"))
-                    .isEqualTo(new Valid(new CurrentUser(ID, AuthRole.USER)));
+                    .isEqualTo(new Valid(new AuthUser(ID, AuthRole.USER)));
         }
 
         @ParameterizedTest(name = "[{index}] id={0}, role={1}")
@@ -90,7 +90,7 @@ class CurrentUserHeaderParserTest {
             request.addHeader("x-user-role", "USER");
 
             assertThat(CurrentUserHeaderParser.parse(request))
-                    .isEqualTo(new Valid(new CurrentUser(ID, AuthRole.USER)));
+                    .isEqualTo(new Valid(new AuthUser(ID, AuthRole.USER)));
         }
 
         @Test

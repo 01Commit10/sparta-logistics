@@ -11,13 +11,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class CurrentUserTest {
+class AuthUserTest {
 
     static final UUID ID = UUID.randomUUID();
     static final UUID OTHER = UUID.randomUUID();
 
-    static final CurrentUser MASTER = new CurrentUser(ID, AuthRole.MASTER);
-    static final CurrentUser USER = new CurrentUser(ID, AuthRole.USER);
+    static final AuthUser MASTER = new AuthUser(ID, AuthRole.MASTER);
+    static final AuthUser USER = new AuthUser(ID, AuthRole.USER);
 
     @Test
     @DisplayName("isMaster: MASTER는 true, USER는 false")
@@ -45,8 +45,8 @@ class CurrentUserTest {
     @Test
     @DisplayName("id·role 없이는 만들 수 없다")
     void requiresIdAndRole() {
-        assertThatThrownBy(() -> new CurrentUser(null, AuthRole.USER)).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new CurrentUser(ID, null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new AuthUser(null, AuthRole.USER)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new AuthUser(ID, null)).isInstanceOf(NullPointerException.class);
     }
 
     private static void assertAccessDenied(Runnable action) {
