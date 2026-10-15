@@ -1,5 +1,6 @@
 package com.user.infrastructure.persistence;
 
+import com.user.domain.user.User;
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +45,7 @@ public class UserSchemaInitializer {
             log.debug("[UserSchemaInitializer] PostgreSQL이 아니므로 부분 UNIQUE·CHECK 생성을 건너뜀");
             return;
         }
-        jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_p_users_slack_id_active "
+        jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS " + User.UK_SLACK_ID_ACTIVE + " "
                 + "ON " + schema + ".p_users (slack_id) WHERE deleted_at IS NULL");
         jdbc.execute("""
                 DO $$
