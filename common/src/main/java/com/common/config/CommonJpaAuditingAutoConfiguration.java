@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
@@ -26,10 +27,19 @@ import java.util.UUID;
 @EnableJpaAuditing
 public class CommonJpaAuditingAutoConfiguration {
 
-    // 서비스에서 작업자 결정 방식을 바꾸려면 AuditorAware 빈을 등록해 덮어쓰기 가능.
-    @Bean
-    @ConditionalOnMissingBean(AuditorAware.class)
-    public AuditorAware<UUID> userIdAuditorAware() {
-        return new UserIdAuditorAware();
+    // 작업자는 HTTP 요청 헤더에서 읽으므로 servlet 환경에서만 등록.
+    // 그 외 환경에선 AuditorAware 없이 생성·수정 시각만 기록.
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = {
+            "jakarta.servlet.http.HttpServletRequest",
+            "org.springframework.web.context.request.RequestContextHolder"})
+    static class UserIdAuditorConfiguration {
+
+        // 서비스에서 작업자 결정 방식을 바꾸려면 AuditorAware 빈을 등록해 덮어쓰기 가능.
+        @Bean
+        @ConditionalOnMissingBean(AuditorAware.class)
+        AuditorAware<UUID> userIdAuditorAware() {
+            return new UserIdAuditorAware();
+        }
     }
 }

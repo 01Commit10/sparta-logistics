@@ -2,7 +2,7 @@ package com.common.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.common.audit.UserIdAuditorAware;
+import com.common.web.UserHeaders;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -16,7 +16,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * 도메인 서비스와 같은 조건(@DataJpaTest 슬라이스 + common auto-configuration)에서
- * BaseEntity의 Audit 컬럼이 채워지는지 검증한다.
+ * BaseEntity의 Audit 컬럼이 채워지는지 검증.
  */
 @DataJpaTest
 class BaseEntityAuditingTest {
@@ -104,7 +104,7 @@ class BaseEntityAuditingTest {
 
     private void bindUser(UUID userId) {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader(UserIdAuditorAware.USER_ID_HEADER, userId.toString());
+        request.addHeader(UserHeaders.USER_ID, userId.toString());
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 }

@@ -54,7 +54,12 @@ public abstract class BaseEntity {
         this.createdBy = actorId;
     }
 
+    // 이미 삭제된 경우엔 아무것도 하지 않는다. 최초 삭제 시각·삭제자를 보존하기 위함.
+    // (예: 주문 삭제 시 연관 배송을 일괄 삭제하는데 그중 일부가 이미 삭제된 경우)
     protected void softDelete(UUID actorId) {
+        if (isDeleted()) {
+            return;
+        }
         this.deletedAt = LocalDateTime.now();
         this.deletedBy = actorId;
     }

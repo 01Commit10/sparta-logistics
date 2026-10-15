@@ -2,6 +2,7 @@ package com.common.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.common.web.UserHeaders;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ class UserIdAuditorAwareTest {
     private void bindRequest(String userId) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         if (userId != null) {
-            request.addHeader(UserIdAuditorAware.USER_ID_HEADER, userId);
+            request.addHeader(UserHeaders.USER_ID, userId);
         }
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }

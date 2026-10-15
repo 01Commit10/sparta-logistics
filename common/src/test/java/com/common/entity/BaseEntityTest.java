@@ -2,6 +2,7 @@ package com.common.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +27,19 @@ class BaseEntityTest {
         assertThat(entity.isDeleted()).isTrue();
         assertThat(entity.getDeletedAt()).isNotNull();
         assertThat(entity.getDeletedBy()).isEqualTo(actorId);
+    }
+
+    @Test
+    void softDeleteAgainKeepsFirstDeletion() {
+        SampleAuditEntity entity = new SampleAuditEntity("업체");
+        UUID firstActorId = UUID.randomUUID();
+        entity.delete(firstActorId);
+        LocalDateTime firstDeletedAt = entity.getDeletedAt();
+
+        entity.delete(UUID.randomUUID());
+
+        assertThat(entity.getDeletedAt()).isEqualTo(firstDeletedAt);
+        assertThat(entity.getDeletedBy()).isEqualTo(firstActorId);
     }
 
     @Test

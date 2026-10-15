@@ -1,10 +1,7 @@
 package com.common.audit;
 
-import jakarta.servlet.http.HttpServletRequest;
+import com.common.web.UserHeaders;
 import org.springframework.data.domain.AuditorAware;
-import org.springframework.web.context.request.RequestAttributes;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -17,23 +14,14 @@ import java.util.UUID;
  */
 public class UserIdAuditorAware implements AuditorAware<UUID> {
 
-    public static final String USER_ID_HEADER = "X-User-Id";
-
     @Override
     public Optional<UUID> getCurrentAuditor() {
-        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
-        if (!(attributes instanceof ServletRequestAttributes servletAttributes)) {
-            return Optional.empty();
-        }
+        return UserHeaders.currentUserId().flatMap(UserIdAuditorAware::parse);
+    }
 
-        HttpServletRequest request = servletAttributes.getRequest();
-        String userId = request.getHeader(USER_ID_HEADER);
-        if (userId == null || userId.isBlank()) {
-            return Optional.empty();
-        }
-
+    private static Optional<UUID> parse(String userId) {
         try {
-            return Optional.of(UUID.fromString(userId.trim()));
+            return Optional.of(UUID.fromString(userId));
         } catch (IllegalArgumentException e) {
             return Optional.empty();
         }
