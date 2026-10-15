@@ -11,7 +11,7 @@ import java.util.Locale;
  *     <li>{@code *}: 세그먼트 하나 (예: {@code /api/v1/users/*} → {@code /api/v1/users/u-1})</li>
  *     <li>{@code **}: 패턴 마지막에서만, 세그먼트 0개 이상</li>
  * </ul>
- * 비교 전에 경로를 정규화한다: 빈 세그먼트·{@code .} 제거, {@code ..} 해석, 소문자.
+ * 비교 전에 경로를 정규화한다: 쿼리스트링 제거, 빈 세그먼트·{@code .} 제거, {@code ..} 해석, 소문자.
  */
 public final class PathRule {
 
@@ -57,8 +57,10 @@ public final class PathRule {
     }
 
     private static List<String> normalize(String path) {
+        int query = path.indexOf('?');
+        String withoutQuery = query >= 0 ? path.substring(0, query) : path;
         Deque<String> result = new ArrayDeque<>();
-        for (String segment : path.toLowerCase(Locale.ROOT).split("/")) {
+        for (String segment : withoutQuery.toLowerCase(Locale.ROOT).split("/")) {
             if (segment.isEmpty() || ".".equals(segment)) {
                 continue;
             }
