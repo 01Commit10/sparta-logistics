@@ -6,6 +6,7 @@ import com.common.exception.UserErrorCode;
 import com.common.remote.RemoteBusinessException;
 import com.common.remote.RemoteErrorCode;
 import com.common.remote.RemoteServiceException;
+import com.common.remote.RemoteTimeoutException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.Request;
 import feign.RequestTemplate;
@@ -114,8 +115,8 @@ class CommonFeignErrorDecoderTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {500, 502, 503, 504})
-    @DisplayName("5xx → RemoteServiceException (본문 code와 상관없이)")
+    @ValueSource(ints = {500, 501, 502, 503, 599})
+    @DisplayName("504가 아닌 5xx → RemoteServiceException (본문 code와 상관없이)")
     void serverError(int status) {
         Exception e = decode(status, """
                 {"code":"INTERNAL_SERVER_ERROR","message":"서버 내부 오류가 발생했습니다."}""");
@@ -124,6 +125,21 @@ class CommonFeignErrorDecoderTest {
             assertThat(r.getStatus()).isEqualTo(status);
             assertThat(r.getTarget()).isEqualTo("hub-ms");
             assertThat(r.getErrorCode()).isSameAs(CommonErrorCode.SERVICE_UNAVAILABLE);
+        });
+    }
+
+    @ParameterizedTest(name = "504 + 본문 \"{0}\" → RemoteTimeoutException")
+    @ValueSource(strings = {"{\"code\":\"SERVICE_TIMEOUT\",\"message\":\"x\"}", "{\"code\":\"INTERNAL_SERVER_ERROR\"}", "<없음>"})
+    @DisplayName("리뷰: 원격 504 → RemoteTimeoutException (원격이 그다음 호출에서 타임아웃 → 그쪽에서 처리됐을 수 있어 결과 모름, 본문 code와 상관없이)")
+    void gatewayTimeoutIsUnknown(String body) {
+        Exception e = decode(504, "<없음>".equals(body) ? null : body);
+
+        assertThat(e).isInstanceOfSatisfying(RemoteTimeoutException.class, r -> {
+            assertThat(r.getStatus()).isEqualTo(504);
+            assertThat(r.getTarget()).isEqualTo("hub-ms");
+            assertThat(r.getErrorCode()).isSameAs(CommonErrorCode.SERVICE_TIMEOUT);
+            assertThat(r.getMessage()).doesNotContain("hub-ms");
+            assertThat(r.toString()).contains("hub-ms").contains("504");
         });
     }
 
