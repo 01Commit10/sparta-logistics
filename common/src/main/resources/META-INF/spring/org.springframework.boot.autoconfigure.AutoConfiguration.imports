@@ -4,3 +4,4 @@ com.common.config.CommonJpaAuditingAutoConfiguration
 com.common.config.CommonAuthWebAutoConfiguration
 com.common.config.CommonAuthFeignAutoConfiguration
 com.common.config.CommonRemoteAutoConfiguration
+com.common.config.CommonNotificationAutoConfiguration
