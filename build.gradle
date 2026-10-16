@@ -33,7 +33,6 @@ subprojects {
 
     dependencyManagement {
         imports {
-            // 앞에 org.springframework.boot를 지울 시 참조 경로가 달라져 에러가 발생하니 경로 변경x
             mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
             mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
         }
@@ -56,7 +55,7 @@ subprojects {
 }
 
 // 도메인 서비스 공통
-configure(subprojects.findAll { it.name.endsWith('-ms') }) {
+configure(subprojects.findAll { it.name.endsWith('-service') }) {
     apply plugin: 'org.springframework.boot'
 
     dependencies {
@@ -67,8 +66,6 @@ configure(subprojects.findAll { it.name.endsWith('-ms') }) {
         implementation 'org.springframework.boot:spring-boot-starter-validation'
         implementation 'org.springframework.boot:spring-boot-starter-actuator'
         implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
-        implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-        implementation 'org.springframework.boot:spring-boot-starter-cache'
 
         // Spring security
 //        implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -77,10 +74,5 @@ configure(subprojects.findAll { it.name.endsWith('-ms') }) {
         runtimeOnly 'org.postgresql:postgresql'
 
         testRuntimeOnly 'com.h2database:h2'
-        testImplementation testFixtures(project(':common')) // test code 작성을 위한 yaml 의존성 추가.
-    }
-
-    tasks.named('test') {
-        systemProperty 'spring.profiles.active', 'test'
     }
 }
