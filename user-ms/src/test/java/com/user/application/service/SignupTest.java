@@ -126,7 +126,7 @@ class SignupTest {
     @Test
     @DisplayName("ID 중복 확인: 없으면 사용 가능, 활성·탈퇴 사용자가 쓰면 사용 불가")
     void usernameAvailability() {
-        UserQueryService query = new UserQueryService(userRepository);
+        UserQueryService query = new UserQueryService(userRepository, new FakePasswordHasher());
         service.signup(valid());
         userRepository.save(withdrawnUser("gone01", "U009"));
 
@@ -138,7 +138,7 @@ class SignupTest {
     @Test
     @DisplayName("ID 중복 확인도 username 규칙을 검사한다 (INVALID_USERNAME)")
     void availabilityValidatesFormat() {
-        UserQueryService query = new UserQueryService(userRepository);
+        UserQueryService query = new UserQueryService(userRepository, new FakePasswordHasher());
 
         assertError(() -> query.isUsernameAvailable("A!"), UserErrorCode.INVALID_USERNAME);
     }

@@ -3,6 +3,11 @@ spring:
     name: user-ms
   profiles:
     include: common
+  data:
+    redis:
+      # 기본값(60초)이면 Redis가 멈췄을 때 로그인 응답이 60초 동안 걸린다. 짧게 끊고 503 AUTH_UNAVAILABLE로 응답
+      timeout: 2s
+      connect-timeout: 2s
 
 server:
   port: 19095
@@ -12,6 +17,12 @@ db:
   username: ${AUTH_DB_USER}
   password: ${AUTH_DB_PASSWORD}
 
+
+# 토큰 발급 (docs/plan/02 인증 계약 2.1). 키는 .env, gateway-edge와 같은 값
+jwt:
+  secret-key: ${JWT_SECRET_KEY:}
+  access-ttl: 30m
+  refresh-ttl: 7d
 
 # USR-19 초기 MASTER (값은 .env, 비어 있으면 만들지 않음)
 initial-master:

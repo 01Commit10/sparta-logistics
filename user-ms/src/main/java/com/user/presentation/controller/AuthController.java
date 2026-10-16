@@ -1,8 +1,11 @@
 package com.user.presentation.controller;
 
+import com.user.application.facade.AuthFacade;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
+import com.user.presentation.dto.request.LoginRequest;
 import com.user.presentation.dto.request.SignupRequest;
+import com.user.presentation.dto.response.LoginResponse;
 import com.user.presentation.dto.response.SignupResponse;
 import com.user.presentation.dto.response.UsernameAvailabilityResponse;
 import jakarta.validation.Valid;
@@ -24,10 +27,13 @@ public class AuthController {
 
     private final UserCommandService userCommandService;
     private final UserQueryService userQueryService;
+    private final AuthFacade authFacade;
 
-    public AuthController(UserCommandService userCommandService, UserQueryService userQueryService) {
+    public AuthController(UserCommandService userCommandService, UserQueryService userQueryService,
+                          AuthFacade authFacade) {
         this.userCommandService = userCommandService;
         this.userQueryService = userQueryService;
+        this.authFacade = authFacade;
     }
 
     /** USR-01 회원가입 */
@@ -41,5 +47,11 @@ public class AuthController {
     @GetMapping("/check-username")
     public UsernameAvailabilityResponse checkUsername(@RequestParam String username) {
         return new UsernameAvailabilityResponse(userQueryService.isUsernameAvailable(username));
+    }
+
+    /** USR-02 로그인 */
+    @PostMapping("/login")
+    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+        return LoginResponse.from(authFacade.login(request.toCommand()));
     }
 }

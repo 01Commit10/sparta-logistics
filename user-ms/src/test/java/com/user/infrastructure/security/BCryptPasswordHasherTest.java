@@ -24,4 +24,13 @@ class BCryptPasswordHasherTest {
     void saltedHash() {
         assertThat(hasher.hash("Master!2345")).isNotEqualTo(hasher.hash("Master!2345"));
     }
+
+    @Test
+    @DisplayName("BCrypt 한도(72바이트)를 넘는 비밀번호는 예외 없이 불일치로 본다 (로그인에서 500 방지)")
+    void tooLongPasswordDoesNotMatch() {
+        String hash = hasher.hash("Master!2345");
+
+        assertThat(hasher.matches("a".repeat(73), hash)).isFalse();
+        assertThat(hasher.matches("가".repeat(25), hash)).isFalse();   // 25자지만 UTF-8로 75바이트
+    }
 }
