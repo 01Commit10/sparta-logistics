@@ -16,7 +16,8 @@ import java.util.function.Supplier;
  * <ul>
  *     <li>{@link RemoteBusinessException}: 원격 4xx (ErrorDecoder가 만든 것을 그대로)</li>
  *     <li>{@link RemoteServiceException}: 원격 5xx·401, Circuit Breaker OPEN, 연결 실패(거부·연결 타임아웃) — 처리 안 됨</li>
- *     <li>{@link RemoteTimeoutException}: 요청을 보낸 뒤 응답을 못 받음(read 타임아웃, 응답 중 연결 끊김) — 결과 모름</li>
+ *     <li>{@link RemoteTimeoutException}: 요청을 보낸 뒤 결과를 알 수 없음(read 타임아웃, 응답 중 연결 끊김,
+ *         2xx 본문 변환 실패, 원격 504) — 결과 모름</li>
  * </ul>
  * Feign·Circuit Breaker는 원인을 여러 겹으로 감싸 던지므로(RetryableException, NoFallbackAvailableException 등) 원인 체인을 따라가며 판단한다.
  */
@@ -25,6 +26,8 @@ public class RemoteCallTemplate {
     private static final int MAX_CAUSE_DEPTH = 10;
     /** 이름으로 비교한다. resilience4j 없이 openfeign만 넣은 서비스에서도 이 클래스가 로딩되게 한다 */
     private static final String CIRCUIT_OPEN = "io.github.resilience4j.circuitbreaker.CallNotPermittedException";
+    /** 2xx를 받았지만 본문을 반환 타입으로 못 바꿈. 원격은 처리했다 */
+    private static final String DECODE_FAILURE = "feign.codec.DecodeException";
 
     public <T> T execute(String target, Supplier<T> call) {
         try {
@@ -43,7 +46,7 @@ public class RemoteCallTemplate {
 
     /**
      * 실패하면 한 번만 다시 보낸다. <b>멱등성 키가 있어 두 번 처리돼도 결과가 같은 호출에만</b> 쓴다 (SYS-13 6장).
-     * 업무 거절(4xx)과 Circuit Breaker OPEN은 다시 보내도 같으므로 재시도하지 않는다.
+     * 업무 거절(4xx), Circuit Breaker OPEN, 2xx 본문 변환 실패는 다시 보내도 같으므로 재시도하지 않는다.
      * <p>
      * 첫 시도가 타임아웃(결과 모름)이면 재시도가 5xx·연결 실패·OPEN(처리 안 됨)으로 끝나도 첫 요청이 처리됐을 수 있으므로
      * 첫 타임아웃을 던진다 (재시도 실패는 suppressed). 처리 안 됨으로 알리면 호출한 쪽이 보상(재고 복구 등)을 건너뛴다.
@@ -53,7 +56,7 @@ public class RemoteCallTemplate {
         try {
             return execute(target, call);
         } catch (RemoteTimeoutException | RemoteServiceException first) {
-            if (isCircuitOpen(first.getCause())) {
+            if (isCircuitOpen(first.getCause()) || isDecodeFailure(first.getCause())) {
                 throw first;
             }
             try {
@@ -79,6 +82,10 @@ public class RemoteCallTemplate {
             if (isCircuitOpen(cause) || isConnectFailure(cause)) {
                 return new RemoteServiceException(target, cause);
             }
+            // Jackson 예외도 IOException이라 원인을 따라가기 전에 먼저 본다 (HTML 등 IOException이 아닌 원인과 같게 분류)
+            if (isDecodeFailure(cause)) {
+                return new RemoteTimeoutException(target, cause);
+            }
             if (cause instanceof IOException io && ioFailure == null) {
                 ioFailure = io;
             }
@@ -91,6 +98,10 @@ public class RemoteCallTemplate {
 
     private static boolean isCircuitOpen(Throwable cause) {
         return cause != null && CIRCUIT_OPEN.equals(cause.getClass().getName());
+    }
+
+    private static boolean isDecodeFailure(Throwable cause) {
+        return cause != null && DECODE_FAILURE.equals(cause.getClass().getName());
     }
 
     /** 연결 단계 실패: 요청이 상대에게 닿지 않았다. JDK 기본 클라이언트는 연결 타임아웃도 SocketTimeoutException이라 메시지로 구분한다 */

@@ -6,6 +6,7 @@ import com.common.exception.ErrorCodeRegistry;
 import com.common.remote.RemoteBusinessException;
 import com.common.remote.RemoteErrorCode;
 import com.common.remote.RemoteServiceException;
+import com.common.remote.RemoteTimeoutException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.Response;
@@ -21,7 +22,8 @@ import java.util.Optional;
  * <ul>
  *     <li>4xx(401 제외) → {@link RemoteBusinessException}. 본문 code를 {@link ErrorCodeRegistry}로 복원하고,
  *         모르는 code는 {@link RemoteErrorCode}, 본문이 공통 형식이 아니면 상태별 공통 코드</li>
- *     <li>5xx·401 → {@link RemoteServiceException}. 서비스 간 401은 호출 쪽이 사용자 헤더를 안 넣은 내부 버그다 (E3)</li>
+ *     <li>504 → {@link RemoteTimeoutException}. 원격이 그다음 호출에서 타임아웃을 받은 것이라 그쪽에서 처리됐을 수 있다 (결과 모름)</li>
+ *     <li>그 밖의 5xx·401 → {@link RemoteServiceException}. 서비스 간 401은 호출 쪽이 사용자 헤더를 안 넣은 내부 버그다 (E3)</li>
  * </ul>
  */
 public class CommonFeignErrorDecoder implements ErrorDecoder {
@@ -39,6 +41,9 @@ public class CommonFeignErrorDecoder implements ErrorDecoder {
     public Exception decode(String methodKey, Response response) {
         String target = target(methodKey, response);
         int status = response.status();
+        if (status == HttpStatus.GATEWAY_TIMEOUT.value()) {
+            return new RemoteTimeoutException(target, status);
+        }
         if (status == HttpStatus.UNAUTHORIZED.value() || status < 400 || status >= 500) {
             return new RemoteServiceException(target, status);
         }
