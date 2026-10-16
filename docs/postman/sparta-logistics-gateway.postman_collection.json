@@ -1,0 +1,3983 @@
+{
+	"info": {
+		"_postman_id": "8f0b6c3e-6a7a-4a43-9a51-6f2f6f3c0a01",
+		"name": "sparta-logistics · Gateway 라우팅 확인",
+		"description": "docs/Common/로컬 실행·라우팅 확인 가이드.md 3장\n\n토큰 변수(masterToken, userToken, expiredToken)는 `python3 scripts/dev-token.py`로 만들어 Collection Variables에 붙여 넣습니다 (8~12번: 만료·위조 토큰 등 로그인으로 만들 수 없는 경우).\n로그인 토큰(loginAccessToken, loginRefreshToken)은 23번이 자동으로 저장합니다. 14번(가입) → 23번(로그인) 순서로 실행합니다.\n관리자 API(57~90번)는 masterUsername·masterPassword(.env의 MASTER 계정)를 Current value에만 채운 뒤 57번부터 순서대로 실행합니다.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. user-ms 직접 호출 (서비스 기동 확인)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"user-ms 응답\", () => pm.expect(pm.response.json().service).to.eql(\"user-ms\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{userDirect}}/api/v1/auth/routing-check",
+					"host": [
+						"{{userDirect}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "Gateway 없이 user-ms(19095)로 직접 호출합니다."
+			}
+		},
+		{
+			"name": "2. Gateway 경유 라우팅",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200 (기동 직후 503이면 잠시 후 재시도)\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"user-ms로 라우팅\", () => pm.expect(b.service).to.eql(\"user-ms\"));",
+							"pm.test(\"경로·쿼리 그대로 전달\", () => { pm.expect(b.path).to.eql(\"/api/v1/auth/routing-check\"); pm.expect(b.query).to.eql(\"from=postman\"); });"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check?from=postman",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					],
+					"query": [
+						{
+							"key": "from",
+							"value": "postman"
+						}
+					]
+				},
+				"description": "Postman → Gateway(19090) → user-ms\n\nGW-05 이후 보호 경로라서 {{masterToken}}이 필요합니다."
+			}
+		},
+		{
+			"name": "3. 위조 헤더 → 토큰 값으로 교체",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const h = pm.response.json().headers;",
+							"pm.test(\"위조한 X-User-*, X-Token-* 값은 도착하지 않음 (토큰 값으로 교체)\", () => { pm.expect(h[\"X-User-Id\"]).to.not.eql(\"00000000-0000-0000-0000-000000000001\"); pm.expect(h[\"X-User-Role\"]).to.eql(\"USER\"); pm.expect(h[\"X-Token-Jti\"]).to.not.eql(\"forged\"); });",
+							"pm.test(\"다른 헤더는 그대로\", () => pm.expect(h[\"X-Request-Id\"]).to.eql(\"postman-1\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					},
+					{
+						"key": "X-User-Id",
+						"value": "00000000-0000-0000-0000-000000000001"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "MASTER"
+					},
+					{
+						"key": "X-Token-Jti",
+						"value": "forged"
+					},
+					{
+						"key": "X-Request-Id",
+						"value": "postman-1"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "외부에서 넣은 X-User-*, X-Token-*는 Gateway가 먼저 지우고(GW-03), 토큰에서 만든 값만 붙입니다(GW-06). {{userToken}}(USER)으로 X-User-Role: MASTER를 위조해도 USER로 도착합니다."
+			}
+		},
+		{
+			"name": "4. 없는 경로 → 404 공통 형식",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"404\", () => pm.response.to.have.status(404));",
+							"pm.test(\"RESOURCE_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"RESOURCE_NOT_FOUND\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{gateway}}/api/v1/unknown",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"unknown"
+					]
+				},
+				"description": "GW-04"
+			}
+		},
+		{
+			"name": "5. 내부 API 차단 → 404",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"404\", () => pm.response.to.have.status(404));",
+							"pm.test(\"RESOURCE_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"RESOURCE_NOT_FOUND\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{gateway}}/internal/v1/users/00000000-0000-0000-0000-000000000001",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"internal",
+						"v1",
+						"users",
+						"00000000-0000-0000-0000-000000000001"
+					]
+				},
+				"description": "GW-03: /internal/** 는 외부에서 도달할 수 없습니다."
+			}
+		},
+		{
+			"name": "6. 서비스 미기동 → 503 공통 형식",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"503 (hub-ms를 띄우지 않았을 때)\", () => pm.response.to.have.status(503));",
+							"pm.test(\"SERVICE_UNAVAILABLE\", () => pm.expect(pm.response.json().code).to.eql(\"SERVICE_UNAVAILABLE\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/hubs",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"hubs"
+					]
+				},
+				"description": "hub-ms를 실행하지 않은 상태에서 확인합니다.\n\nGW-05 이후 보호 경로라서 {{masterToken}}이 필요합니다."
+			}
+		},
+		{
+			"name": "7. Eureka 등록 확인",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const apps = pm.response.json().applications.application.map(a => a.name);",
+							"pm.test(\"GATEWAY-EDGE, USER-MS 등록\", () => { pm.expect(apps).to.include(\"GATEWAY-EDGE\"); pm.expect(apps).to.include(\"USER-MS\"); });"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{eureka}}/eureka/apps",
+					"host": [
+						"{{eureka}}"
+					],
+					"path": [
+						"eureka",
+						"apps"
+					]
+				},
+				"description": "Eureka에 등록된 서비스 목록"
+			}
+		},
+		{
+			"name": "8. 토큰 없음 → 401 TOKEN_MISSING",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"code TOKEN_MISSING\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_MISSING\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "공개 경로가 아니면 Access Token이 필요합니다 (GW-05)."
+			}
+		},
+		{
+			"name": "9. 잘못된 토큰 → 401 TOKEN_INVALID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"code TOKEN_INVALID\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_INVALID\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer abc"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "서명·형식이 틀리거나 Refresh Token(typ=refresh)이면 TOKEN_INVALID."
+			}
+		},
+		{
+			"name": "10. 만료 토큰 → 401 TOKEN_EXPIRED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"code TOKEN_EXPIRED\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_EXPIRED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{expiredToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "{{expiredToken}}: python3 scripts/dev-token.py --expired"
+			}
+		},
+		{
+			"name": "11. USER 토큰 → 사용자 헤더 주입 확인",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const h = pm.response.json().headers;",
+							"pm.test(\"X-User-Role은 토큰 값\", () => pm.expect(h[\"X-User-Role\"]).to.eql(\"USER\"));",
+							"pm.test(\"X-User-Id·X-Token-Jti·X-Token-Exp 주입\", () => { pm.expect(h[\"X-User-Id\"]).to.match(/^[0-9a-f-]{36}$/); pm.expect(h[\"X-Token-Jti\"]).to.be.a(\"string\"); pm.expect(h[\"X-Token-Exp\"]).to.match(/^\\d{10}$/); });"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "MASTER",
+						"description": "위조 헤더. 토큰 값(USER)으로 덮여야 한다"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "Gateway가 토큰에서 X-User-Id, X-User-Role, X-Token-Jti, X-Token-Exp를 만들어 붙입니다 (GW-06). routing-check가 받은 헤더를 그대로 보여 줍니다."
+			}
+		},
+		{
+			"name": "12. USER 토큰 → MASTER 전용 API → 403",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"403\", () => pm.response.to.have.status(403));",
+							"pm.test(\"code ACCESS_DENIED\", () => pm.expect(pm.response.json().code).to.eql(\"ACCESS_DENIED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users"
+					]
+				},
+				"description": "MASTER 전용 경로는 application.yaml gateway.policy.master에 있습니다. user-ms에 도착하지 않습니다."
+			}
+		},
+		{
+			"name": "13. ID 중복 확인 (공개 경로) → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"available 값\", () => pm.expect(pm.response.json().available).to.be.a(\"boolean\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/check-username?username=user01",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"check-username"
+					],
+					"query": [
+						{
+							"key": "username",
+							"value": "user01"
+						}
+					]
+				},
+				"description": "공개 경로라 토큰 없이 user-ms로 갑니다 (USR-20). 탈퇴한 사용자의 ID도 사용 불가(false)입니다."
+			}
+		},
+		{
+			"name": "14. 회원가입 → 201",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"const n = String(Date.now()).slice(-6);",
+							"pm.collectionVariables.set(\"signupUsername\", \"user\" + n);",
+							"pm.collectionVariables.set(\"signupSlackId\", \"U\" + n);"
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"201\", () => pm.response.to.have.status(201));",
+							"const b = pm.response.json();",
+							"pm.test(\"USER로 가입\", () => pm.expect(b.role).to.eql(\"USER\"));",
+							"pm.test(\"비밀번호 미노출\", () => pm.expect(pm.response.text().toLowerCase()).to.not.include(\"password\"));",
+							"pm.collectionVariables.set(\"signupUserId\", b.id);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/signup",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"signup"
+					]
+				},
+				"description": "토큰 없이 가입합니다 (USR-01). 보낼 때마다 username·slackId를 새로 만듭니다 (Pre-request Script).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{signupUsername}}\",\n  \"password\": \"Abcd123!\",\n  \"name\": \"홍길동\",\n  \"slackId\": \"{{signupSlackId}}\",\n  \"organizationType\": \"COMPANY\",\n  \"organizationName\": \"부산수산\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "15. 같은 username 재가입 → 409",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"409\", () => pm.response.to.have.status(409));",
+							"pm.test(\"code DUPLICATE_USERNAME\", () => pm.expect(pm.response.json().code).to.eql(\"DUPLICATE_USERNAME\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/signup",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"signup"
+					]
+				},
+				"description": "14번 바로 다음에 보냅니다. 탈퇴한 사용자의 username도 다시 쓸 수 없습니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{signupUsername}}\",\n  \"password\": \"Abcd123!\",\n  \"name\": \"홍길동\",\n  \"slackId\": \"{{signupSlackId}}\",\n  \"organizationType\": \"COMPANY\",\n  \"organizationName\": \"부산수산\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "16. 가입한 ID 확인 → available false",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"사용 불가\", () => pm.expect(pm.response.json().available).to.eql(false));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/check-username?username={{signupUsername}}",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"check-username"
+					],
+					"query": [
+						{
+							"key": "username",
+							"value": "{{signupUsername}}"
+						}
+					]
+				},
+				"description": "14번에서 가입한 username은 사용할 수 없습니다."
+			}
+		},
+		{
+			"name": "17. 비밀번호 정책 위반 → 400 INVALID_PASSWORD",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"code INVALID_PASSWORD\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_PASSWORD\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/signup",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"signup"
+					]
+				},
+				"description": "8~15자, 영문 대문자·소문자·숫자·특수문자를 모두 포함해야 합니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"weak0001\",\n  \"password\": \"abcd1234\",\n  \"name\": \"홍길동\",\n  \"slackId\": \"UWEAK0001\",\n  \"organizationType\": \"HUB\",\n  \"organizationName\": \"경기남부허브\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "18. 내부 API 직접 호출 (가입한 사용자) → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const body = pm.response.json();",
+							"pm.test(\"계약 필드 6개\", () => pm.expect(Object.keys(body)).to.have.members([\"id\", \"name\", \"role\", \"isDeliveryManager\", \"slackId\", \"active\"]));",
+							"pm.test(\"가입한 사용자\", () => {",
+							"    pm.expect(body.id).to.eql(pm.collectionVariables.get(\"signupUserId\"));",
+							"    pm.expect(body.slackId).to.eql(pm.collectionVariables.get(\"signupSlackId\"));",
+							"    pm.expect(body.isDeliveryManager).to.eql(false);",
+							"    pm.expect(body.active).to.eql(true);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{userDirect}}/internal/v1/users/{{signupUserId}}",
+					"host": [
+						"{{userDirect}}"
+					],
+					"path": [
+						"internal",
+						"v1",
+						"users",
+						"{{signupUserId}}"
+					]
+				},
+				"description": "U06: 서비스 간 계약(delivery-ms가 Feign으로 호출). Gateway를 거치지 않고 user-ms 포트로 직접 호출합니다. 14번 회원가입을 먼저 실행하세요."
+			}
+		},
+		{
+			"name": "19. 내부 API 없는 사용자 → 404 USER_NOT_FOUND",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"404\", () => pm.response.to.have.status(404));",
+							"pm.test(\"USER_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"USER_NOT_FOUND\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{userDirect}}/internal/v1/users/00000000-0000-0000-0000-0000000000ff",
+					"host": [
+						"{{userDirect}}"
+					],
+					"path": [
+						"internal",
+						"v1",
+						"users",
+						"00000000-0000-0000-0000-0000000000ff"
+					]
+				},
+				"description": "U06: 없거나 탈퇴·비활성화된 사용자는 404 USER_NOT_FOUND입니다."
+			}
+		},
+		{
+			"name": "20. 서비스 직접: 올바른 X-User-* → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"헤더 그대로 전달\", () => pm.expect(pm.response.json().headers[\"X-User-Role\"]).to.eql(\"USER\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "3f2b8c1e-7a4d-4e5f-9b6a-1c2d3e4f5a6b"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "USER"
+					}
+				],
+				"url": {
+					"raw": "{{userDirect}}/api/v1/auth/routing-check",
+					"host": [
+						"{{userDirect}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "C01: Gateway 없이 서비스를 직접 부를 때 X-User-Id·X-User-Role을 손으로 넣으면 그대로 동작합니다 (로컬 개발용)."
+			}
+		},
+		{
+			"name": "21. 서비스 직접: X-User-Id만 → 401 UNAUTHENTICATED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"UNAUTHENTICATED\", () => pm.expect(pm.response.json().code).to.eql(\"UNAUTHENTICATED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "3f2b8c1e-7a4d-4e5f-9b6a-1c2d3e4f5a6b"
+					}
+				],
+				"url": {
+					"raw": "{{userDirect}}/api/v1/auth/routing-check",
+					"host": [
+						"{{userDirect}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "C01 입구 검사: 두 헤더 중 하나만 있으면 모든 API에서 401입니다. @CurrentUser가 없는 API도 마찬가지입니다."
+			}
+		},
+		{
+			"name": "22. 서비스 직접: 형식이 틀린 X-User-* → 401 UNAUTHENTICATED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"UNAUTHENTICATED\", () => pm.expect(pm.response.json().code).to.eql(\"UNAUTHENTICATED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "3f2b8c1e-7a4d-4e5f-9b6a-1c2d3e4f5a6b"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "ADMIN"
+					}
+				],
+				"url": {
+					"raw": "{{userDirect}}/api/v1/auth/routing-check",
+					"host": [
+						"{{userDirect}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "C01 입구 검사: UUID가 아니거나 역할이 MASTER·USER가 아니면 401입니다 (대소문자도 정확히)."
+			}
+		},
+		{
+			"name": "23. 로그인 (가입한 사용자) → 200 토큰 발급",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"응답 필드 3개 (감싸지 않음)\", () => pm.expect(Object.keys(b).sort()).to.eql([\"accessToken\", \"passwordChangeRequired\", \"refreshToken\"]));",
+							"pm.test(\"비밀번호 변경 필요 없음\", () => pm.expect(b.passwordChangeRequired).to.eql(false));",
+							"pm.collectionVariables.set(\"loginAccessToken\", b.accessToken);",
+							"pm.collectionVariables.set(\"loginRefreshToken\", b.refreshToken);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "U05 (USR-02): 14번에서 가입한 사용자로 로그인합니다. 받은 토큰을 loginAccessToken·loginRefreshToken에 저장합니다.\nRedis 확인: `docker exec sparta-logistics-redis redis-cli GET auth:refresh:{signupUserId}` = Refresh의 jti, `TTL` ≈ 604800",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{signupUsername}}\",\n  \"password\": \"Abcd123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "24. 로그인 토큰으로 Gateway 통과 → 200 (발급·검증 계약 교차 확인)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const h = pm.response.json().headers;",
+							"pm.test(\"X-User-Id는 가입한 사용자\", () => pm.expect(h[\"X-User-Id\"]).to.eql(pm.collectionVariables.get(\"signupUserId\")));",
+							"pm.test(\"X-User-Role은 USER\", () => pm.expect(h[\"X-User-Role\"]).to.eql(\"USER\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "user-ms가 발급한 Access Token을 gateway-edge가 받아 주는지 확인합니다 (02 인증 계약 2.1). 실패하면 두 서비스의 JWT_SECRET_KEY나 claim이 다릅니다."
+			}
+		},
+		{
+			"name": "25. Refresh Token을 Access로 사용 → 401 TOKEN_INVALID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"TOKEN_INVALID\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_INVALID\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginRefreshToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "Refresh Token은 typ=refresh라 Gateway가 거부합니다 (02 인증 계약 2.1 typ)."
+			}
+		},
+		{
+			"name": "26. 틀린 비밀번호 → 401 INVALID_CREDENTIALS",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"INVALID_CREDENTIALS\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_CREDENTIALS\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "없는 ID(27번)와 같은 응답입니다. 어느 쪽이 틀렸는지 알려 주지 않습니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{signupUsername}}\",\n  \"password\": \"Wrong123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "27. 없는 ID → 401 INVALID_CREDENTIALS",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"INVALID_CREDENTIALS\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_CREDENTIALS\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "가입 규칙에 맞지 않는 ID(대문자)도 400이 아니라 401입니다 (U05 D1).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"NoSuchUser\",\n  \"password\": \"Abcd123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "28. 빈 비밀번호 → 400 INVALID_INPUT",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"INVALID_INPUT\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INPUT\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "빈 값만 400으로 막습니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{signupUsername}}\",\n  \"password\": \"\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "29. 로그아웃 → 204",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"204\", () => pm.response.to.have.status(204));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/logout",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"logout"
+					]
+				},
+				"description": "U08 (USR-04): 23번 Access Token으로 로그아웃합니다. Gateway가 X-User-*·X-Token-Jti·X-Token-Exp를 넣어 user-ms로 보냅니다.\nRedis 확인: `auth:blacklist:{jti}` = logout (TTL = 남은 유효 시간), `auth:refresh:{signupUserId}` 없음"
+			}
+		},
+		{
+			"name": "30. 로그아웃한 토큰으로 요청 → 401 TOKEN_REVOKED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"TOKEN_REVOKED\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_REVOKED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "GW-07: 서명·만료가 유효해도 Gateway가 Redis blacklist를 보고 막습니다. 서비스에는 도착하지 않습니다."
+			}
+		},
+		{
+			"name": "31. 서비스 직접: X-Token-* 없이 로그아웃 → 401 UNAUTHENTICATED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"UNAUTHENTICATED\", () => pm.expect(pm.response.json().code).to.eql(\"UNAUTHENTICATED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "3f2b8c1e-7a4d-4e5f-9b6a-1c2d3e4f5a6b"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "USER"
+					}
+				],
+				"url": {
+					"raw": "{{userDirect}}/api/v1/auth/logout",
+					"host": [
+						"{{userDirect}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"logout"
+					]
+				},
+				"description": "Gateway가 넣는 X-Token-Jti·X-Token-Exp가 없으면 Gateway를 거치지 않은 요청으로 보고 401입니다 (400이 아님)."
+			}
+		},
+		{
+			"name": "32. 다시 로그인 → 200 (재발급 준비)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.collectionVariables.set(\"loginAccessToken\", b.accessToken);",
+							"pm.collectionVariables.set(\"loginRefreshToken\", b.refreshToken);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "29번 로그아웃으로 Refresh가 지워졌으므로 다시 로그인합니다. 토큰을 loginAccessToken·loginRefreshToken에 다시 저장합니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{signupUsername}}\",\n  \"password\": \"Abcd123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "33. 토큰 재발급 → 200 새 Access·Refresh",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"응답 필드 2개 (감싸지 않음)\", () => pm.expect(Object.keys(b).sort()).to.eql([\"accessToken\", \"refreshToken\"]));",
+							"pm.test(\"Refresh도 새로 바뀜 (Rotation)\", () => pm.expect(b.refreshToken).to.not.eql(pm.collectionVariables.get(\"loginRefreshToken\")));",
+							"pm.collectionVariables.set(\"reissuedAccessToken\", b.accessToken);",
+							"pm.collectionVariables.set(\"reissuedRefreshToken\", b.refreshToken);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/reissue",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"reissue"
+					]
+				},
+				"description": "U07 (USR-03): 공개 경로라 Authorization 헤더 없이 Refresh Token을 본문으로 보냅니다. 받은 토큰을 reissuedAccessToken·reissuedRefreshToken에 저장합니다.\nRedis 확인: `GET auth:refresh:{signupUserId}`가 32번 때와 다른 jti로 바뀜",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"refreshToken\": \"{{loginRefreshToken}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "34. 재발급한 Access로 Gateway 통과 → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{reissuedAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "재발급한 Access Token도 Gateway 검증 계약을 지킵니다."
+			}
+		},
+		{
+			"name": "35. 이전 Refresh로 다시 재발급 → 401 REFRESH_TOKEN_INVALID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"REFRESH_TOKEN_INVALID\", () => pm.expect(pm.response.json().code).to.eql(\"REFRESH_TOKEN_INVALID\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/reissue",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"reissue"
+					]
+				},
+				"description": "32번 Refresh는 33번에서 교체되었습니다. 교체된 토큰이 다시 오면 유출로 보고 저장된 Refresh를 지웁니다 (재사용 탐지).\nRedis 확인: `EXISTS auth:refresh:{signupUserId}` = 0",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"refreshToken\": \"{{loginRefreshToken}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "36. 새 Refresh도 401 (재사용 탐지로 지워짐)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"REFRESH_TOKEN_INVALID\", () => pm.expect(pm.response.json().code).to.eql(\"REFRESH_TOKEN_INVALID\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/reissue",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"reissue"
+					]
+				},
+				"description": "35번에서 저장값이 지워졌으므로 33번에서 받은 새 Refresh도 쓸 수 없습니다. 다시 로그인해야 합니다. 이미 발급된 Access는 만료(30분)까지 남습니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"refreshToken\": \"{{reissuedRefreshToken}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "37. Access Token으로 재발급 → 401 REFRESH_TOKEN_INVALID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"REFRESH_TOKEN_INVALID\", () => pm.expect(pm.response.json().code).to.eql(\"REFRESH_TOKEN_INVALID\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/reissue",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"reissue"
+					]
+				},
+				"description": "typ=access 토큰은 재발급에 쓸 수 없습니다 (25번의 반대 방향).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"refreshToken\": \"{{reissuedAccessToken}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "38. refreshToken 빈 값 → 400 INVALID_INPUT",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"INVALID_INPUT\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INPUT\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/reissue",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"reissue"
+					]
+				},
+				"description": "빈 값만 400입니다. 형식이 틀린 토큰은 401 REFRESH_TOKEN_INVALID입니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"refreshToken\": \"\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "39. 다시 로그인 → 200 (내 계정 준비)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.collectionVariables.set(\"loginAccessToken\", b.accessToken);",
+							"pm.collectionVariables.set(\"loginRefreshToken\", b.refreshToken);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "35번 재사용 탐지로 Refresh가 지워졌으므로 다시 로그인합니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{signupUsername}}\",\n  \"password\": \"Abcd123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "40. 내 정보 조회 → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"본인 정보\", () => pm.expect(b.username).to.eql(pm.collectionVariables.get(\"signupUsername\")));",
+							"pm.test(\"비밀번호 해시 없음\", () => pm.expect(JSON.stringify(b).toLowerCase()).to.not.include(\"hash\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "U09 (USR-06): 대상은 토큰의 사용자입니다 (Gateway가 X-User-Id를 넣음). 비밀번호 변경이 필요한 상태(pcr)에서도 허용됩니다."
+			}
+		},
+		{
+			"name": "41. 내 정보 수정 (Slack ID만) → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"slackId 변경\", () => pm.expect(pm.response.json().slackId).to.eql(pm.collectionVariables.get(\"signupSlackId\") + \"-2\"));",
+							"pm.test(\"name은 무시\", () => pm.expect(pm.response.json().name).to.eql(\"홍길동\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "U09 (USR-07): 본인은 Slack ID만 바꿀 수 있습니다. 본문의 name은 무시됩니다.\nDB 확인: `updated_by` = 본인 ID",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"slackId\": \"{{signupSlackId}}-2\",\n  \"name\": \"바뀌면안됨\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "42. 현재 비밀번호 틀림 → 401 INVALID_CREDENTIALS",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"INVALID_CREDENTIALS\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_CREDENTIALS\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me/password",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me",
+						"password"
+					]
+				},
+				"description": "U10: 현재 비밀번호를 다시 확인합니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"currentPassword\": \"Wrong123!\",\n  \"newPassword\": \"Newpw123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "43. 비밀번호 변경 → 204",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"204\", () => pm.response.to.have.status(204));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me/password",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me",
+						"password"
+					]
+				},
+				"description": "U10 (USR-08): 바꾸면 이 사용자의 모든 토큰이 무효가 됩니다 (Refresh 삭제, revoked-at 기록). 비밀번호 변경 필요 상태도 풀립니다.\nRedis 확인: `GET auth:revoked-at:{signupUserId}` = epoch 초, `TTL` ≈ 1800",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"currentPassword\": \"Abcd123!\",\n  \"newPassword\": \"Newpw123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "44. 변경 전 토큰으로 요청 → 401 TOKEN_REVOKED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"TOKEN_REVOKED\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_REVOKED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "43번에서 무효화된 토큰입니다."
+			}
+		},
+		{
+			"name": "45. 새 비밀번호로 바로 로그인 → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.collectionVariables.set(\"loginAccessToken\", b.accessToken);",
+							"pm.collectionVariables.set(\"loginRefreshToken\", b.refreshToken);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "43번 직후(같은 초여도) 다시 로그인합니다. 새 Access의 iat는 revoked-at 다음 초 이후로 정해집니다 (U10 D1).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{signupUsername}}\",\n  \"password\": \"Newpw123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "46. 새 토큰으로 Gateway 통과 → 200 (같은 초 재로그인)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "같은 초에 다시 로그인한 토큰도 막히지 않습니다."
+			}
+		},
+		{
+			"name": "47. 회원탈퇴 본문 없음 → 400 INVALID_INPUT",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"INVALID_INPUT\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INPUT\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "U11: 비밀번호를 DELETE 본문으로 받습니다."
+			}
+		},
+		{
+			"name": "48. 회원탈퇴 → 204",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"204\", () => pm.response.to.have.status(204));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "U11 (USR-09): 비밀번호를 다시 확인하고 논리 삭제합니다 (deleted_by = 본인). 토큰도 모두 무효가 됩니다. 마지막 MASTER는 409 LAST_MASTER입니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"password\": \"Newpw123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "49. 탈퇴 후 토큰 → 401 TOKEN_REVOKED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"TOKEN_REVOKED\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_REVOKED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{loginAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "탈퇴 전에 받은 토큰도 바로 쓸 수 없습니다."
+			}
+		},
+		{
+			"name": "50. 탈퇴 후 로그인 → 401 INVALID_CREDENTIALS",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"INVALID_CREDENTIALS\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_CREDENTIALS\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "탈퇴한 계정은 로그인할 수 없습니다. 같은 ID로 다시 가입할 수도 없습니다 (409).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{signupUsername}}\",\n  \"password\": \"Newpw123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "51. 요청 ID: 보낸 X-Request-Id가 서비스와 응답에 그대로 → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"응답 헤더 X-Request-Id\", () => pm.expect(pm.response.headers.get(\"X-Request-Id\")).to.eql(\"postman-trace-51\"));",
+							"pm.test(\"서비스가 받은 X-Request-Id\", () => pm.expect(pm.response.json().headers[\"X-Request-Id\"]).to.eql(\"postman-trace-51\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					},
+					{
+						"key": "X-Request-Id",
+						"value": "postman-trace-51"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/routing-check",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"routing-check"
+					]
+				},
+				"description": "GW-08. 형식(1~64자, 영문·숫자·하이픈)이 맞는 ID는 그대로 하위 서비스와 응답 헤더에 실립니다. Gateway 로그에 `GET /api/v1/auth/routing-check 200 {ms} postman-trace-51 {userId}` 한 줄이 남습니다."
+			}
+		},
+		{
+			"name": "52. 요청 ID: 없는 경로 404에도 새 X-Request-Id(UUID)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"404\", () => pm.response.to.have.status(404));",
+							"pm.test(\"RESOURCE_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"RESOURCE_NOT_FOUND\"));",
+							"pm.test(\"새 UUID 요청 ID\", () => pm.expect(pm.response.headers.get(\"X-Request-Id\")).to.match(/^[0-9a-f-]{36}$/));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					},
+					{
+						"key": "X-Request-Id",
+						"value": "bad id <script>"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/unknown",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"unknown"
+					]
+				},
+				"description": "GW-08. 형식이 틀린 ID(공백·스크립트)는 버리고 새 UUID를 만듭니다. 라우트가 없는 404처럼 Gateway가 직접 만든 오류 응답에도 붙습니다."
+			}
+		},
+		{
+			"name": "53. 인가 우회: 인코딩한 MASTER 경로(%75sers) → 403",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"403\", () => pm.response.to.have.status(403));",
+							"pm.test(\"code ACCESS_DENIED\", () => pm.expect(pm.response.json().code).to.eql(\"ACCESS_DENIED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/%75sers",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"%75sers"
+					]
+				},
+				"description": "%75 = u. Gateway는 디코딩한 경로(/api/v1/users)로 정책을 비교합니다 (RequestPath)."
+			}
+		},
+		{
+			"name": "54. 인가 우회: 세미콜론(;) 경로 → 400 INVALID_INPUT",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"code INVALID_INPUT\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INPUT\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users;x",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users;x"
+					]
+				},
+				"description": "Tomcat은 ;뒤를 지워 처리하므로 Gateway가 거부합니다. MASTER 토큰이어도 400입니다."
+			}
+		},
+		{
+			"name": "55. 인가 우회: HEAD로 MASTER GET 경로 → 403",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"403\", () => pm.response.to.have.status(403));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "HEAD",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users"
+					]
+				},
+				"description": "HEAD 요청은 GET 규칙을 따릅니다. HEAD 응답에는 본문이 없습니다."
+			}
+		},
+		{
+			"name": "56. 인가 우회: 인코딩된 점(%2e%2e)으로 내부 API → 400 INVALID_INPUT",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"code INVALID_INPUT\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INPUT\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/%2e%2e/%2e%2e/%2e%2e/internal/v1/users/x",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"%2e%2e",
+						"%2e%2e",
+						"%2e%2e",
+						"internal",
+						"v1",
+						"users",
+						"x"
+					]
+				},
+				"description": "%2e %2f %5c %00 %25 \\ ; 와 . .. 세그먼트는 해석이 서비스마다 달라질 수 있어 거부합니다."
+			}
+		},
+		{
+			"name": "57. MASTER 로그인 → 200 (관리자 API 준비)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"비밀번호 변경 필요 없음\", () => pm.expect(b.passwordChangeRequired).to.eql(false));",
+							"pm.collectionVariables.set(\"masterLoginToken\", b.accessToken);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "U05: .env의 MASTER 계정으로 로그인합니다. Collection Variables의 masterUsername·masterPassword를 **Current value**에만 채우세요 (비밀값이라 Initial value·Git에 넣지 않음).\n받은 Access를 masterLoginToken에 저장합니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{masterUsername}}\",\n  \"password\": \"{{masterPassword}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "58. MASTER 내 정보 → 200 (본인 ID 저장)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"MASTER\", () => pm.expect(b.role).to.eql(\"MASTER\"));",
+							"pm.collectionVariables.set(\"masterUserId\", b.id);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "80·82번(본인에게 하면 409)에 쓸 MASTER 본인 ID를 masterUserId에 저장합니다."
+			}
+		},
+		{
+			"name": "59. 사용자 생성 (허브 배송담당자) → 201",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"const n = String(Date.now()).slice(-6);",
+							"pm.collectionVariables.set(\"adminUsername\", \"dm\" + n);",
+							"pm.collectionVariables.set(\"adminSlackId\", \"UDM\" + n);"
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"201\", () => pm.response.to.have.status(201));",
+							"const b = pm.response.json();",
+							"pm.test(\"Location = /api/v1/users/{id}\", () => pm.expect(pm.response.headers.get(\"Location\")).to.eql(\"/api/v1/users/\" + b.id));",
+							"pm.test(\"배송담당자·비밀번호 변경 필요\", () => { pm.expect(b.isDeliveryManager).to.eql(true); pm.expect(b.passwordChangeRequired).to.eql(true); });",
+							"pm.test(\"작성자 = MASTER\", () => pm.expect(b.createdBy).to.eql(pm.collectionVariables.get(\"masterUserId\")));",
+							"pm.test(\"비밀번호 미노출\", () => pm.expect(pm.response.text().toLowerCase()).to.not.include(\"passwordhash\"));",
+							"pm.collectionVariables.set(\"adminUserId\", b.id);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users"
+					]
+				},
+				"description": "U12 (USR-10): 역할·배송담당 여부를 정해 만듭니다. MASTER가 정한 비밀번호라 다음 로그인 후 변경이 강제됩니다 (passwordChangeRequired=true).\n보낼 때마다 username·slackId를 새로 만들고, 만든 ID를 adminUserId에 저장합니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"Abcd123!\",\n  \"name\": \"김배송\",\n  \"slackId\": \"{{adminSlackId}}\",\n  \"organizationType\": \"HUB\",\n  \"organizationName\": \"서울허브\",\n  \"role\": \"USER\",\n  \"isDeliveryManager\": true\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "60. 사용자 생성: 본사(HQ) USER → 400 INVALID_ORGANIZATION",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"code INVALID_ORGANIZATION\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_ORGANIZATION\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users"
+					]
+				},
+				"description": "본사(HQ) 소속은 MASTER만 가질 수 있습니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"hq{{adminUsername}}\",\n  \"password\": \"Abcd123!\",\n  \"name\": \"본사직원\",\n  \"slackId\": \"HQ{{adminSlackId}}\",\n  \"organizationType\": \"HQ\",\n  \"organizationName\": \"본사\",\n  \"role\": \"USER\",\n  \"isDeliveryManager\": false\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "61. 사용자 생성: role 없음 → 400 INVALID_INPUT",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"code INVALID_INPUT\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INPUT\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users"
+					]
+				},
+				"description": "역할·배송담당 여부는 필수입니다 (빠뜨려서 USER·비담당자가 조용히 만들어지지 않게).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"nr{{adminUsername}}\",\n  \"password\": \"Abcd123!\",\n  \"name\": \"역할없음\",\n  \"slackId\": \"NR{{adminSlackId}}\",\n  \"organizationType\": \"HUB\",\n  \"organizationName\": \"서울허브\",\n  \"isDeliveryManager\": false\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "62. 생성한 계정 로그인 → 200 passwordChangeRequired",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"비밀번호 변경 필요\", () => pm.expect(b.passwordChangeRequired).to.eql(true));",
+							"pm.collectionVariables.set(\"adminAccessToken\", b.accessToken);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "GW-07: 로그인은 되지만 토큰에 pcr=true가 들어갑니다. 받은 Access를 adminAccessToken에 저장합니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"Abcd123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "63. 비밀번호 변경 전 다른 API → 403 PASSWORD_CHANGE_REQUIRED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"403\", () => pm.response.to.have.status(403));",
+							"pm.test(\"code PASSWORD_CHANGE_REQUIRED\", () => pm.expect(pm.response.json().code).to.eql(\"PASSWORD_CHANGE_REQUIRED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{adminAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "비밀번호를 바꾸기 전에는 GET /users/me, PATCH /users/me/password, 로그아웃만 됩니다 (Gateway가 막음).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"slackId\": \"UX{{adminSlackId}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "64. 비밀번호 변경 전 내 정보 → 200 (허용 목록)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"passwordChangeRequired true\", () => pm.expect(pm.response.json().passwordChangeRequired).to.eql(true));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{adminAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "허용 목록이라 통과합니다."
+			}
+		},
+		{
+			"name": "65. 생성한 계정 비밀번호 변경 → 204",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"204\", () => pm.response.to.have.status(204));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{adminAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me/password",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me",
+						"password"
+					]
+				},
+				"description": "바꾸면 변경 필요 상태가 풀리고 기존 토큰은 무효가 됩니다. 다시 로그인해야 합니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"currentPassword\": \"Abcd123!\",\n  \"newPassword\": \"Newpw123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "66. 새 비밀번호로 로그인 → 200 변경 필요 없음",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"비밀번호 변경 필요 없음\", () => pm.expect(b.passwordChangeRequired).to.eql(false));",
+							"pm.collectionVariables.set(\"adminAccessToken\", b.accessToken);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "이제 모든 API를 쓸 수 있습니다. adminAccessToken을 새 토큰으로 바꿉니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"Newpw123!\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "67. 사용자 목록 (username 검색) → 200 1건",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"페이지 형식\", () => pm.expect(Object.keys(b).sort()).to.eql([\"content\", \"hasNext\", \"page\", \"size\", \"sort\", \"totalElements\", \"totalPages\"]));",
+							"pm.test(\"1건\", () => { pm.expect(b.totalElements).to.eql(1); pm.expect(b.content[0].id).to.eql(pm.collectionVariables.get(\"adminUserId\")); });",
+							"pm.test(\"목록엔 slackId 없음\", () => pm.expect(b.content[0]).to.not.have.property(\"slackId\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users?username={{adminUsername}}&size=10",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users"
+					],
+					"query": [
+						{
+							"key": "username",
+							"value": "{{adminUsername}}"
+						},
+						{
+							"key": "size",
+							"value": "10"
+						}
+					]
+				},
+				"description": "U13 (USR-11): 검색은 모두 선택 조건입니다. 기본 정렬은 생성일 역순(+ id), size가 1~100 밖이면 10입니다.\n목록 한 줄에는 Slack ID·소속 ID가 없습니다 (상세에서 확인)."
+			}
+		},
+		{
+			"name": "68. 사용자 목록: size 500 → 10으로 (400 아님)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"size 10\", () => pm.expect(pm.response.json().size).to.eql(10));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users?size=500",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users"
+					],
+					"query": [
+						{
+							"key": "size",
+							"value": "500"
+						}
+					]
+				},
+				"description": "07 서비스 정책 1.5: size는 1~100만, 그 밖은 기본값 10."
+			}
+		},
+		{
+			"name": "69. 사용자 목록: 허용하지 않은 정렬 → 400 INVALID_SORT_PROPERTY",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"code INVALID_SORT_PROPERTY\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_SORT_PROPERTY\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users?sort=slackId,asc",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users"
+					],
+					"query": [
+						{
+							"key": "sort",
+							"value": "slackId,asc"
+						}
+					]
+				},
+				"description": "정렬은 createdAt·username·name만 됩니다."
+			}
+		},
+		{
+			"name": "70. 사용자 상세 → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"활성·비밀번호 변경 끝남\", () => { pm.expect(b.active).to.eql(true); pm.expect(b.passwordChangeRequired).to.eql(false); });",
+							"pm.test(\"Slack ID 있음\", () => pm.expect(b.slackId).to.eql(pm.collectionVariables.get(\"adminSlackId\")));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}"
+					]
+				},
+				"description": "U13 (USR-12): 삭제된 사용자도 조회됩니다. 작업자(createdBy 등)와 활성 여부가 함께 나옵니다."
+			}
+		},
+		{
+			"name": "71. 정보 수정 (이름만) → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"이름만 바뀜\", () => { pm.expect(b.name).to.eql(\"김배송2\"); pm.expect(b.organizationName).to.eql(\"서울허브\"); });",
+							"pm.test(\"수정자 = MASTER\", () => pm.expect(b.updatedBy).to.eql(pm.collectionVariables.get(\"masterUserId\")));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}"
+					]
+				},
+				"description": "U14 (USR-13): 보낸 필드만 바꿉니다. 역할·배송담당·비밀번호·소속 ID는 전용 API로만 바꿉니다. 토큰은 그대로입니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"김배송2\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "72. 정보 수정: 빈 본문 → 400 INVALID_INPUT",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"400\", () => pm.response.to.have.status(400));",
+							"pm.test(\"code INVALID_INPUT\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_INPUT\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}"
+					]
+				},
+				"description": "바꿀 필드가 하나도 없으면 400입니다 (필드 이름 오타가 조용히 무시되지 않게).",
+				"body": {
+					"mode": "raw",
+					"raw": "{}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "73. 정보 수정: 배송담당자를 업체 소속으로 → 409 DELIVERY_MANAGER_REQUIRES_HUB",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"409\", () => pm.response.to.have.status(409));",
+							"pm.test(\"code DELIVERY_MANAGER_REQUIRES_HUB\", () => pm.expect(pm.response.json().code).to.eql(\"DELIVERY_MANAGER_REQUIRES_HUB\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}"
+					]
+				},
+				"description": "배송담당자는 허브 소속만 가능합니다. 옮기려면 먼저 배송담당을 해제하세요 (75번).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"organizationType\": \"COMPANY\",\n  \"organizationName\": \"부산수산\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "74. 소속 연결 (허브 UUID) → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"organizationId 저장\", () => pm.expect(b.organizationId).to.eql(\"11111111-1111-4111-8111-111111111111\"));",
+							"pm.test(\"소속명 유지\", () => pm.expect(b.organizationName).to.eql(\"서울허브\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}/organization",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}",
+						"organization"
+					]
+				},
+				"description": "U20 (USR-16): 업체·허브가 실제로 있는지는 확인하지 않습니다 (MASTER가 확인한 UUID). 유형이 같으면 소속명은 생략할 수 있고, 유형을 바꾸면 소속명이 필수입니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"organizationType\": \"HUB\",\n  \"organizationId\": \"11111111-1111-4111-8111-111111111111\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "75. 배송담당자 해제 → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"해제됨\", () => pm.expect(pm.response.json().isDeliveryManager).to.eql(false));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}/delivery-manager",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}",
+						"delivery-manager"
+					]
+				},
+				"description": "U16 (USR-15): 지정(true)·해제(false). 배송담당 여부는 토큰에 없어서 토큰을 무효화하지 않습니다 (내부 API가 바로 새 값을 돌려줌).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"isDeliveryManager\": false\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "76. 역할 변경 USER → MASTER → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"MASTER\", () => pm.expect(pm.response.json().role).to.eql(\"MASTER\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}/role",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}",
+						"role"
+					]
+				},
+				"description": "U15 (USR-14): 역할이 실제로 바뀌면 대상의 토큰이 모두 무효가 됩니다 (role claim이 달라지므로). 같은 역할이면 아무것도 하지 않습니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"role\": \"MASTER\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "77. 역할 변경 전 토큰 → 401 TOKEN_REVOKED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"code TOKEN_REVOKED\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_REVOKED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{adminAccessToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/me",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"me"
+					]
+				},
+				"description": "대상은 다시 로그인해야 새 역할의 토큰을 받습니다."
+			}
+		},
+		{
+			"name": "78. 역할 변경 MASTER → USER → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"USER\", () => pm.expect(pm.response.json().role).to.eql(\"USER\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}/role",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}",
+						"role"
+					]
+				},
+				"description": "되돌립니다. 마지막 MASTER는 강등할 수 없습니다 (409 LAST_MASTER). 본인 강등은 됩니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"role\": \"USER\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "79. 비밀번호 초기화 → 200 임시 비밀번호",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"응답 필드 3개\", () => pm.expect(Object.keys(b).sort()).to.eql([\"temporaryPassword\", \"userId\", \"username\"]));",
+							"pm.test(\"대상 확인\", () => { pm.expect(b.userId).to.eql(pm.collectionVariables.get(\"adminUserId\")); pm.expect(b.username).to.eql(pm.collectionVariables.get(\"adminUsername\")); });",
+							"pm.test(\"no-store\", () => pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"));",
+							"pm.collectionVariables.set(\"tempPassword\", b.temporaryPassword);"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}/password-reset",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}",
+						"password-reset"
+					]
+				},
+				"description": "U18 (USR-21): 임시 비밀번호는 이 응답으로 한 번만 나옵니다 (저장하지 않음, Cache-Control: no-store). 대상의 토큰은 모두 무효가 되고, 임시 비밀번호로 로그인하면 변경이 강제됩니다.\n임시 비밀번호를 tempPassword에 저장합니다."
+			}
+		},
+		{
+			"name": "80. 본인 비밀번호 초기화 → 409 CANNOT_RESET_OWN_PASSWORD",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"409\", () => pm.response.to.have.status(409));",
+							"pm.test(\"code CANNOT_RESET_OWN_PASSWORD\", () => pm.expect(pm.response.json().code).to.eql(\"CANNOT_RESET_OWN_PASSWORD\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{masterUserId}}/password-reset",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{masterUserId}}",
+						"password-reset"
+					]
+				},
+				"description": "관리자 초기화는 현재 비밀번호를 확인하지 않으므로 본인은 비밀번호 변경(PATCH /users/me/password)을 씁니다."
+			}
+		},
+		{
+			"name": "81. 임시 비밀번호로 로그인 → 200 passwordChangeRequired",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"비밀번호 변경 필요\", () => pm.expect(pm.response.json().passwordChangeRequired).to.eql(true));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "예전 비밀번호(Newpw123!)는 더 이상 안 됩니다. 임시 비밀번호로 로그인하면 다시 비밀번호 변경이 강제됩니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{tempPassword}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "82. 본인 비활성화 → 409 CANNOT_DEACTIVATE_SELF",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"409\", () => pm.response.to.have.status(409));",
+							"pm.test(\"code CANNOT_DEACTIVATE_SELF\", () => pm.expect(pm.response.json().code).to.eql(\"CANNOT_DEACTIVATE_SELF\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{masterUserId}}",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{masterUserId}}"
+					]
+				},
+				"description": "관리자 비활성화는 비밀번호를 다시 확인하지 않으므로 본인은 탈퇴(DELETE /users/me)를 씁니다."
+			}
+		},
+		{
+			"name": "83. 사용자 비활성화 → 204",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"204\", () => pm.response.to.have.status(204));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}"
+					]
+				},
+				"description": "U17 (USR-17): 논리 삭제(deleted_by = MASTER)하고 대상의 토큰을 모두 무효로 합니다. 역할·배송담당 여부는 재활성화를 위해 그대로 둡니다."
+			}
+		},
+		{
+			"name": "84. 다시 비활성화 → 409 USER_ALREADY_DELETED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"409\", () => pm.response.to.have.status(409));",
+							"pm.test(\"code USER_ALREADY_DELETED\", () => pm.expect(pm.response.json().code).to.eql(\"USER_ALREADY_DELETED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}"
+					]
+				},
+				"description": "이미 삭제된 사용자입니다."
+			}
+		},
+		{
+			"name": "85. 비활성화한 계정 로그인 → 401 INVALID_CREDENTIALS",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"401\", () => pm.response.to.have.status(401));",
+							"pm.test(\"code INVALID_CREDENTIALS\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_CREDENTIALS\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "삭제된 계정은 없는 계정과 같은 응답입니다 (계정 존재 여부를 드러내지 않음).",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{tempPassword}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "86. 목록: 삭제된 사용자는 includeDeleted=true일 때만",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"1건, active false\", () => { pm.expect(b.totalElements).to.eql(1); pm.expect(b.content[0].active).to.eql(false); });"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users?username={{adminUsername}}&includeDeleted=true",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users"
+					],
+					"query": [
+						{
+							"key": "username",
+							"value": "{{adminUsername}}"
+						},
+						{
+							"key": "includeDeleted",
+							"value": "true"
+						}
+					]
+				},
+				"description": "includeDeleted를 빼면 0건입니다."
+			}
+		},
+		{
+			"name": "87. 재활성화 → 200",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"const b = pm.response.json();",
+							"pm.test(\"활성, 삭제 정보 지워짐\", () => { pm.expect(b.active).to.eql(true); pm.expect(b.deletedAt).to.eql(null); pm.expect(b.deletedBy).to.eql(null); });"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}/restore",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}",
+						"restore"
+					]
+				},
+				"description": "U19 (USR-22): 비활성화·본인 탈퇴 모두 되살립니다. 비밀번호·역할·배송담당 여부는 그대로입니다. 그사이 다른 활성 사용자가 같은 Slack ID를 쓰면 409 DUPLICATE_SLACK_ID입니다."
+			}
+		},
+		{
+			"name": "88. 다시 재활성화 → 409 USER_NOT_DELETED",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"409\", () => pm.response.to.have.status(409));",
+							"pm.test(\"code USER_NOT_DELETED\", () => pm.expect(pm.response.json().code).to.eql(\"USER_NOT_DELETED\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/{{adminUserId}}/restore",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"{{adminUserId}}",
+						"restore"
+					]
+				},
+				"description": "삭제되지 않은 사용자입니다."
+			}
+		},
+		{
+			"name": "89. 재활성화한 계정 로그인 → 200 (비밀번호 그대로)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"200\", () => pm.response.to.have.status(200));",
+							"pm.test(\"비밀번호 변경 필요 그대로\", () => pm.expect(pm.response.json().passwordChangeRequired).to.eql(true));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/auth/login",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				},
+				"description": "비활성화 전 비밀번호(임시 비밀번호)로 로그인되고, 비밀번호 변경 필요 상태도 그대로입니다.",
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{tempPassword}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "90. 없는 사용자 상세 → 404 USER_NOT_FOUND",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"404\", () => pm.response.to.have.status(404));",
+							"pm.test(\"code USER_NOT_FOUND\", () => pm.expect(pm.response.json().code).to.eql(\"USER_NOT_FOUND\"));"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{masterLoginToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{gateway}}/api/v1/users/00000000-0000-0000-0000-0000000000ff",
+					"host": [
+						"{{gateway}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"00000000-0000-0000-0000-0000000000ff"
+					]
+				}
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "gateway",
+			"value": "http://localhost:19090"
+		},
+		{
+			"key": "userDirect",
+			"value": "http://localhost:19095"
+		},
+		{
+			"key": "eureka",
+			"value": "http://localhost:8761"
+		},
+		{
+			"key": "masterToken",
+			"value": "",
+			"description": "python3 scripts/dev-token.py --role MASTER 결과 (로그인 API 전까지)"
+		},
+		{
+			"key": "userToken",
+			"value": "",
+			"description": "python3 scripts/dev-token.py 결과"
+		},
+		{
+			"key": "expiredToken",
+			"value": "",
+			"description": "python3 scripts/dev-token.py --expired 결과"
+		},
+		{
+			"key": "signupUsername",
+			"value": ""
+		},
+		{
+			"key": "signupSlackId",
+			"value": ""
+		},
+		{
+			"key": "signupUserId",
+			"value": ""
+		},
+		{
+			"key": "loginAccessToken",
+			"value": "",
+			"description": "23·32번 로그인 응답 (자동 저장)"
+		},
+		{
+			"key": "loginRefreshToken",
+			"value": "",
+			"description": "23·32번 로그인 응답 (자동 저장)"
+		},
+		{
+			"key": "reissuedAccessToken",
+			"value": "",
+			"description": "33번 재발급 응답 (자동 저장)"
+		},
+		{
+			"key": "reissuedRefreshToken",
+			"value": "",
+			"description": "33번 재발급 응답 (자동 저장)"
+		},
+		{
+			"key": "masterUsername",
+			"value": "",
+			"description": "57번: .env의 MASTER_USERNAME (Current value에만, 공유·커밋 금지)"
+		},
+		{
+			"key": "masterPassword",
+			"value": "",
+			"description": "57번: .env의 MASTER_PASSWORD (Current value에만, 공유·커밋 금지)"
+		},
+		{
+			"key": "masterLoginToken",
+			"value": "",
+			"description": "57번 MASTER 로그인 응답 (자동 저장)"
+		},
+		{
+			"key": "masterUserId",
+			"value": "",
+			"description": "58번 (자동 저장)"
+		},
+		{
+			"key": "adminUsername",
+			"value": "",
+			"description": "59번 (자동 생성)"
+		},
+		{
+			"key": "adminSlackId",
+			"value": "",
+			"description": "59번 (자동 생성)"
+		},
+		{
+			"key": "adminUserId",
+			"value": "",
+			"description": "59번 사용자 생성 응답 (자동 저장)"
+		},
+		{
+			"key": "adminAccessToken",
+			"value": "",
+			"description": "62·66번 생성한 계정의 로그인 응답 (자동 저장)"
+		},
+		{
+			"key": "tempPassword",
+			"value": "",
+			"description": "79번 비밀번호 초기화 응답 (자동 저장)"
+		}
+	]
+}

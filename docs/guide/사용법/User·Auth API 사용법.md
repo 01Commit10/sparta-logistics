@@ -1,6 +1,6 @@
 # User·Auth API 사용법
 
-> 작성: 대진 · 기준: `dev` d6af869 · 최종 수정: 2026-10-16
+> 작성: 대진 · 기준: `dev` 46ad946 · 최종 수정: 2026-10-17
 > 대상: Postman·curl로 API를 테스트하는 사람, 다른 서비스에서 사용자 정보가 필요한 사람
 > 원리·전체 필드·오류 코드 전체는 [[03 User·Auth API 가이드]]에 있습니다. 이 문서는 **따라 하기만** 합니다.
 
@@ -51,7 +51,47 @@ curl -s -X POST $GW/api/v1/auth/login -H 'Content-Type: application/json' \
 | 비밀번호 변경 | `PATCH /api/v1/users/me/password` `{ "currentPassword": "...", "newPassword": "..." }` | ✅ | 204 → **다시 로그인** |
 | 탈퇴 | `DELETE /api/v1/users/me` `{ "password": "..." }` (DELETE지만 본문 필요) | ✅ | 204 → 로그인 불가 |
 
-- MASTER 관리자 API(사용자 목록·역할 변경·배송담당자 지정 등, U12~U20)는 **아직 없습니다.** 만들어지면 이 표에 추가합니다.
+### 2.1 관리자 API (MASTER만, U12~U20)
+
+MASTER 토큰이 아니면 Gateway가 403 `ACCESS_DENIED`로 막습니다. `/users/me`·`/users/me/**`는 본인 API라 여기에 걸리지 않습니다.
+
+| 하고 싶은 것 | 요청 | 성공 응답 |
+|---|---|---|
+| 사용자 생성 | `POST /api/v1/users` (가입 항목 + `role` + `isDeliveryManager`) | 201 상세 + `Location` |
+| 목록·검색 | `GET /api/v1/users?username=&name=&role=&isDeliveryManager=&organizationType=&includeDeleted=&page=0&size=10&sort=createdAt,desc` | 200 페이지 |
+| 상세 | `GET /api/v1/users/{userId}` (삭제된 사용자도 보임) | 200 상세 |
+| 정보 수정 | `PATCH /api/v1/users/{userId}` `{ "name", "slackId", "organizationType", "organizationName" }` 중 보낼 것만 | 200 상세 |
+| 역할 변경 | `PATCH /api/v1/users/{userId}/role` `{ "role": "MASTER" }` | 200 상세 → 대상 **다시 로그인** |
+| 배송담당자 지정·해제 | `PATCH /api/v1/users/{userId}/delivery-manager` `{ "isDeliveryManager": true }` | 200 상세 |
+| 소속 연결 | `PATCH /api/v1/users/{userId}/organization` `{ "organizationType": "HUB", "organizationId": "uuid", "organizationName": "서울허브" }` | 200 상세 |
+| 비밀번호 초기화 | `POST /api/v1/users/{userId}/password-reset` (본문 없음) | 200 `{ userId, username, temporaryPassword }` → 대상 **다시 로그인** |
+| 비활성화 | `DELETE /api/v1/users/{userId}` (본문 없음) | 204 → 대상 로그인 불가 |
+| 재활성화 | `POST /api/v1/users/{userId}/restore` (본문 없음) | 200 상세 → 기존 비밀번호로 로그인 |
+
+```bash
+# MASTER로 로그인한 토큰 (.env의 MASTER 계정)
+M=eyJ...
+
+# 허브 배송담당자 만들기 (시연용 계정)
+curl -s -X POST $GW/api/v1/users -H "Authorization: Bearer $M" -H 'Content-Type: application/json' \
+  -d '{"username":"dm01","password":"Abcd1234!","name":"김배송","slackId":"U0DM01","organizationType":"HUB","organizationName":"서울허브","role":"USER","isDeliveryManager":true}'
+# → 201 { "id": "...", "isDeliveryManager": true, "passwordChangeRequired": true, ... }
+```
+
+알아 둘 규칙:
+
+- **만든 계정과 초기화된 계정은 비밀번호를 먼저 바꿔야 합니다.** 로그인 응답이 `passwordChangeRequired: true`이고, 바꾸기 전에는 `GET /users/me`, `PATCH /users/me/password`, 로그아웃만 됩니다(그 밖은 403 `PASSWORD_CHANGE_REQUIRED`). 바꾼 뒤 다시 로그인하세요.
+- **임시 비밀번호는 응답으로 한 번만** 나옵니다(저장하지 않음, `Cache-Control: no-store`). 응답의 `username`이 대상과 맞는지 확인하고 대상에게 전달하세요.
+- **본인에게는 못 하는 것**: 본인 비활성화 409 `CANNOT_DEACTIVATE_SELF`(탈퇴를 쓰세요), 본인 비밀번호 초기화 409 `CANNOT_RESET_OWN_PASSWORD`(비밀번호 변경을 쓰세요). 본인 강등은 됩니다(마지막 MASTER가 아닐 때).
+- **배송담당자는 허브 소속만**: 허브가 아닌 사용자를 지정하거나, 담당자를 허브가 아닌 소속으로 옮기면 409 `DELIVERY_MANAGER_REQUIRES_HUB`. 옮기려면 먼저 해제하세요.
+- **본사(HQ)는 MASTER만**: USER를 HQ로 만들거나 HQ 소속 MASTER를 USER로 바꾸면 400 `INVALID_ORGANIZATION`. 소속 연결은 `COMPANY`·`HUB`만 됩니다.
+- **소속 유형을 바꾸면 소속명도 함께** 보내야 합니다(정보 수정·소속 연결 둘 다, 없으면 400 `INVALID_INPUT`). 소속 연결은 업체·허브가 실제로 있는지 확인하지 않으니 UUID를 확인하고 넣으세요.
+- **정보 수정**은 보낸 필드만 바꿉니다. 바꿀 필드가 하나도 없거나 빈 문자열이면 400. 역할·배송담당·비밀번호·소속 ID는 전용 API로만 바꿉니다.
+- **역할 변경·비밀번호 초기화·비활성화**는 대상의 토큰을 바로 무효로 합니다(401 `TOKEN_REVOKED`). 배송담당자 지정·정보 수정은 토큰을 그대로 둡니다(내부 API가 바로 새 값을 돌려줌).
+- **마지막 MASTER**는 강등·비활성화할 수 없습니다(409 `LAST_MASTER`).
+- **재활성화**: 삭제되지 않은 사용자면 409 `USER_NOT_DELETED`, 그사이 다른 사용자가 같은 Slack ID를 쓰면 409 `DUPLICATE_SLACK_ID`. 이미 삭제된 사용자를 비활성화하면 409 `USER_ALREADY_DELETED`.
+- **목록**: 기본은 생성일 역순, 정렬은 `createdAt`·`username`·`name`만(그 밖은 400 `INVALID_SORT_PROPERTY`). `size`가 1~100 밖이면 10으로 바뀝니다(400 아님). 삭제된 사용자는 `includeDeleted=true`일 때만 나옵니다. 목록 한 줄에는 Slack ID·소속 ID가 없으니 상세로 보세요.
+- 없는 사용자는 404 `USER_NOT_FOUND`(수정·역할·배송담당·소속·초기화는 삭제된 사용자도 404).
 
 ## 3. 토큰이 막힐 때
 
@@ -255,10 +295,9 @@ USER_ID=$(curl -s -X POST localhost:19090/api/v1/auth/signup -H 'Content-Type: a
 curl -s localhost:19095/internal/v1/users/$USER_ID | jq
 # → "isDeliveryManager": false
 
-# 3) 배송담당자로 만들기: 지정 API(U16)가 아직 없으므로 지금은 DB에서 직접 (로컬 전용)
-set -a; . ./.env; set +a
-docker exec -it sparta-logistics-postgres psql -U "$DB_USER" -d "$DB_NAME" \
-  -c "update auth.p_users set is_delivery_manager = true where username = 'dm01';"
+# 3) 배송담당자로 만들기: MASTER 토큰으로 지정 API (2.1)
+curl -s -X PATCH localhost:19090/api/v1/users/$USER_ID/delivery-manager -H "Authorization: Bearer $M" \
+  -H 'Content-Type: application/json' -d '{"isDeliveryManager":true}' > /dev/null
 curl -s localhost:19095/internal/v1/users/$USER_ID | jq .isDeliveryManager
 # → true
 
@@ -277,4 +316,4 @@ curl -s localhost:19095/internal/v1/users/00000000-0000-0000-0000-0000000000ff |
 ## 6. 막히면
 
 - 필드 전체, 오류 코드 전체, 인증 흐름 그림: [[03 User·Auth API 가이드]]
-- 내부 API 응답 필드 추가, 관리자 API 일정: **대진**에게
+- 내부 API 응답 필드 추가: **대진**에게

@@ -1,6 +1,6 @@
 # SYS-13. 장애 대응 설계
 
-> 작성일: 2026-10-14 · 담당: 대진 (공통 설정) · 각 서비스 담당 (실패 처리)
+> 작성일: 2026-10-14 · 수정: 2026-10-17 (5장 분류, 6장 재시도, 9·11장 Gateway CB를 구현에 맞춤) · 담당: 대진 (공통 설정) · 각 서비스 담당 (실패 처리)
 > 관련: [[요구사항 정리]] SYS-13 · [[07 서비스 정책]] 7장 Saga · [[SYS-01 게이트웨이 인증 인가 설계]] 6장 (Redis 장애) · [[SA 설계보완리포트]] D-4, T-4
 
 ## 1. 목적과 범위
@@ -108,9 +108,11 @@ stateDiagram-v2
 | 분류 | 발생 조건 | 공통 예외 (예시) | 결과가 확실한가 | 클라이언트 응답 |
 |---|---|---|---|---|
 | **업무 거절** | 4xx | `RemoteBusinessException` (원래 오류 코드 유지) | ✅ 확실히 실패 | 원래 코드 그대로 전달 (예: 409 `INSUFFICIENT_STOCK`) |
-| **서비스 오류** | 5xx | `RemoteServiceException` | ⚠️ 대체로 실패 | 503 `SERVICE_UNAVAILABLE` |
-| **응답 없음** | 타임아웃, 연결 실패 | `RemoteTimeoutException` | ❌ **결과 모름** | 504 `SERVICE_TIMEOUT` |
+| **서비스 오류** | 5xx(504 제외), 원격 401, 연결 실패, 인스턴스 없음 | `RemoteServiceException` | ⚠️ 대체로 실패 | 503 `SERVICE_UNAVAILABLE` |
+| **응답 없음** | read 타임아웃, 응답 중 끊김, 원격 504, 2xx 응답 변환 실패 | `RemoteTimeoutException` | ❌ **결과 모름** | 504 `SERVICE_TIMEOUT` |
 | **차단됨** | Circuit Breaker OPEN | `CallNotPermittedException` → `RemoteServiceException` | ✅ 호출 안 함 | 503 `SERVICE_UNAVAILABLE` |
+
+> 2026-10-17 구현 기준으로 바뀐 점: **연결 실패**는 요청이 닿지 않은 것이 확실하므로 서비스 오류(503)입니다. **원격 504**(원격의 다음 호출 결과 모름)와 **2xx 응답 변환 실패**(원격은 이미 처리함)는 결과 모름(504)입니다. 자세한 표는 [[02 장애 대응(Feign) 가이드]] 4장.
 
 > **"응답 없음"은 실패가 아니라 "결과를 모름"입니다.** 재고 차감이 타임아웃되어도 Hub에서는 실제로 차감됐을 수 있습니다. 이 경우를 실패로 단정하고 그냥 끝내면 재고가 사라집니다.
 
@@ -128,6 +130,7 @@ stateDiagram-v2
 
 - 재시도는 Feign `Retryer`가 아니라 **각 서비스가 명시적으로** 합니다. 어떤 호출이 안전한지는 업무를 아는 사람만 판단할 수 있기 때문입니다.
 - 재시도 대상 API는 **같은 키로 다시 와도 결과가 같아야** 합니다(멱등). → 이찬(재고), 영은(배송) 확인 필요
+- 구현(`RemoteCallTemplate.executeWithRetryOnce`): 4xx·CB OPEN·응답 변환 실패는 재시도하지 않습니다. **첫 시도가 결과 모름이고 재시도가 503류로 실패하면 결과 모름(첫 예외)을 유지**합니다. 첫 요청이 처리됐을 수 있기 때문입니다.
 
 ---
 
@@ -145,7 +148,7 @@ stateDiagram-v2
 
 ### 8.1 주문 생성 (Order Saga)
 
-| 단계 | 업무 거절 (4xx) | 서비스 오류·차단 (5xx·OPEN) | 응답 없음 (타임아웃) |
+| 단계 | 업무 거절 (4xx) | 서비스 오류·차단 (504 외 5xx·연결 실패·OPEN) | 결과 모름 (타임아웃·원격 504·변환 실패) |
 |---|---|---|---|
 | ① 업체·상품 검증 → Company | 주문 FAILED | 주문 FAILED (되돌릴 것 없음) | 주문 FAILED |
 | ② 재고 차감 → Hub | 재고 부족 → FAILED | FAILED | **같은 키로 1회 재시도** → 그래도 모르면 **재고 복원 호출** 후 FAILED |
@@ -186,7 +189,8 @@ stateDiagram-v2
 |---|---|
 | 타임아웃 | 전역 연결 2초·응답 5초, 주문 라우트만 응답 15초 (3.2) |
 | Circuit Breaker | 라우트(대상 서비스)마다 1개. 기준값은 4.1과 동일 |
-| Fallback | `forward:/fallback` → 공통 에러 형식으로 503 `SERVICE_UNAVAILABLE` |
+| 회로 열림 응답 | `fallbackUri` **없음**. 열리면 SCG가 던지는 예외를 Gateway 공통 오류 처리가 503 `SERVICE_UNAVAILABLE`(공통 에러 형식)로 바꿈 |
+| 실패로 세는 것 | 연결 실패·타임아웃(예외)만. `statusCodes` **없음** → 하위 4xx·5xx 응답은 세지 않고 본문 그대로 전달 |
 | 타임아웃 응답 | 504 `SERVICE_TIMEOUT` (공통 에러 형식) |
 | 재시도 | 하지 않음 |
 
@@ -293,11 +297,12 @@ spring:
               metadata:
                 response-timeout: 15000
               filters:
-                - name: CircuitBreaker
+                - name: CircuitBreaker   # fallbackUri·statusCodes 없음 (9장)
                   args:
                     name: order-ms
-                    fallbackUri: forward:/fallback
 ```
+
+> **fallbackUri·statusCodes를 두지 않은 이유** (GW-10 실험, 2026-10-16): `fallbackUri: forward:/fallback` + `statusCodes`면 ① 회로가 닫혀 있어도 하위 500이 fallback 503으로 바뀌고 본문이 사라지고 ② 응답 타임아웃 504도 503으로 바뀌며 ③ 외부에서 `GET /fallback`을 직접 부를 수 있었습니다. 또 `statusCodes`에 5xx를 넣으면 order-ms가 hub 장애를 전하는 503 때문에 order-ms 회로까지 열립니다(연쇄). 단점은 빠른 500이 연속돼도 회로가 열리지 않는다는 점입니다.
 
 > 패키지명(`com.common.exception`)과 클래스명은 공통 모듈 구조가 정해지면 맞춥니다. Spring Cloud 2025.0.x 기준 속성명이며, 적용 시 실제 동작을 확인합니다.
 
