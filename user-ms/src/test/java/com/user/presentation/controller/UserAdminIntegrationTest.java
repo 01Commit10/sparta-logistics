@@ -242,4 +242,46 @@ class UserAdminIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
     }
+
+    private static MockHttpServletRequestBuilder create(String username, String slackId) {
+        return asMaster(post("/api/v1/users").contentType(MediaType.APPLICATION_JSON).content("""
+                { "username": "%s", "password": "Abcd123!", "name": "김배송", "slackId": "%s",
+                  "organizationType": "HUB", "organizationName": "서울센터", "role": "USER", "isDeliveryManager": true }
+                """.formatted(username, slackId)));
+    }
+
+    @Test
+    @DisplayName("U12: 생성 → 201, 작성자는 MASTER, 해시 저장, 내부 API가 배송담당자, 로그인하면 비밀번호 변경 필요")
+    void createByMaster() throws Exception {
+        mockMvc.perform(create("new01", "U-new01"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.createdBy").value(MASTER_ID.toString()))
+                .andExpect(jsonPath("$.passwordChangeRequired").value(true));
+
+        var row = jdbc.queryForMap("select id, created_by, password_hash, password_change_required, role,"
+                + " is_delivery_manager from auth.p_users where username = 'new01'");
+        assertThat(row).containsEntry("created_by", MASTER_ID).containsEntry("password_change_required", true)
+                .containsEntry("role", "USER").containsEntry("is_delivery_manager", true);
+        assertThat((String) row.get("password_hash")).startsWith("$2").doesNotContain("Abcd123!");
+
+        mockMvc.perform(get("/internal/v1/users/{userId}", row.get("id")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isDeliveryManager").value(true));
+        mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"username\": \"new01\", \"password\": \"Abcd123!\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.passwordChangeRequired").value(true));
+    }
+
+    @Test
+    @DisplayName("U12: 가입자와 같은 username → 409 DUPLICATE_USERNAME, 하나만 남는다")
+    void createDuplicateUsername() throws Exception {
+        signup("dupnew01", "HUB");
+
+        mockMvc.perform(create("dupnew01", "U-other"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_USERNAME"));
+        assertThat(jdbc.queryForObject("select count(*) from auth.p_users where username = 'dupnew01'", Integer.class))
+                .isEqualTo(1);
+    }
 }

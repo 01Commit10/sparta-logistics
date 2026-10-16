@@ -61,7 +61,7 @@ class UserTest {
         }
 
         @Test
-        @DisplayName("MASTER 생성: 역할·배송담당 여부를 지정하고 작성자는 MASTER")
+        @DisplayName("MASTER 생성: 역할·배송담당 여부를 지정하고 작성자는 MASTER, MASTER가 정한 비밀번호라 변경 필요")
         void createByMaster() {
             User user = User.createByMaster(USER_ID, Username.of("courier01"), "배송원", "hashed", "U002",
                     OrganizationType.HUB, "서울센터", UserRole.USER, true, MASTER_ID);
@@ -69,6 +69,8 @@ class UserTest {
             assertThat(user.getRole()).isEqualTo(UserRole.USER);
             assertThat(user.isDeliveryManager()).isTrue();
             assertThat(user.getCreatedBy()).isEqualTo(MASTER_ID);
+            assertThat(user.isPasswordChangeRequired()).isTrue();
+            assertThat(user.isActive()).isTrue();
         }
 
         @Test

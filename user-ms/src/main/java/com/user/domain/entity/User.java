@@ -99,7 +99,10 @@ public class User extends BaseEntity {
         return user;
     }
 
-    /** MASTER가 만든 계정: 역할·배송담당 여부 지정 가능. 본사(HQ)는 MASTER 역할만, 배송담당자는 허브 소속만. 작성자는 MASTER. */
+    /**
+     * MASTER가 만든 계정: 역할·배송담당 여부 지정 가능. 본사(HQ)는 MASTER 역할만, 배송담당자는 허브 소속만. 작성자는 MASTER.
+     * 비밀번호를 MASTER도 알고 있으므로 초기화(A12)처럼 다음 로그인 후 변경을 강제한다.
+     */
     public static User createByMaster(UUID id, Username username, String name, String passwordHash, String slackId,
                                       OrganizationType organizationType, String organizationName,
                                       UserRole role, boolean deliveryManager, UUID masterId) {
@@ -109,6 +112,7 @@ public class User extends BaseEntity {
         checkDeliveryManagerOrganization(deliveryManager, organizationType);
         User user = new User(id, username, name, passwordHash, slackId, role, deliveryManager,
                 organizationType, organizationName);
+        user.passwordChangeRequired = true;
         user.recordCreatedBy(masterId);
         return user;
     }

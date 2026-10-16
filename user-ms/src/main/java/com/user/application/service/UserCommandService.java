@@ -6,6 +6,7 @@ import com.common.exception.UserErrorCode;
 import com.user.application.dto.AssignDeliveryManagerCommand;
 import com.user.application.dto.ChangePasswordCommand;
 import com.user.application.dto.ChangeRoleCommand;
+import com.user.application.dto.CreateUserCommand;
 import com.user.application.dto.DeactivateUserCommand;
 import com.user.application.dto.InitialMasterCommand;
 import com.user.application.dto.InitialMasterResult;
@@ -69,15 +70,28 @@ public class UserCommandService {
         Username username = Username.of(command.username());
         PasswordPolicy.validate(command.password());
         OrganizationType organizationType = parseOrganizationType(command.organizationType());
-        if (userRepository.existsByUsername(username.value())) {
-            throw new BusinessException(UserErrorCode.DUPLICATE_USERNAME);
-        }
-        if (userRepository.existsActiveBySlackId(command.slackId())) {
-            throw new BusinessException(UserErrorCode.DUPLICATE_SLACK_ID);
-        }
+        checkNotDuplicated(username, command.slackId());
         User user = User.signup(UUID.randomUUID(), username, command.name(),
                 passwordHasher.hash(command.password()), command.slackId(),
                 organizationType, command.organizationName());
+        return UserResult.from(userRepository.save(user));
+    }
+
+    /**
+     * USR-10 MASTER의 사용자 생성: 가입과 같은 입력·중복 규칙에 역할·배송담당 여부를 더한다.
+     * 본사(HQ)는 MASTER만, 배송담당자는 허브 소속만 (domain). 다음 로그인 후 비밀번호 변경을 강제한다.
+     * 확인을 동시에 통과한 요청은 save의 flush에서 UNIQUE에 걸려 같은 중복 오류가 된다.
+     */
+    @Transactional
+    public UserResult createByMaster(CreateUserCommand command) {
+        Username username = Username.of(command.username());
+        PasswordPolicy.validate(command.password());
+        OrganizationType organizationType = parseOrganizationType(command.organizationType());
+        checkNotDuplicated(username, command.slackId());
+        User user = User.createByMaster(UUID.randomUUID(), username, command.name(),
+                passwordHasher.hash(command.password()), command.slackId(), organizationType,
+                command.organizationName(), UserRole.valueOf(command.role()), command.deliveryManager(),
+                command.masterId());
         return UserResult.from(userRepository.save(user));
     }
 
@@ -189,6 +203,16 @@ public class UserCommandService {
         }
         user.withdraw(command.masterId());
         userRepository.save(user);
+    }
+
+    /** username은 탈퇴자 포함 유일, slackId는 활성 사용자 사이에서만 유일 */
+    private void checkNotDuplicated(Username username, String slackId) {
+        if (userRepository.existsByUsername(username.value())) {
+            throw new BusinessException(UserErrorCode.DUPLICATE_USERNAME);
+        }
+        if (userRepository.existsActiveBySlackId(slackId)) {
+            throw new BusinessException(UserErrorCode.DUPLICATE_SLACK_ID);
+        }
     }
 
     /** 본인 확인용 비밀번호 재입력. 틀리면 로그인 실패와 같은 INVALID_CREDENTIALS */

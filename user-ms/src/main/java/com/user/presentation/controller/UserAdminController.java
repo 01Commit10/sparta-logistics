@@ -7,20 +7,24 @@ import com.user.application.facade.UserAdminFacade;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
 import com.user.presentation.dto.request.ChangeRoleRequest;
+import com.user.presentation.dto.request.CreateUserRequest;
 import com.user.presentation.dto.request.DeliveryManagerRequest;
 import com.user.presentation.dto.request.UpdateUserRequest;
 import com.user.presentation.dto.response.UserDetailResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.net.URI;
 import java.util.UUID;
 
 /**
@@ -40,6 +44,15 @@ public class UserAdminController {
         this.userQueryService = userQueryService;
         this.userCommandService = userCommandService;
         this.userAdminFacade = userAdminFacade;
+    }
+
+    /** USR-10 사용자 생성. 다음 로그인 후 비밀번호 변경이 강제된다 (MASTER가 정한 비밀번호이므로) */
+    @PostMapping
+    public ResponseEntity<UserDetailResponse> create(@CurrentUser AuthUser user,
+                                                     @Valid @RequestBody CreateUserRequest request) {
+        user.requireMaster();
+        UserDetailResponse created = UserDetailResponse.from(userCommandService.createByMaster(request.toCommand(user.id())));
+        return ResponseEntity.created(URI.create("/api/v1/users/" + created.id())).body(created);
     }
 
     /** USR-12 사용자 상세 (삭제된 사용자 포함). /users/me는 MyAccountController가 먼저 받는다 (경로 우선순위) */
