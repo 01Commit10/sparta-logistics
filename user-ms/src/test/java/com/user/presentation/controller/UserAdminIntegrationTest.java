@@ -145,6 +145,39 @@ class UserAdminIntegrationTest {
     }
 
     @Test
+    @DisplayName("U13 목록: 실제 쿼리로 검색·정렬하고 common PageResponse 형식으로 응답한다. 비활성화된 사용자는 includeDeleted=true일 때만")
+    void searchList() throws Exception {
+        signup("lsthub02", "HUB");
+        signup("lstcom01", "COMPANY");
+        UUID deactivated = signup("lsthub01", "HUB");
+        mockMvc.perform(asMaster(delete("/api/v1/users/{userId}", deactivated))).andExpect(status().isNoContent());
+
+        mockMvc.perform(asMaster(get("/api/v1/users").param("username", "lst").param("sort", "username,asc")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0].username").value("lstcom01"))
+                .andExpect(jsonPath("$.content[1].username").value("lsthub02"))
+                .andExpect(jsonPath("$.content[1].organizationType").value("HUB"))
+                .andExpect(jsonPath("$.content[1].slackId").doesNotExist())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.sort[0].property").value("username"))
+                .andExpect(jsonPath("$.sort[1].property").value("id"));
+
+        mockMvc.perform(asMaster(get("/api/v1/users").param("username", "LSTHUB").param("includeDeleted", "true")
+                        .param("organizationType", "HUB").param("size", "1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].username").value("lsthub01"))
+                .andExpect(jsonPath("$.content[0].active").value(false))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.hasNext").value(true));
+
+        mockMvc.perform(asMaster(get("/api/v1/users").param("sort", "passwordHash,asc")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_SORT_PROPERTY"));
+    }
+
+    @Test
     @DisplayName("U13 상세: MASTER의 GET /users/me는 상세가 아니라 내 정보 API로 간다 (경로 우선순위)")
     void meIsNotUserId() throws Exception {
         mockMvc.perform(asMaster(get("/api/v1/users/me")))

@@ -3,13 +3,21 @@ package com.user.infrastructure.persistence;
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
 import com.user.domain.entity.User;
+import com.user.domain.repository.PageData;
+import com.user.domain.repository.PageQuery;
 import com.user.domain.repository.UserRepository;
+import com.user.domain.repository.UserSearchCondition;
 import com.user.domain.vo.UserRole;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -17,6 +25,9 @@ import java.util.UUID;
  */
 @Repository
 public class UserRepositoryImpl implements UserRepository {
+
+    /** 목록 정렬에 쓸 수 있는 엔티티 필드. 허용 여부는 presentation PagePolicy가 먼저 400으로 거르고, 여기서 한 번 더 막는다 */
+    private static final Set<String> SORTABLE = Set.of("createdAt", "username", "name", "id");
 
     private final UserJpaRepository jpa;
 
@@ -75,6 +86,24 @@ public class UserRepositoryImpl implements UserRepository {
     @Override
     public boolean existsActiveMaster() {
         return jpa.existsByRoleAndDeletedAtIsNull(UserRole.MASTER);
+    }
+
+    @Override
+    public PageData<User> search(UserSearchCondition condition, PageQuery pageQuery) {
+        Page<User> page = jpa.findAll(UserSpecifications.of(condition),
+                PageRequest.of(pageQuery.page(), pageQuery.size(), toSort(pageQuery.orders())));
+        return new PageData<>(page.getContent(), page.getTotalElements());
+    }
+
+    private static Sort toSort(List<PageQuery.Order> orders) {
+        return Sort.by(orders.stream()
+                .map(order -> {
+                    if (!SORTABLE.contains(order.property())) {
+                        throw new IllegalArgumentException("정렬할 수 없는 필드입니다: " + order.property());
+                    }
+                    return order.ascending() ? Sort.Order.asc(order.property()) : Sort.Order.desc(order.property());
+                })
+                .toList());
     }
 
     /**
