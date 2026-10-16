@@ -10,7 +10,7 @@ import java.util.List;
  * 경로가 바뀌어도 코드를 고치지 않도록 정책은 설정에 둔다.
  * <ul>
  *     <li>blocked: 경로 패턴 ({@code /internal/**})</li>
- *     <li>public, master-exclude, master: {@code "메서드[,메서드] 경로"} ({@code "GET,PATCH /api/v1/users/*"}, 메서드 {@code *}는 전체)</li>
+ *     <li>public, master-exclude, master, password-change-allowed: {@code "메서드[,메서드] 경로"} ({@code "GET,PATCH /api/v1/users/*"}, 메서드 {@code *}는 전체)</li>
  * </ul>
  */
 @ConfigurationProperties(prefix = "gateway.policy")
@@ -18,7 +18,8 @@ public record RoutePolicyProperties(
         List<String> blocked,
         @Name("public") List<String> publicRules,
         List<String> masterExclude,
-        List<String> master
+        List<String> master,
+        List<String> passwordChangeAllowed
 ) {
 
     public RoutePolicyProperties {
@@ -26,6 +27,7 @@ public record RoutePolicyProperties(
         publicRules = copy(publicRules);
         masterExclude = copy(masterExclude);
         master = copy(master);
+        passwordChangeAllowed = copy(passwordChangeAllowed);
     }
 
     private static List<String> copy(List<String> values) {

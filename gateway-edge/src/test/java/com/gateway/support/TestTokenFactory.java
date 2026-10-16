@@ -70,4 +70,14 @@ public final class TestTokenFactory {
     public static SecretKey key(String base64Secret) {
         return Keys.hmacShaKeyFor(Decoders.BASE64.decode(base64Secret));
     }
+
+    /** 토큰 payload의 jti (서명 확인 없이 읽음, 테스트에서 blacklist 키를 만들 때) */
+    public static String jtiOf(String token) {
+        String payload = new String(java.util.Base64.getUrlDecoder().decode(token.split("\\.")[1]));
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"jti\":\"([^\"]+)\"").matcher(payload);
+        if (!m.find()) {
+            throw new IllegalArgumentException("jti 없음");
+        }
+        return m.group(1);
+    }
 }

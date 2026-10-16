@@ -5,6 +5,14 @@ spring:
     import:
       - optional:file:.env[.properties]
       - optional:file:../.env[.properties]
+  # 토큰 상태 읽기 (GW-07, user-ms가 쓴 auth:blacklist·auth:revoked-at). 장애 시 보호 요청이 이 시간만큼 늦어지므로 짧게
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:500ms}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:500ms}
   cloud:
     gateway:
       server:
@@ -81,3 +89,8 @@ gateway:
       - "PATCH,DELETE /api/v1/hub-routes/*"
       - "POST /api/v1/companies"
       - "DELETE /api/v1/companies/*"
+    # 관리자가 비밀번호를 초기화한 사용자(토큰 pcr=true)가 호출할 수 있는 요청 (GW-07). 그 밖은 403 PASSWORD_CHANGE_REQUIRED
+    password-change-allowed:
+      - "GET /api/v1/users/me"
+      - "PATCH /api/v1/users/me/password"
+      - "POST /api/v1/auth/logout"

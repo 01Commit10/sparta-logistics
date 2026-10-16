@@ -6,6 +6,7 @@ import com.gateway.application.auth.AuthenticationService;
 import com.gateway.domain.policy.RoutePolicy;
 import com.gateway.domain.token.AccessTokenClaims;
 import com.gateway.domain.token.Role;
+import com.gateway.domain.token.TokenState;
 import com.gateway.domain.token.VerificationResult;
 import com.gateway.presentation.error.ErrorResponseWriter;
 import org.junit.jupiter.api.DisplayName;
@@ -14,6 +15,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+
+import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.List;
@@ -33,7 +36,7 @@ class AuthenticationFilterTest {
 
     private static AuthenticationFilter filterWith(VerificationResult verification) {
         return new AuthenticationFilter(
-                new AuthenticationService(POLICY, token -> verification),
+                new AuthenticationService(POLICY, token -> verification, (userId, jti) -> Mono.just(TokenState.active())),
                 new ErrorResponseWriter(new ObjectMapper()));
     }
 
