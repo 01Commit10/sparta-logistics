@@ -26,16 +26,18 @@
 | 내 정보 수정 | PATCH | `/users/me` | 로그인 | slackId | 200 |
 | 비밀번호 변경 | PATCH | `/users/me/password` | 로그인 | currentPassword, newPassword | 204 |
 | 회원탈퇴 | DELETE | `/users/me` | 로그인 | password | 204 |
-| 사용자 생성 | POST | `/users` | MASTER | 회원가입 항목 + role, isDeliveryManager | 201 |
-| 사용자 목록 조회 | GET | `/users` | MASTER | username, name, role, isDeliveryManager, organizationType, includeDeleted, page, size, sort | 200 |
-| 사용자 상세 조회 | GET | `/users/{userId}` | MASTER | userId | 200 |
-| 사용자 정보 수정 | PATCH | `/users/{userId}` | MASTER | name, slackId, organizationType, organizationName | 200 |
-| 사용자 권한 변경 | PATCH | `/users/{userId}/role` | MASTER | role | 200 |
-| 배송담당자 지정 | PATCH | `/users/{userId}/delivery-manager` | MASTER | isDeliveryManager | 200 |
-| 사용자 소속 연결 | PATCH | `/users/{userId}/organization` | MASTER | organizationType, organizationId (COMPANY·HUB만) | 200 |
-| 사용자 비활성화 | DELETE | `/users/{userId}` | MASTER | userId | 204 |
-| 사용자 재활성화 | POST | `/users/{userId}/restore` | MASTER | userId | 200 |
-| 비밀번호 초기화 | POST | `/users/{userId}/password-reset` | MASTER | userId (오프라인 문의 후 실행) | 200 (temporaryPassword, 1회만 노출) |
+| 사용자 생성 | POST | `/users` | MASTER | 회원가입 항목 + role, isDeliveryManager (둘 다 필수, organizationType HQ는 MASTER만) | 201 (passwordChangeRequired=true: 첫 로그인 후 비밀번호 변경 강제) |
+| 사용자 목록 조회 | GET | `/users` | MASTER | username, name, role, isDeliveryManager, organizationType, includeDeleted, page, size(1~100, 밖이면 10), sort(createdAt·username·name, 기본 createdAt 역순) | 200 (페이지) |
+| 사용자 상세 조회 | GET | `/users/{userId}` | MASTER | userId (삭제된 사용자 포함) | 200 |
+| 사용자 정보 수정 | PATCH | `/users/{userId}` | MASTER | name, slackId, organizationType, organizationName (부분 수정, 유형을 바꾸면 소속명 필수) | 200 |
+| 사용자 권한 변경 | PATCH | `/users/{userId}/role` | MASTER | role (바뀌면 대상 토큰 무효) | 200 |
+| 배송담당자 지정 | PATCH | `/users/{userId}/delivery-manager` | MASTER | isDeliveryManager (허브 소속만, 아니면 409) | 200 |
+| 사용자 소속 연결 | PATCH | `/users/{userId}/organization` | MASTER | organizationType, organizationId (COMPANY·HUB만, 존재 확인 안 함), organizationName (유형을 바꾸면 필수) | 200 |
+| 사용자 비활성화 | DELETE | `/users/{userId}` | MASTER | userId (본인은 409, 대상 토큰 무효) | 204 |
+| 사용자 재활성화 | POST | `/users/{userId}/restore` | MASTER | userId (비밀번호·역할 그대로) | 200 |
+| 비밀번호 초기화 | POST | `/users/{userId}/password-reset` | MASTER | userId (오프라인 문의 후 실행, 본인은 409) | 200 (userId, username, temporaryPassword: 1회만 노출, 대상 토큰 무효, 다음 로그인 후 변경 강제) |
+
+*관리자 API의 오류 코드와 예시는 [[User·Auth API 사용법]] 2.1, Postman 57~90번을 봅니다.*
 
 ## Hub
 

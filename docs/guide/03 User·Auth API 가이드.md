@@ -1,6 +1,6 @@
 # 03. User·Auth API 가이드
 
-> 작성자: 대진 · 기준: `dev` d6af869 (U00~U11 머지) · 최종 수정: 2026-10-16
+> 작성자: 대진 · 기준: `dev` 46ad946 (U00~U20 머지) · 최종 수정: 2026-10-17
 > 대상: 팀원(허브 이찬, 주문 다울, 배송 영은, 업체 권우)과 API를 호출하는 분
 > 원칙: **코드가 기준**입니다. 아직 구현되지 않은 것은 (예정)으로 표시했습니다.
 
@@ -8,8 +8,8 @@
 
 - **지금 쓸 수 있는 API**: 회원가입, ID 중복 확인, 로그인, 토큰 재발급, 로그아웃, 내 정보 조회·수정(Slack ID만), 비밀번호 변경, 회원탈퇴, 내부 사용자 조회(`GET /internal/v1/users/{userId}`).
    - **쉽게 말해:** 사용자 **본인**이 하는 기능은 모두 동작합니다.
-- **아직 없는 API (예정)**: MASTER 관리자 기능 전부(U12~U20: 사용자 생성·목록·상세·수정·역할 변경·배송담당자 지정·비활성화·비밀번호 초기화·재활성화·소속 연결).
-   - **쉽게 말해:** **관리자 화면** 기능은 아직 없습니다. 경로와 권한 규칙만 Gateway에 미리 등록되어 있습니다.
+- **MASTER 관리자 API (U12~U20)도 모두 있습니다**: 사용자 생성·목록·상세·수정·역할 변경·배송담당자 지정·소속 연결·비밀번호 초기화·비활성화·재활성화 (4.10).
+   - **쉽게 말해:** 관리자가 계정을 만들고 고치는 기능입니다. 시연용 **허브 배송담당자 계정**도 이 API로 만듭니다. MASTER가 만든 계정과 초기화한 계정은 첫 로그인 뒤 비밀번호를 바꿔야 다른 API를 쓸 수 있습니다.
 - **역할은 `MASTER`, `USER` 두 개뿐**입니다. 배송담당자는 역할이 아니라 `isDeliveryManager` 속성입니다.
    - **쉽게 말해:** 권한은 "관리자 / 일반" 두 단계뿐입니다. 배송담당자는 "USER이면서 배송 담당 표시가 켜진 사람"입니다. 업체 관리자인지도 역할이 아니라 업체 데이터(`p_companies.manager_user_id`)를 보고 각 서비스가 판단합니다.
 - **토큰**: Access 30분, Refresh 7일. 재발급하면 Refresh도 바뀝니다(rotation). 이미 교체된 이전 Refresh를 다시 쓰면 저장된 Refresh가 지워져 다시 로그인해야 합니다(이미 받은 Access는 만료까지 유효).
@@ -33,17 +33,17 @@
 | U09 | USR-06·07 | `GET`·`PATCH /api/v1/users/me` | 로그인 | ✅ |
 | U10 | USR-08 | `PATCH /api/v1/users/me/password` | 로그인 | ✅ |
 | U11 | USR-09 | `DELETE /api/v1/users/me` | 로그인 | ✅ |
-| U12 | USR-10 | `POST /api/v1/users` 사용자 생성 | MASTER | (예정) |
-| U13 | USR-11·12 | `GET /api/v1/users`, `GET /api/v1/users/{userId}` | MASTER | (예정) |
-| U14 | USR-13 | `PATCH /api/v1/users/{userId}` 정보 수정 | MASTER | (예정) |
-| U15 | USR-14 | `PATCH /api/v1/users/{userId}/role` 역할 변경 | MASTER | (예정) |
-| U16 | USR-15 | `PATCH /api/v1/users/{userId}/delivery-manager` | MASTER | (예정) |
-| U17 | USR-17 | `DELETE /api/v1/users/{userId}` 비활성화 | MASTER | (예정) |
-| U18 | USR-21 | `POST /api/v1/users/{userId}/password-reset` | MASTER | (예정) |
-| U19 | USR-22 | `POST /api/v1/users/{userId}/restore` 재활성화 | MASTER | (예정) |
-| U20 | USR-16 | `PATCH /api/v1/users/{userId}/organization` 소속 연결 | MASTER | (예정) |
+| U12 | USR-10 | `POST /api/v1/users` 사용자 생성 | MASTER | ✅ (PR #29) |
+| U13 | USR-11·12 | `GET /api/v1/users`, `GET /api/v1/users/{userId}` | MASTER | ✅ (상세 PR #28, 목록 PR #32) |
+| U14 | USR-13 | `PATCH /api/v1/users/{userId}` 정보 수정 | MASTER | ✅ (PR #28) |
+| U15 | USR-14 | `PATCH /api/v1/users/{userId}/role` 역할 변경 | MASTER | ✅ (PR #28) |
+| U16 | USR-15 | `PATCH /api/v1/users/{userId}/delivery-manager` | MASTER | ✅ (PR #28) |
+| U17 | USR-17 | `DELETE /api/v1/users/{userId}` 비활성화 | MASTER | ✅ (PR #28) |
+| U18 | USR-21 | `POST /api/v1/users/{userId}/password-reset` | MASTER | ✅ (PR #29) |
+| U19 | USR-22 | `POST /api/v1/users/{userId}/restore` 재활성화 | MASTER | ✅ (PR #29) |
+| U20 | USR-16 | `PATCH /api/v1/users/{userId}/organization` 소속 연결 | MASTER | ✅ (PR #29) |
 
-- (예정) 경로는 Gateway 정책(`gateway-edge/src/main/resources/application.yaml` `gateway.policy.master`)에 이미 MASTER 전용으로 등록되어 있습니다. USER 토큰으로 부르면 지금도 403 `ACCESS_DENIED`, MASTER 토큰이면 user-ms에 컨트롤러가 없어 404입니다.
+- MASTER 경로는 Gateway 정책(`gateway-edge/src/main/resources/application.yaml` `gateway.policy.master`)에 등록되어 있어 USER 토큰이면 403 `ACCESS_DENIED`입니다. user-ms도 모든 관리자 메서드에서 MASTER를 다시 확인합니다(Gateway를 거치지 않은 요청 대비).
 - 개발 확인용 `GET /api/v1/auth/routing-check`도 있습니다(로그인 필요, 받은 `X-User-*` 헤더를 그대로 보여 줌). `ROUTING_CHECK_ENABLED=false`면 꺼집니다. 업무 API가 아니니 클라이언트에서 쓰지 마세요.
 
 ## 2. 역할·사용자 모델
@@ -55,7 +55,7 @@
 | `MASTER` | 관리자. Gateway의 MASTER 전용 경로 + 모든 기능. 본사(`HQ`) 소속은 MASTER만 가능 |
 | `USER` | 로그인 사용자. 본인 계정 관리, 본인 데이터(업체 관리자·주문자·배송담당자 등)만 수정. 판단은 각 서비스가 데이터로 합니다 |
 
-- 회원가입은 항상 `USER`입니다. 역할 변경은 U15(예정)입니다.
+- 회원가입은 항상 `USER`입니다. 역할 변경은 U15(`PATCH /api/v1/users/{userId}/role`)입니다.
 - 서비스에서는 `@CurrentUser AuthUser user`로 받고 `user.isMaster()`, `user.requireMaster()`, `user.requireSelfOrMaster(ownerId)`를 씁니다(common `AuthUser`, `AuthRole`).
 
 ### 2.2 사용자 필드 (`auth.p_users`, `User` 엔티티)
@@ -67,11 +67,11 @@
 | `name` | `name` VARCHAR(100) | 이름 |
 | `slackId` | `slack_id` VARCHAR(80) | 활성 사용자 사이에서만 UNIQUE (부분 인덱스 `uk_p_users_slack_id_active`) |
 | `role` | `role` | `MASTER` / `USER` |
-| `isDeliveryManager` | `is_delivery_manager` | 배송담당자 여부. 가입 시 `false`, 지정은 U16(예정) |
+| `isDeliveryManager` | `is_delivery_manager` | 배송담당자 여부. 가입 시 `false`, 지정은 U16. **허브 소속만** 지정 가능 |
 | `organizationType` | `organization_type` | `COMPANY` / `HUB` / `HQ`(본사, MASTER 전용) |
 | `organizationName` | `organization_name` VARCHAR(150) | 가입 때 입력한 소속명 (자유 입력) |
-| `organizationId` | `organization_id` (UUID, NULL 가능) | 실제 업체·허브 ID. **지금은 항상 `null`** (연결은 U20 예정). HQ는 항상 NULL (CHECK 제약) |
-| `passwordChangeRequired` | `password_change_required` | MASTER가 비밀번호를 초기화하면 `true`(U18 예정), 본인이 변경하면 `false` |
+| `organizationId` | `organization_id` (UUID, NULL 가능) | 실제 업체·허브 ID. MASTER가 U20으로 연결(존재 확인 안 함), 그 전에는 `null`. HQ는 항상 NULL (CHECK 제약) |
+| `passwordChangeRequired` | `password_change_required` | MASTER가 만든 계정(U12)과 비밀번호를 초기화한 계정(U18)은 `true`, 본인이 변경하면 `false` |
 | - | `created_at/by`, `updated_at/by`, `deleted_at/by` | 감사 컬럼. 회원가입의 `created_by`는 본인, 초기 MASTER는 시스템 UUID(`00000000-0000-0000-0000-000000000000`) |
 
 - **소속만으로는 권한이 생기지 않습니다.** 업체 관리자 여부는 `p_companies.manager_user_id`, 배송담당 여부는 `isDeliveryManager`로 판단합니다(07 서비스 정책 1.2).
@@ -203,7 +203,7 @@ sequenceDiagram
 | 회원탈퇴 | Soft Delete + 모든 토큰 무효. 같은 username으로 재가입 불가 |
 
 - 토큰 claim: `sub`(사용자 UUID), `role`, `pcr`(비밀번호 변경 필요), `typ`(`access`/`refresh`), `jti`, `iat`, `exp`. HS256, 키는 `.env`의 `JWT_SECRET_KEY`(gateway와 공유). 상세는 [[01 Gateway·인증 가이드]]·[[SYS-01 게이트웨이 인증 인가 설계]].
-- `pcr=true` 토큰은 `GET /api/v1/users/me`, `PATCH /api/v1/users/me/password`, `POST /api/v1/auth/logout`만 통과하고 나머지는 403 `PASSWORD_CHANGE_REQUIRED`입니다. 지금은 `pcr`을 `true`로 만드는 API(U18)가 없습니다.
+- `pcr=true` 토큰은 `GET /api/v1/users/me`, `PATCH /api/v1/users/me/password`, `POST /api/v1/auth/logout`만 통과하고 나머지는 403 `PASSWORD_CHANGE_REQUIRED`입니다. `pcr=true`는 MASTER가 만든 계정(U12)과 초기화한 계정(U18)의 로그인 토큰에 들어갑니다.
 - Redis 장애 시 로그인·재발급·로그아웃·비밀번호 변경·탈퇴는 503 `AUTH_UNAVAILABLE`입니다(user-ms Redis timeout 2s).
 
 ## 4. API 레퍼런스 (구현된 것만)
@@ -321,6 +321,28 @@ user-ms는 Gateway가 넣은 `X-User-Id`·`X-User-Role`·`X-Token-Jti`·`X-Token
 DELETE지만 **본문이 필요**합니다(`@NotBlank`, 본문 없으면 400 `INVALID_INPUT`). 응답 204 → 모든 토큰 무효, 이후 로그인은 401 `INVALID_CREDENTIALS`.
 오류: 400 `INVALID_INPUT`, 401 `INVALID_CREDENTIALS`, 404 `USER_NOT_FOUND`, 409 `LAST_MASTER`(활성 MASTER가 본인 1명), 503 `AUTH_UNAVAILABLE`.
 
+### 4.10 MASTER 관리자 API (U12~U20)
+
+요청·응답 예시와 규칙은 [[User·Auth API 사용법]] 2.1, 실행 순서는 Postman 57~90번([[Postman Gateway 테스트 가이드]] 4.13)에 있습니다. 여기에는 응답 형태와 오류만 정리합니다.
+
+| API | 성공 | 주요 오류 |
+|---|---|---|
+| `POST /api/v1/users` 생성 | 201 상세 + `Location`, `passwordChangeRequired=true` | 400 `INVALID_USERNAME`·`INVALID_PASSWORD`·`INVALID_ORGANIZATION`(USER를 HQ로), 400 `INVALID_INPUT`(`role`·`isDeliveryManager` 누락), 409 `DUPLICATE_USERNAME`·`DUPLICATE_SLACK_ID`·`DELIVERY_MANAGER_REQUIRES_HUB` |
+| `GET /api/v1/users` 목록 | 200 `PageResponse<UserSummaryResponse>` | 400 `INVALID_SORT_PROPERTY`(정렬은 `createdAt`·`username`·`name`), 400 `INVALID_INPUT`(`role`·`organizationType` 값) |
+| `GET /api/v1/users/{id}` 상세 | 200 상세 (삭제된 사용자 포함) | 404 `USER_NOT_FOUND` |
+| `PATCH /api/v1/users/{id}` 수정 | 200 상세 | 400 `INVALID_INPUT`(빈 본문·빈 문자열·유형만 바꾸고 소속명 없음), 400 `INVALID_ORGANIZATION`, 409 `DUPLICATE_SLACK_ID`·`DELIVERY_MANAGER_REQUIRES_HUB` |
+| `PATCH …/role` 역할 | 200 상세, 바뀌면 대상 토큰 무효 | 400 `INVALID_ORGANIZATION`(HQ 소속 MASTER를 USER로), 409 `LAST_MASTER` |
+| `PATCH …/delivery-manager` | 200 상세 (토큰 그대로) | 409 `DELIVERY_MANAGER_REQUIRES_HUB` |
+| `PATCH …/organization` 소속 연결 | 200 상세 | 400 `INVALID_INPUT`(`COMPANY`·`HUB` 외, 유형을 바꾸고 소속명 없음), 409 `DELIVERY_MANAGER_REQUIRES_HUB` |
+| `POST …/password-reset` | 200 `{userId, username, temporaryPassword}`, `Cache-Control: no-store`, 대상 토큰 무효 | 409 `CANNOT_RESET_OWN_PASSWORD` |
+| `DELETE /api/v1/users/{id}` 비활성화 | 204, 대상 토큰 무효 | 409 `CANNOT_DEACTIVATE_SELF`·`USER_ALREADY_DELETED`·`LAST_MASTER` |
+| `POST …/restore` 재활성화 | 200 상세 (비밀번호·역할 그대로) | 409 `USER_NOT_DELETED`·`DUPLICATE_SLACK_ID` |
+
+- 수정·역할·배송담당·소속·초기화의 대상이 없거나 삭제됐으면 404 `USER_NOT_FOUND`입니다.
+- **상세(`UserDetailResponse`)**: `id, username, name, slackId, role, isDeliveryManager, organizationType, organizationName, organizationId, passwordChangeRequired, active, createdAt, createdBy, updatedAt, updatedBy, deletedAt, deletedBy`. 비밀번호 해시는 나가지 않습니다.
+- **목록 한 줄(`UserSummaryResponse`)**: `id, username, name, role, isDeliveryManager, organizationType, organizationName, active, createdAt`. Slack ID·소속 ID·작업자는 상세에서 봅니다.
+- 작업자: 생성·수정·비활성화는 MASTER, 회원가입·탈퇴는 본인, 기동 시 초기화 등 요청 밖 작업은 시스템 UUID(`00000000-…`).
+
 ## 5. 다른 서비스에서 사용자 조회 (내부 API)
 
 `GET /internal/v1/users/{userId}` — user-ms에 Eureka 이름 `user-ms`로 **Feign 직접 호출**합니다. Gateway는 `/internal/**`을 404로 막으므로 외부에서는 부를 수 없습니다. `X-User-*` 헤더 없이도 됩니다.
@@ -389,8 +411,9 @@ public class UserAdapter implements UserPort {
 | 항목 | 내용 | 관련 |
 |---|---|---|
 | 정책 #16 내부 API 호출자 확인 | 지금 `/internal/**`은 Gateway 차단만 하고 **호출 서비스를 검증하지 않습니다**. 네트워크 제한만 할지 서비스 토큰을 둘지 미결정 | 팀 공통 |
-| U16 배송담당자 지정 (예정) | 지금은 API로 `isDeliveryManager=true`를 만들 수 없습니다. 시연 데이터를 위해 관리자 기능 중 먼저 구현 예정. 정책 #15(진행 중 배송이 있는 담당자 해제)는 미결정 | 영은 |
-| U20 소속 연결 (예정) | `organizationId`는 지금 항상 `null`입니다. 연결 시 업체·허브 존재 확인(Feign)은 선택 사항이며 일정이 밀리면 제외 1순위 | 권우(업체), 이찬(허브) |
+| U16 배송담당자 지정 | ✅ API로 지정합니다(허브 소속만). 정책 #15(진행 중 배송이 있는 담당자 해제)는 미결정 — 지금은 해제를 막지 않음 | 영은 |
+| U20 소속 연결 | ✅ 업체·허브 UUID를 연결합니다. **존재 확인(Feign)은 하지 않기로 결정**(2026-10-16) | 권우(업체), 이찬(허브) |
+| 내부 API에 소속 정보 | 내부 응답에 `organizationType`·`organizationId`가 없습니다. 배송담당자의 허브를 알아야 하면 대진에게 요청 | 영은 |
 
 ## 6. 로컬 테스트 계정·토큰 얻기
 
@@ -427,7 +450,7 @@ MASTER 토큰은 같은 방법으로 `"username":"'$MASTER_USERNAME'"` 등 `.env
 
 ### 6.3 기타
 
-- **Postman**: `docs/postman/sparta-logistics-gateway.postman_collection.json` (56개 요청, 13~50번이 회원가입~탈퇴 흐름, 18·19번이 내부 API). 사용법은 [[Postman Gateway 테스트 가이드]].
+- **Postman**: `docs/postman/sparta-logistics-gateway.postman_collection.json` (90개 요청, 13~50번이 회원가입~탈퇴 흐름, 18·19번이 내부 API, 57~90번이 MASTER 관리자 API). 사용법은 [[Postman Gateway 테스트 가이드]].
 - **`scripts/dev-token.py`**: DB 없이 서명만 맞춘 토큰을 만듭니다. 사용자 ID가 가짜라 Gateway 통과 확인용으로만 쓰고, `/users/me`처럼 실제 사용자가 필요한 API에는 로그인 토큰을 쓰세요.
 - 내부 API 직접 확인: `curl http://localhost:19095/internal/v1/users/{userId}`.
 
@@ -437,21 +460,25 @@ MASTER 토큰은 같은 방법으로 `"username":"'$MASTER_USERNAME'"` 등 `.env
 |---|---|---|---|
 | `INVALID_USERNAME` | 400 | 아이디는 4~10자의 영문 소문자와 숫자만 사용할 수 있습니다. | 가입, ID 확인 |
 | `INVALID_PASSWORD` | 400 | 비밀번호는 8~15자이며 영문 대문자·소문자·숫자·특수문자를 모두 포함해야 합니다. | 가입, 비밀번호 변경 |
-| `INVALID_ORGANIZATION` | 400 | 소속 정보가 올바르지 않습니다. | 가입(HQ·잘못된 값) |
+| `INVALID_ORGANIZATION` | 400 | 소속 정보가 올바르지 않습니다. | 가입(HQ·잘못된 값), 생성·수정·역할 변경(HQ는 MASTER만) |
 | `SAME_PASSWORD` | 400 | 현재 비밀번호와 다른 비밀번호를 입력해 주세요. | 비밀번호 변경 |
 | `INVALID_CREDENTIALS` | 401 | 아이디 또는 비밀번호가 올바르지 않습니다. | 로그인, 비밀번호 재확인 |
-| `USER_NOT_FOUND` | 404 | 사용자를 찾을 수 없습니다. | 내 정보, 내부 API |
-| `DUPLICATE_USERNAME` | 409 | 이미 사용 중인 아이디입니다. | 가입 |
-| `DUPLICATE_SLACK_ID` | 409 | 이미 사용 중인 Slack ID입니다. | 가입, 내 정보 수정 |
-| `LAST_MASTER` | 409 | 마지막 관리자는 탈퇴·강등·비활성화할 수 없습니다. | 탈퇴 (U15·U17 예정) |
-| `USER_ALREADY_DELETED` | 409 | 이미 삭제된 사용자입니다. | (U17 예정) |
-| `USER_NOT_DELETED` | 409 | 삭제되지 않은 사용자입니다. | (U19 예정) |
+| `USER_NOT_FOUND` | 404 | 사용자를 찾을 수 없습니다. | 내 정보, 내부 API, 관리자 API |
+| `DUPLICATE_USERNAME` | 409 | 이미 사용 중인 아이디입니다. | 가입, 생성 |
+| `DUPLICATE_SLACK_ID` | 409 | 이미 사용 중인 Slack ID입니다. | 가입, 생성, 내 정보·관리자 수정, 재활성화 |
+| `LAST_MASTER` | 409 | 마지막 관리자는 탈퇴·강등·비활성화할 수 없습니다. | 탈퇴, 역할 변경, 비활성화 |
+| `USER_ALREADY_DELETED` | 409 | 이미 삭제된 사용자입니다. | 비활성화 |
+| `USER_NOT_DELETED` | 409 | 삭제되지 않은 사용자입니다. | 재활성화 |
+| `DELIVERY_MANAGER_REQUIRES_HUB` | 409 | 허브 소속 사용자만 배송담당자로 지정할 수 있습니다. | 생성, 배송담당자 지정, 수정·소속 연결(담당자를 허브 밖으로) |
+| `CANNOT_DEACTIVATE_SELF` | 409 | 본인 계정은 탈퇴 기능을 이용해 주세요. | 비활성화 |
+| `CANNOT_RESET_OWN_PASSWORD` | 409 | 본인 비밀번호는 비밀번호 변경 기능을 이용해 주세요. | 비밀번호 초기화 |
+| `INVALID_SORT_PROPERTY` | 400 | 정렬할 수 없는 필드입니다. | 목록 정렬 필드가 허용 목록 밖 (CommonErrorCode) |
 | `TOKEN_MISSING` | 401 | 인증 토큰이 없습니다. | Gateway |
 | `TOKEN_EXPIRED` | 401 | 인증 토큰이 만료되었습니다. | Gateway → 재발급 |
 | `TOKEN_INVALID` | 401 | 유효하지 않은 인증 토큰입니다. | Gateway (Refresh를 Access로 사용 포함) |
-| `TOKEN_REVOKED` | 401 | 더 이상 사용할 수 없는 인증 토큰입니다. 다시 로그인해 주세요. | Gateway (로그아웃·비밀번호 변경·탈퇴 후) |
+| `TOKEN_REVOKED` | 401 | 더 이상 사용할 수 없는 인증 토큰입니다. 다시 로그인해 주세요. | Gateway (로그아웃·비밀번호 변경·탈퇴, 관리자의 역할 변경·비밀번호 초기화·비활성화 후) |
 | `REFRESH_TOKEN_INVALID` | 401 | 유효하지 않은 Refresh Token입니다. 다시 로그인해 주세요. | 재발급 |
-| `PASSWORD_CHANGE_REQUIRED` | 403 | 비밀번호를 변경한 뒤 이용할 수 있습니다. | Gateway (`pcr=true`) |
+| `PASSWORD_CHANGE_REQUIRED` | 403 | 비밀번호를 변경한 뒤 이용할 수 있습니다. | Gateway (`pcr=true`: MASTER가 만든·초기화한 계정) |
 | `AUTH_UNAVAILABLE` | 503 | 일시적으로 인증을 처리할 수 없습니다. | Redis 장애 |
 | `INVALID_INPUT` | 400 | 잘못된 요청입니다. | Bean Validation, JSON 오류, 파라미터 누락 |
 | `UNAUTHENTICATED` | 401 | 인증이 필요합니다. | 서비스 직접 호출로 `X-User-*`·`X-Token-*` 없음 |
@@ -466,15 +493,18 @@ MASTER 토큰은 같은 방법으로 `"username":"'$MASTER_USERNAME'"` 등 `.env
 | username | `^[a-z0-9]{4,10}$`. 탈퇴 사용자 포함 영구 UNIQUE |
 | password | `^[A-Za-z0-9\p{Punct}]{8,15}$` + 대문자·소문자·숫자·특수문자 각 1개 이상. 공백·한글 불가. BCrypt 저장 |
 | slackId | 필수, 80자 이하. 활성 사용자 사이 중복 불가(탈퇴자의 값은 재사용 가능) |
-| 소속 | 가입은 `COMPANY`·`HUB`만. `HQ`는 MASTER 전용. `organizationId`는 MASTER가 연결(예정) |
+| 소속 | 가입은 `COMPANY`·`HUB`만. `HQ`는 MASTER 전용. `organizationId`는 MASTER가 연결(U20, 존재 확인 안 함). 유형을 바꾸면 소속명 필수 |
 | 가입 | 승인 없이 즉시 활성, 역할 `USER`, `isDeliveryManager=false` |
 | 로그인 실패 | 없는 ID·틀린 비밀번호·탈퇴 계정 모두 같은 401 (ID 존재 여부는 ID 확인 API로 알 수 있음, 감수) |
 | 세션 | 사용자당 Refresh 1개. 새 로그인·재발급 시 이전 Refresh 무효 |
-| 본인 수정 | Slack ID만. 이름·소속 변경은 MASTER(U14 예정) |
+| 본인 수정 | Slack ID만. 이름·소속 변경은 MASTER(U14) |
 | 비밀번호 변경 | 현재 비밀번호 확인, 새 규칙 충족, 현재와 달라야 함. 성공 시 전체 토큰 무효 |
 | 탈퇴 | 비밀번호 재확인 후 Soft Delete(`deleted_by`=본인), 전체 토큰 무효 |
-| 마지막 MASTER 보호 | 활성 MASTER가 1명이면 탈퇴 409 `LAST_MASTER` (강등·비활성화도 같은 규칙 예정). 동시 탈퇴는 잠금 조회로 막음 |
-| 비밀번호 찾기 | 온라인 기능 없음. MASTER에게 오프라인 문의 → 초기화(U18 예정) |
+| 마지막 MASTER 보호 | 활성 MASTER가 1명이면 탈퇴·강등·비활성화 409 `LAST_MASTER`. 동시 요청은 잠금 조회로 막음 |
+| 비밀번호 찾기 | 온라인 기능 없음. MASTER에게 오프라인 문의 → 초기화(U18). 임시 비밀번호는 응답으로 1회만, 다음 로그인 후 변경 강제. 본인 초기화는 409 |
+| MASTER의 사용자 생성 | 비밀번호를 MASTER가 정하므로 첫 로그인 후 변경 강제(`pcr`). 역할·배송담당 여부 필수 |
+| 배송담당자 | 허브 소속만. 담당자를 허브 밖으로 옮기려면 먼저 해제 |
+| 비활성화·재활성화 | 비활성화는 Soft Delete(`deleted_by`=MASTER) + 토큰 무효, 본인은 409(탈퇴 사용). 재활성화는 비밀번호·역할·배송담당 여부 그대로 |
 | 초기 MASTER | 활성 MASTER가 0명일 때만 `.env`로 1회 생성 |
 
 ## 9. FAQ

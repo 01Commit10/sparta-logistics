@@ -136,6 +136,20 @@ flowchart TB
 - `/internal/**`는 Gateway에서 404로 차단합니다. 내부 API는 서비스끼리 Feign으로만 호출합니다.
 - MASTER 전용 경로와 헤더 규약은 [Gateway·인증 가이드](<docs/guide/01 Gateway·인증 가이드.md>)를 참고합니다.
 
+**Gateway가 하는 일 (요청 순서)**
+
+| 단계 | 내용 | 실패 응답 |
+|---|---|---|
+| 경로 정규화 | `;`·`%2f`·`..` 등 해석이 갈리는 경로 거부, `/internal/**` 차단 | 400 `INVALID_INPUT`, 404 `RESOURCE_NOT_FOUND` |
+| 요청 ID | `X-Request-Id`가 없거나 형식이 틀리면 새 UUID. 서비스·응답·접근 로그에 같은 값 | - |
+| 인증 | JWT 서명·만료·`typ` 검증, Redis로 로그아웃·무효화 확인 (Redis 장애 시 거부) | 401 `TOKEN_*`, 503 `AUTH_UNAVAILABLE` |
+| 인가 | MASTER 전용 경로, 비밀번호 변경이 필요한 계정은 일부 API만 | 403 `ACCESS_DENIED`, 403 `PASSWORD_CHANGE_REQUIRED` |
+| 헤더 | 외부 `X-User-*`·`X-Token-*`를 지우고 토큰 값으로 다시 넣음 | - |
+| 라우팅 | Eureka + 로드밸런서. 연결 2초, 응답 5초(주문 15초) | 503 `SERVICE_UNAVAILABLE`, 504 `SERVICE_TIMEOUT` |
+| Circuit Breaker | 서비스별 1개. 연결 실패·타임아웃만 실패로 세고, 열리면 하위로 보내지 않음 | 503 `SERVICE_UNAVAILABLE` |
+
+- 운영 확인: 서비스 포트(19090)에는 헬스체크용 `/livez`·`/readyz`만 있고, 헬스 상세·라우트·회로 상태는 **관리 포트 19190**(`GW_MANAGEMENT_PORT`)의 `/actuator/health`·`/actuator/gateway/routes`·`/actuator/circuitbreakers`에서 봅니다. 관리 포트는 외부에 공개하지 않습니다.
+
 ## 5. 실행 방법
 
 > 현재 Docker Compose에는 **PostgreSQL·Redis만** 정의되어 있습니다. 애플리케이션(Eureka·Gateway·서비스)은 Gradle `bootRun`이나 IntelliJ로 로컬에서 띄웁니다. 애플리케이션 컨테이너화는 진행 중입니다.
@@ -266,7 +280,7 @@ docker compose ps        # postgres, redis 둘 다 (healthy) 확인
 | 확인 | 주소 | 기대 결과 |
 |---|---|---|
 | Eureka 대시보드 | http://localhost:8761 | 띄운 서비스가 모두 `UP` |
-| Gateway 헬스 | http://localhost:19090/actuator/health | `UP` |
+| Gateway 헬스 | http://localhost:19090/livez · 상세는 http://localhost:19190/actuator/health (관리 포트) | `UP`. 관리 포트 헬스는 Redis·Eureka 포함 (Redis가 꺼지면 `DOWN`), `/livez`·`/readyz`는 Redis와 무관 |
 | user-ms 헬스 | http://localhost:19095/actuator/health | `UP` (DB·Redis 포함) |
 | 초기 MASTER | user-ms 로그 | `[InitialMaster] 초기 MASTER를 생성했습니다. username=…` |
 
@@ -447,13 +461,13 @@ flowchart LR
 
 ## 9. 구현 현황
 
-> 기준: 2026-10-16
+> 기준: 2026-10-17 (Gateway·common·user-ms), 그 밖은 2026-10-16
 
 | 영역 | 상태 | 내용 |
 |---|---|---|
-| Gateway | ✅ | 라우팅, JWT 인증, MASTER 경로 인가, 토큰 상태 확인, 요청 ID·접근 로그, 타임아웃·Circuit Breaker, 경로 정규화 |
+| Gateway | ✅ | 라우팅, JWT 인증, MASTER 경로 인가, 토큰 상태 확인, 요청 ID·접근 로그, 타임아웃·Circuit Breaker, 경로 정규화, 운영 확인(관리 포트), 계약 테스트 |
 | common | ✅ | `BaseEntity`·감사, 공통 예외, `@CurrentUser`, Feign 헤더 전달·장애 대응, `SlackNotifier` |
-| user-ms | 🚧 | 가입·로그인·재발급·로그아웃·내 정보·비밀번호 변경·탈퇴·내부 조회 완료 / MASTER 관리자 API 진행 중 |
+| user-ms | ✅ | 가입·로그인·재발급·로그아웃·내 정보·비밀번호 변경·탈퇴·내부 조회, MASTER 관리자 API(생성·목록·상세·수정·역할·배송담당자·소속 연결·비밀번호 초기화·비활성화·재활성화) |
 | hub-ms | 🚧 | 허브 엔티티·조회, 17개 허브 시드 |
 | company-ms, order-ms, delivery-ms | 🚧 | 구현 중 |
 | Docker Compose | 🚧 | PostgreSQL·Redis 구성 완료 / 애플리케이션 컨테이너화 예정 |

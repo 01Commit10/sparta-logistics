@@ -1,8 +1,8 @@
 # Postman Gateway 테스트 가이드
 
-> 작성일: 2026-10-15 · 수정: 2026-10-16 (dev d6af869 기준: 29~50번 로그아웃·재발급·내 정보·비밀번호 변경·탈퇴, 51~56번 요청 ID·경로 우회 차단 추가) · 작성: 대진
+> 작성일: 2026-10-15 · 수정: 2026-10-17 (dev 46ad946 기준: 57~90번 MASTER 관리자 API 추가. 이전: 29~50번 로그아웃·재발급·내 정보·비밀번호 변경·탈퇴, 51~56번 요청 ID·경로 우회 차단) · 작성: 대진
 > 목적: Postman으로 **클라이언트 → Gateway(19090) → 각 서비스** 흐름을 직접 확인하고, 각자 만든 API도 같은 방식으로 컬렉션에 추가합니다.
-> 컬렉션: `docs/postman/sparta-logistics-gateway.postman_collection.json` (**요청 56개**)
+> 컬렉션: `docs/postman/sparta-logistics-gateway.postman_collection.json` (**요청 90개**)
 > 기동 방법·문제 해결은 [[로컬 실행·라우팅 확인 가이드]], 인증 흐름 설명은 [[03 User·Auth API 가이드]] 3장을 보세요.
 
 ---
@@ -51,6 +51,9 @@ flowchart LR
 | `signupUsername` / `signupSlackId` / `signupUserId` | 비어 있음 | 14번이 자동으로 채웁니다 |
 | `loginAccessToken` / `loginRefreshToken` | 비어 있음 | 23·32·39·45번(로그인)이 자동으로 채웁니다 |
 | `reissuedAccessToken` / `reissuedRefreshToken` | 비어 있음 | 33번(재발급)이 자동으로 채웁니다 |
+| `masterUsername` / `masterPassword` | 비어 있음 | **직접 채웁니다** (57번). `.env`의 `MASTER_USERNAME`·`MASTER_PASSWORD`를 **Current value에만** 넣습니다. Initial value에 넣으면 컬렉션을 내보낼 때 함께 나가니 넣지 마세요 |
+| `masterLoginToken` / `masterUserId` | 비어 있음 | 57·58번이 자동으로 채웁니다 (실제 MASTER 토큰, `masterToken`과 별개) |
+| `adminUsername` / `adminSlackId` / `adminUserId` / `adminAccessToken` / `tempPassword` | 비어 있음 | 59·62·66·79번이 자동으로 채웁니다 |
 
 > 자동으로 채우는 변수는 손대지 않습니다. 14번부터 순서대로 실행하면 이어서 쓰입니다.
 
@@ -97,7 +100,7 @@ sh ./gradlew :gateway-edge:bootRun
 |---|---|
 | http://localhost:8761 | `GATEWAY-EDGE`, `USER-MS`가 `UP` |
 | `GET http://localhost:19095/actuator/health` | `{"status":"UP"}` |
-| `GET http://localhost:19090/actuator/health` | `{"status":"UP"}` (Redis가 꺼져 있으면 `DOWN`) |
+| `GET http://localhost:19090/livez` | `{"status":"UP"}` (상세는 관리 포트 `http://localhost:19190/actuator/health`, Redis가 꺼져 있으면 `DOWN`) |
 | 컬렉션 2번 | 200. **Gateway 기동 직후 몇 초는 503일 수 있습니다**(Eureka 목록을 아직 못 받음). 잠시 후 다시 보냅니다 |
 
 ## 4. 요청 목록과 기대 결과
@@ -241,18 +244,64 @@ docker exec -it sparta-logistics-redis redis-cli   # 컨테이너의 REDISCLI_AU
 
 - Redis가 꺼져 있으면 로그인·재발급·로그아웃·비밀번호 변경·탈퇴는 503 `AUTH_UNAVAILABLE`(user-ms, 2초 안), 그 밖의 보호 경로도 503 `AUTH_UNAVAILABLE`(Gateway)입니다.
 
+### 4.13 MASTER 관리자 API (57~90, U12~U20)
+
+57번에서 실제 MASTER로 로그인하고, 59번에서 만든 허브 배송담당자 계정 하나로 생성부터 재활성화까지 이어서 확인합니다. **57번부터 순서대로** 실행하세요.
+
+| # | 요청 | 기대 결과 | 확인 내용 |
+|---|---|---|---|
+| 57 | MASTER 로그인 (`masterUsername`·`masterPassword`) | 200 | `masterLoginToken` 저장 |
+| 58 | MASTER `/users/me` | 200 | `masterUserId` 저장 (80·82번) |
+| 59 | `POST /api/v1/users` 허브 배송담당자 (USER) | 201 | `Location`, `isDeliveryManager` true, **`passwordChangeRequired` true**, `createdBy` = MASTER |
+| 60 | 생성: `HQ` + `USER` | 400 `INVALID_ORGANIZATION` | 본사는 MASTER만 |
+| 61 | 생성: `role` 없음 | 400 `INVALID_INPUT` | 역할·배송담당 여부 필수 |
+| 62 | 생성한 계정 로그인 | 200 | `passwordChangeRequired` true |
+| 63 | 62번 토큰으로 `PATCH /users/me` | 403 `PASSWORD_CHANGE_REQUIRED` | 비밀번호를 바꾸기 전에는 `GET /users/me`·`PATCH /users/me/password`·로그아웃만 |
+| 64 | 62번 토큰으로 `GET /users/me` | 200 | 허용 목록 |
+| 65 | 비밀번호 변경 | 204 | 변경 필요 상태 풀림, 기존 토큰 무효 |
+| 66 | 새 비밀번호로 로그인 | 200 | `passwordChangeRequired` false |
+| 67 | `GET /api/v1/users?username=…` | 200 | 페이지 형식 7개 필드, 1건, 목록엔 `slackId` 없음 |
+| 68 | `GET /api/v1/users?size=500` | 200, `size` 10 | 1~100 밖이면 10 (400 아님) |
+| 69 | `GET /api/v1/users?sort=slackId,asc` | 400 `INVALID_SORT_PROPERTY` | 정렬은 `createdAt`·`username`·`name`만 |
+| 70 | `GET /api/v1/users/{id}` | 200 | 상세 (활성 여부, 작업자) |
+| 71 | `PATCH /api/v1/users/{id}` `{name}` | 200 | 보낸 필드만, `updatedBy` = MASTER |
+| 72 | `PATCH /api/v1/users/{id}` `{}` | 400 `INVALID_INPUT` | 바꿀 필드가 없으면 400 |
+| 73 | 배송담당자를 `COMPANY`로 | 409 `DELIVERY_MANAGER_REQUIRES_HUB` | 배송담당자는 허브 소속만 |
+| 74 | `PATCH …/organization` `{HUB, organizationId}` | 200 | 존재 확인 없음, 같은 유형이면 소속명 유지 |
+| 75 | `PATCH …/delivery-manager` `false` | 200 | 토큰은 그대로 |
+| 76 | `PATCH …/role` `MASTER` | 200 | |
+| 77 | 66번 토큰으로 `/users/me` | 401 `TOKEN_REVOKED` | 역할이 바뀌면 대상 토큰 무효 |
+| 78 | `PATCH …/role` `USER` | 200 | 되돌리기 |
+| 79 | `POST …/password-reset` | 200 `{userId, username, temporaryPassword}` | `Cache-Control: no-store`, `tempPassword` 저장 |
+| 80 | 본인(`masterUserId`) 초기화 | 409 `CANNOT_RESET_OWN_PASSWORD` | 본인은 비밀번호 변경 사용 |
+| 81 | 임시 비밀번호로 로그인 | 200 | `passwordChangeRequired` true |
+| 82 | 본인 비활성화 | 409 `CANNOT_DEACTIVATE_SELF` | 본인은 탈퇴 사용 |
+| 83 | `DELETE /api/v1/users/{id}` | 204 | 논리 삭제 + 대상 토큰 무효 |
+| 84 | 다시 비활성화 | 409 `USER_ALREADY_DELETED` | |
+| 85 | 비활성화한 계정 로그인 | 401 `INVALID_CREDENTIALS` | 없는 계정과 같은 응답 |
+| 86 | 목록 `includeDeleted=true` | 200, 1건, `active` false | 삭제된 사용자는 이 조건일 때만 |
+| 87 | `POST …/restore` | 200 | `active` true, `deletedAt`·`deletedBy` null |
+| 88 | 다시 재활성화 | 409 `USER_NOT_DELETED` | |
+| 89 | 임시 비밀번호로 로그인 | 200 | 비밀번호·변경 필요 상태 그대로 |
+| 90 | 없는 사용자 상세 | 404 `USER_NOT_FOUND` | |
+
+- 테스트 계정은 Runner를 돌릴 때마다 새로 만들어지고(`dm` + 숫자 6자리), 마지막에 활성 상태로 남습니다.
+- 마지막 MASTER의 강등·비활성화(409 `LAST_MASTER`)는 MASTER가 하나뿐이면 확인할 수 없어서 넣지 않았습니다.
+
 ## 5. 한 번에 돌리기 (Collection Runner)
 
 1. 컬렉션 오른쪽 `…` → **Run collection**
-2. 순서는 그대로 두고 **Run** → 56개 결과가 한 화면에 나옵니다.
+2. 순서는 그대로 두고 **Run** → 90개 결과가 한 화면에 나옵니다.
 3. 6번은 hub-ms를 띄우지 않았을 때만 PASS입니다. 다른 서비스를 함께 띄웠다면 6번 FAIL은 정상입니다.
 4. 2·3·10~12번은 `masterToken`·`userToken`·`expiredToken`이 있어야 PASS입니다(2.3). 30분이 지났다면 다시 만듭니다.
-5. 매번 새 사용자로 가입하므로(14번) **여러 번 돌려도 됩니다.** 탈퇴한 테스트 사용자는 DB에 Soft Delete 상태로 남습니다.
+5. 매번 새 사용자로 가입하므로(14·59번) **여러 번 돌려도 됩니다.** 탈퇴한 테스트 사용자는 DB에 Soft Delete 상태로 남습니다.
+6. 57~90번은 `masterUsername`·`masterPassword`가 있어야 PASS입니다. 비어 있으면 57번부터 줄줄이 실패합니다.
 
 > 10/15: `dev` + Redis 기동 상태에서 19개 전체 PASS, 로그에 토큰 원문 0건.
 > 10/16: C01(20~22), U05 로그인(23~28) 추가 후 28개 전체 PASS.
 > 10/16: GW-07·U08 로그아웃(29~31), U07 재발급(32~38), U09~U11 내 정보·비밀번호·탈퇴(39~50) 추가 후 50개 전체 PASS. Redis 중지 시 503 확인.
 > 10/16: GW-08 요청 ID(51·52), 경로 정규화(53~56) 추가 후 **56개 전체 PASS**.
+> 10/17: U12~U20 관리자 API(57~90) 추가. 같은 요청·기대값을 스크립트로 Gateway(dev 46ad946)에 보내 **34개 전체 PASS**.
 
 ## 6. 자주 보는 실패
 
@@ -265,6 +314,8 @@ docker exec -it sparta-logistics-redis redis-cli   # 컨테이너의 REDISCLI_AU
 | 내가 만든 토큰이 401 `TOKEN_REVOKED` | 그 사용자가 로그아웃·비밀번호 변경·탈퇴함 (또는 Runner 44·49번이 무효화) | 다시 로그인 |
 | 33번이 401 `REFRESH_TOKEN_INVALID` | 32번을 건너뛰었거나, 같은 Refresh를 이미 한 번 씀 | 32번부터 다시 |
 | 23번이 401 `INVALID_CREDENTIALS` | 14번을 건너뜀 (`signupUsername`이 비어 있음), 또는 이전 실행에서 탈퇴한 사용자 | 14번부터 다시 |
+| 57번이 401 `INVALID_CREDENTIALS`·400, 그 뒤가 전부 실패 | `masterUsername`·`masterPassword`가 비었거나 `.env`와 다름 | Variables의 Current value 확인 |
+| 62번이 401 `INVALID_CREDENTIALS` | 59번을 건너뜀 (`adminUsername`이 이전 값) | 59번부터 다시 |
 | 15번이 201 / 18번이 404 | 14번을 건너뛰었거나 14번이 실패함 | 14번부터 다시 |
 | 내 서비스 API가 403 `ACCESS_DENIED` | MASTER 전용 경로(1장)에 USER 토큰을 씀 | `masterToken` 사용 |
 | 내 서비스 API가 403 `PASSWORD_CHANGE_REQUIRED` | `pcr=true` 토큰(`--pcr` 스크립트 토큰 등) | 일반 토큰 사용. `pcr` 토큰은 `/users/me`, 비밀번호 변경, 로그아웃만 통과 |

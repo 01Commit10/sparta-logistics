@@ -108,10 +108,10 @@ server:
 
 # 운영 확인 (GW-11). actuator는 관리 포트에만 둔다. Compose에서 이 포트를 publish하지 않으면 외부에서 닿지 않는다
 # - 서비스 포트(19090): 헬스체크용 /livez·/readyz만. /actuator/**는 404
-# - 관리 포트(19091): 헬스 상세(Redis·Eureka), 라우트 목록, 회로 상태. 설정·메모리(env, heapdump 등)는 노출하지 않는다
+# - 관리 포트(19190): 헬스 상세(Redis·Eureka), 라우트 목록, 회로 상태. 설정·메모리(env, heapdump 등)는 노출하지 않는다
 management:
   server:
-    port: ${GW_MANAGEMENT_PORT:19091}
+    port: ${GW_MANAGEMENT_PORT:19190}   # 19091은 company-ms 서버 포트라 로컬에서 함께 못 띄움
   endpoints:
     web:
       exposure:

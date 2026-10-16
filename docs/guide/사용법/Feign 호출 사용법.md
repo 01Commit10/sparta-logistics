@@ -86,8 +86,8 @@ public class UserAdapter implements UserPort {
 | 예외 | 언제 | 뜻 | 잡지 않으면 |
 |---|---|---|---|
 | `RemoteBusinessException` | 상대가 4xx로 거절 (재고 부족, 없음 등) | **확실히 실패.** 상대는 아무것도 안 함 | 상대와 같은 상태·code로 응답 (예: 409) |
-| `RemoteServiceException` | 상대가 5xx, 꺼져 있음, 연결 안 됨, CB 차단 중 | **처리 안 됨**으로 봄 | 503 `SERVICE_UNAVAILABLE` |
-| `RemoteTimeoutException` | 요청은 보냈는데 2초 안에 응답 없음 | **결과 모름.** 상대가 처리했을 수도 있음 | 504 `SERVICE_TIMEOUT` |
+| `RemoteServiceException` | 상대가 5xx(504 제외), 꺼져 있음, 연결 안 됨, CB 차단 중 | **처리 안 됨**으로 봄 | 503 `SERVICE_UNAVAILABLE` |
+| `RemoteTimeoutException` | 요청은 보냈는데 2초 안에 응답 없음, 상대가 504, 2xx 응답을 내 DTO로 못 바꿈 | **결과 모름.** 상대가 처리했을 수도 있음 | 504 `SERVICE_TIMEOUT` |
 
 ```java
 try {
@@ -112,6 +112,8 @@ try {
 - 자동 재시도는 **없습니다.** 필요하면 `executeWithRetryOnce`만 씁니다.
 - 쓸 수 있는 경우: GET 조회, 또는 받는 쪽이 같은 `Idempotency-Key`로 다시 와도 **처음 결과를 그대로 돌려주는** API
 - 키와 요청 본문은 **람다 밖에서 한 번만** 만드세요.
+- 다시 보내지 않는 경우: 4xx, CB 차단 중, 응답 변환 실패(다시 보내도 같은 응답).
+- **첫 번째가 결과 모름(`RemoteTimeoutException`)이고 두 번째가 503류로 실패하면 첫 번째 `RemoteTimeoutException`이 나옵니다.** 첫 요청이 처리됐을 수 있으니 "안 됐음"으로 바뀌지 않게 한 것입니다. 이때도 보상·조회로 처리하세요.
 
 ```java
 String key = order.getId() + ":decrease";                     // 람다 밖에서 한 번
@@ -202,6 +204,8 @@ new RemoteBusinessException("hub-ms", 409,
 new RemoteServiceException("hub-ms", 500);
 // 결과 모름 (응답 시간 초과)
 new RemoteTimeoutException("hub-ms", new SocketTimeoutException("Read timed out"));
+// 결과 모름 (hub가 504를 줌, getStatus() == 504)
+new RemoteTimeoutException("hub-ms", 504);
 ```
 
 ```java
