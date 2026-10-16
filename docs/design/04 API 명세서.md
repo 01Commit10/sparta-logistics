@@ -157,7 +157,7 @@
 | API 버전 | `/api/v1` |
 | 인증 | JWT |
 | 요청 검증 | Bean Validation |
-| 조회 페이지네이션 | page, size |
+| 조회 페이지네이션 | page(0부터), size(1~100, 기본 10), sort(기본 createdAt,desc) → [[SYS-08 페이지네이션 정렬 설계]] |
 | PK | UUID |
 | 데이터 삭제 | Soft Delete |
 | 중복 요청 방지 | Idempotency-Key |
