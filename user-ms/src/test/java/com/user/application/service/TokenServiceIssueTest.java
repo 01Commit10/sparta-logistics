@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Clock;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,7 +23,7 @@ class TokenServiceIssueTest {
 
     private final FakeTokenIssuer tokenIssuer = new FakeTokenIssuer();
     private final FakeTokenStore tokenStore = new FakeTokenStore();
-    private final TokenService service = new TokenService(tokenIssuer, tokenStore);
+    private final TokenService service = new TokenService(tokenIssuer, tokenStore, Clock.systemUTC());
 
     @Test
     @DisplayName("Access에는 사용자 ID·역할·변경 필요 여부를 담고, Refresh는 사용자 ID로 발급한다")

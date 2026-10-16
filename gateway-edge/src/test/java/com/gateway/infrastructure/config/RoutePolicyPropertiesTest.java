@@ -70,6 +70,16 @@ class RoutePolicyPropertiesTest {
     }
 
     @Test
+    @DisplayName("application.yaml의 비밀번호 변경 중 허용 경로 = GW-07 목록 3개")
+    void passwordChangeAllowed() {
+        assertThat(policy.isAllowedDuringPasswordChange("GET", "/api/v1/users/me")).isTrue();
+        assertThat(policy.isAllowedDuringPasswordChange("PATCH", "/api/v1/users/me/password")).isTrue();
+        assertThat(policy.isAllowedDuringPasswordChange("POST", "/api/v1/auth/logout")).isTrue();
+        assertThat(policy.isAllowedDuringPasswordChange("PATCH", "/api/v1/users/me")).isFalse();
+        assertThat(policy.isAllowedDuringPasswordChange("GET", "/api/v1/orders")).isFalse();
+    }
+
+    @Test
     @DisplayName("차단 경로는 GW-03 그대로 유지된다")
     void blocked() {
         assertThat(policy.isBlocked("/internal/v1/users/1")).isTrue();
@@ -80,7 +90,7 @@ class RoutePolicyPropertiesTest {
     @DisplayName("yaml 규칙 문법이 틀리면 정책을 만들 때 실패한다 (기동 실패)")
     void invalidRuleFailsFast() {
         RoutePolicyProperties properties = new RoutePolicyProperties(
-                List.of(), List.of("/api/v1/auth/login"), List.of(), List.of());
+                List.of(), List.of("/api/v1/auth/login"), List.of(), List.of(), List.of());
 
         assertThatThrownBy(() -> new RoutePolicyConfig().routePolicy(properties))
                 .isInstanceOf(IllegalArgumentException.class)

@@ -41,9 +41,12 @@ class RedisTokenStoreTest {
     @Autowired
     StringRedisTemplate redis;
 
+    private static final String BLACKLIST_KEY = "auth:blacklist:jti-access";
+
     @AfterEach
     void clean() {
         redis.delete(KEY);
+        redis.delete(BLACKLIST_KEY);
     }
 
     @Test
@@ -64,5 +67,25 @@ class RedisTokenStoreTest {
 
         assertThat(redis.opsForValue().get(KEY)).isEqualTo("jti-2");
         assertThat(redis.getExpire(KEY)).isGreaterThan(Duration.ofMinutes(1).toSeconds());
+    }
+
+    @Test
+    @DisplayName("U08: Refresh 삭제 → auth:refresh:{userId} 키가 없어진다 (없을 때 지워도 오류 없음)")
+    void deletesRefresh() {
+        tokenStore.saveRefresh(USER_ID, "jti-1", Duration.ofDays(7));
+
+        tokenStore.deleteRefresh(USER_ID);
+        tokenStore.deleteRefresh(USER_ID);
+
+        assertThat(redis.hasKey(KEY)).isFalse();
+    }
+
+    @Test
+    @DisplayName("U08: auth:blacklist:{jti} = logout, TTL = 남은 유효 시간 (Gateway가 읽는 계약)")
+    void blacklists() {
+        tokenStore.blacklist("jti-access", Duration.ofMinutes(12));
+
+        assertThat(redis.opsForValue().get(BLACKLIST_KEY)).isEqualTo("logout");
+        assertThat(redis.getExpire(BLACKLIST_KEY)).isBetween(Duration.ofMinutes(12).toSeconds() - 5, Duration.ofMinutes(12).toSeconds());
     }
 }

@@ -16,6 +16,7 @@ public class RoutePolicyConfig {
                 .publicRules(properties.publicRules())
                 .masterExcludeRules(properties.masterExclude())
                 .masterRules(properties.master())
+                .passwordChangeAllowedRules(properties.passwordChangeAllowed())
                 .build();
     }
 }
