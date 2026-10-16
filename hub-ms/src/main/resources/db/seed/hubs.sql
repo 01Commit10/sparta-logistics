@@ -2,8 +2,8 @@
 -- UUID는 팀에서 합의하지 않은 예시 고정값입니다. 다른 서비스에 배포 전에 확정하세요.
 -- 전제: hub.p_hubs (id UUID, name TEXT, address TEXT) 및 필요한 Audit 기본값 존재.
 -- 기존 이름 또는 ID가 존재하면 건너뜁니다.
-INSERT INTO hub.p_hubs (id, name, address)
-SELECT seed.id::uuid, seed.name, seed.address
+INSERT INTO hub.p_hubs (id, name, address, created_at)
+SELECT seed.id::uuid, seed.name, seed.address, CURRENT_TIMESTAMP
 FROM (VALUES
     ('10000000-0000-4000-8000-000000000001', '서울특별시 센터', '서울특별시 송파구 송파대로 55'),
     ('10000000-0000-4000-8000-000000000002', '경기 북부 센터', '경기도 고양시 덕양구 권율대로 570'),
