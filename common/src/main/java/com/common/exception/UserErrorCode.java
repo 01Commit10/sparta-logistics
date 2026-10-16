@@ -31,6 +31,8 @@ public enum UserErrorCode implements ErrorCode {
     USER_NOT_DELETED(HttpStatus.CONFLICT, "삭제되지 않은 사용자입니다."),
     // 배송담당자의 소속 허브가 출발지 기준이므로 허브 소속만 지정할 수 있다 (U16)
     DELIVERY_MANAGER_REQUIRES_HUB(HttpStatus.CONFLICT, "허브 소속 사용자만 배송담당자로 지정할 수 있습니다."),
+    // 관리자 비활성화는 비밀번호를 다시 확인하지 않으므로 본인 계정은 탈퇴(비밀번호 확인)로만 없앤다 (U17)
+    CANNOT_DEACTIVATE_SELF(HttpStatus.CONFLICT, "본인 계정은 탈퇴 기능을 이용해 주세요."),
     ;
 
     private final HttpStatus httpStatus;

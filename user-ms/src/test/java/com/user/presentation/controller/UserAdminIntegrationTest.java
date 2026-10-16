@@ -1,5 +1,6 @@
 package com.user.presentation.controller;
 
+import com.user.domain.token.TokenStore;
 import com.user.fake.FakeTokenStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,9 @@ class UserAdminIntegrationTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    TokenStore tokenStore;
 
     private UUID signup(String username, String organizationType) throws Exception {
         mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content("""
@@ -134,6 +138,48 @@ class UserAdminIntegrationTest {
     void meIsNotUserId() throws Exception {
         mockMvc.perform(asMaster(get("/api/v1/users/me")))
                 .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("U17: 비활성화 → 204, deleted_by=MASTER, 대상 토큰 무효, 로그인 401, 내부 API 404, 상세 active=false, 다시 하면 409")
+    void deactivate() throws Exception {
+        UUID target = signup("deact01", "HUB");
+        mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"username\": \"deact01\", \"password\": \"Abcd123!\" }"))
+                .andExpect(status().isOk());
+        FakeTokenStore store = (FakeTokenStore) tokenStore;
+        assertThat(store.refreshOf(target)).isPresent();
+
+        mockMvc.perform(asMaster(delete("/api/v1/users/{userId}", target)))
+                .andExpect(status().isNoContent());
+
+        assertThat(jdbc.queryForMap("select deleted_at, deleted_by from auth.p_users where id = ?", target))
+                .containsEntry("deleted_by", MASTER_ID)
+                .extractingByKey("deleted_at").isNotNull();
+        assertThat(store.revokedOf(target)).isPresent();
+        assertThat(store.refreshOf(target)).isEmpty();
+        mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"username\": \"deact01\", \"password\": \"Abcd123!\" }"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+        mockMvc.perform(get("/internal/v1/users/{userId}", target)).andExpect(status().isNotFound());
+        mockMvc.perform(asMaster(get("/api/v1/users/{userId}", target)))
+                .andExpect(jsonPath("$.active").value(false))
+                .andExpect(jsonPath("$.deletedBy").value(MASTER_ID.toString()));
+        mockMvc.perform(asMaster(delete("/api/v1/users/{userId}", target)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("USER_ALREADY_DELETED"));
+    }
+
+    @Test
+    @DisplayName("U17: MASTER 본인 비활성화 → 409 CANNOT_DEACTIVATE_SELF")
+    void deactivateSelf() throws Exception {
+        UUID self = signup("deact02", "HUB");
+
+        mockMvc.perform(delete("/api/v1/users/{userId}", self)
+                        .header("X-User-Id", self.toString()).header("X-User-Role", "MASTER"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CANNOT_DEACTIVATE_SELF"));
     }
 
     @Test

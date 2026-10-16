@@ -2,16 +2,21 @@ package com.user.presentation.controller;
 
 import com.common.auth.AuthUser;
 import com.common.auth.web.CurrentUser;
+import com.user.application.dto.DeactivateUserCommand;
+import com.user.application.facade.UserAdminFacade;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
 import com.user.presentation.dto.request.DeliveryManagerRequest;
 import com.user.presentation.dto.response.UserDetailResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -26,10 +31,13 @@ public class UserAdminController {
 
     private final UserQueryService userQueryService;
     private final UserCommandService userCommandService;
+    private final UserAdminFacade userAdminFacade;
 
-    public UserAdminController(UserQueryService userQueryService, UserCommandService userCommandService) {
+    public UserAdminController(UserQueryService userQueryService, UserCommandService userCommandService,
+                               UserAdminFacade userAdminFacade) {
         this.userQueryService = userQueryService;
         this.userCommandService = userCommandService;
+        this.userAdminFacade = userAdminFacade;
     }
 
     /** USR-12 사용자 상세 (삭제된 사용자 포함). /users/me는 MyAccountController가 먼저 받는다 (경로 우선순위) */
@@ -45,5 +53,13 @@ public class UserAdminController {
                                                     @Valid @RequestBody DeliveryManagerRequest request) {
         user.requireMaster();
         return UserDetailResponse.from(userCommandService.assignDeliveryManager(request.toCommand(userId)));
+    }
+
+    /** USR-17 비활성화 (논리 삭제, 대상 토큰 무효화). 본인은 탈퇴(DELETE /users/me)를 써야 한다 */
+    @DeleteMapping("/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deactivate(@CurrentUser AuthUser user, @PathVariable UUID userId) {
+        user.requireMaster();
+        userAdminFacade.deactivate(new DeactivateUserCommand(userId, user.id()));
     }
 }

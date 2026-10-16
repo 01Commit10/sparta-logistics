@@ -5,6 +5,7 @@ import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
 import com.user.application.dto.AssignDeliveryManagerCommand;
 import com.user.application.dto.UserResult;
+import com.user.application.facade.UserAdminFacade;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +50,9 @@ class UserAdminControllerDeliveryManagerTest {
 
     @MockitoBean
     UserCommandService userCommandService;
+
+    @MockitoBean
+    UserAdminFacade userAdminFacade;
 
     private static UserResult result(boolean deliveryManager) {
         return new UserResult(TARGET_ID, "driver01", "김배송", "U001", "USER", deliveryManager, "HUB", "서울센터",

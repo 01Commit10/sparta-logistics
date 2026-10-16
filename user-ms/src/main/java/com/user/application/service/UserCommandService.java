@@ -4,6 +4,7 @@ import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
 import com.user.application.dto.AssignDeliveryManagerCommand;
 import com.user.application.dto.ChangePasswordCommand;
+import com.user.application.dto.DeactivateUserCommand;
 import com.user.application.dto.InitialMasterCommand;
 import com.user.application.dto.InitialMasterResult;
 import com.user.application.dto.SignupCommand;
@@ -127,6 +128,23 @@ public class UserCommandService {
         User user = findActive(command.userId());
         user.assignDeliveryManager(command.deliveryManager());
         return UserResult.from(userRepository.save(user));
+    }
+
+    /**
+     * USR-17 비활성화 (MASTER). 탈퇴와 같은 논리 삭제이고 삭제자만 MASTER다. 트랜잭션은 UserAdminFacade가 연다.
+     * 이미 삭제된 사용자는 USER_ALREADY_DELETED (조회는 삭제 포함). 배송담당 여부·역할은 재활성화를 위해 그대로 둔다.
+     */
+    public void deactivate(DeactivateUserCommand command) {
+        if (command.userId().equals(command.masterId())) {
+            throw new BusinessException(UserErrorCode.CANNOT_DEACTIVATE_SELF);
+        }
+        User user = userRepository.findById(command.userId())
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        if (user.isActive() && user.isMaster()) {
+            LastMasterGuard.checkRemovable(user, userRepository.countActiveMastersForUpdate());
+        }
+        user.withdraw(command.masterId());
+        userRepository.save(user);
     }
 
     /** 본인 확인용 비밀번호 재입력. 틀리면 로그인 실패와 같은 INVALID_CREDENTIALS */

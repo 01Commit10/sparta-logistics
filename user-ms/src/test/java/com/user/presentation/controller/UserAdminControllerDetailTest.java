@@ -4,6 +4,7 @@ import com.common.auth.AuthContract;
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
 import com.user.application.dto.UserResult;
+import com.user.application.facade.UserAdminFacade;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +44,9 @@ class UserAdminControllerDetailTest {
 
     @MockitoBean
     UserCommandService userCommandService;
+
+    @MockitoBean
+    UserAdminFacade userAdminFacade;
 
     private static MockHttpServletRequestBuilder as(String role, UUID id, Object userId) {
         return get("/api/v1/users/{userId}", userId)
