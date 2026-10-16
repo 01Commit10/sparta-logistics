@@ -20,13 +20,15 @@ public class FakeTokenIssuer implements TokenIssuer {
     public static final Duration REFRESH_TTL = Duration.ofDays(7);
 
     private final List<AccessTokenSpec> accessSpecs = new ArrayList<>();
+    private final List<Instant> accessRevokedAts = new ArrayList<>();
     private final List<UUID> refreshUserIds = new ArrayList<>();
     private final List<IssuedToken> refreshTokens = new ArrayList<>();
     private int sequence;
 
     @Override
-    public IssuedToken issueAccess(AccessTokenSpec spec) {
+    public IssuedToken issueAccess(AccessTokenSpec spec, Instant revokedAt) {
         accessSpecs.add(spec);
+        accessRevokedAts.add(revokedAt);
         int n = ++sequence;
         return new IssuedToken("access-" + n, "jti-" + n, NOW, NOW.plus(ACCESS_TTL));
     }
@@ -38,6 +40,16 @@ public class FakeTokenIssuer implements TokenIssuer {
         IssuedToken token = new IssuedToken("refresh-" + n, "jti-" + n, NOW, NOW.plus(REFRESH_TTL));
         refreshTokens.add(token);
         return token;
+    }
+
+    @Override
+    public Duration accessTokenLifetime() {
+        return ACCESS_TTL;
+    }
+
+    /** issueAccess에 넘어온 revokedAt (발급 순서대로) */
+    public List<Instant> accessRevokedAts() {
+        return accessRevokedAts;
     }
 
     public List<AccessTokenSpec> accessSpecs() {

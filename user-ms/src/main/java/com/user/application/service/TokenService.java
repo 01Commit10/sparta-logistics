@@ -16,6 +16,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 
 /**
  * 토큰 발급·상태 기록 유스케이스 (token 도메인). DB를 쓰지 않으므로 트랜잭션이 없다.
@@ -36,13 +39,35 @@ public class TokenService {
         this.clock = clock;
     }
 
-    /** Access·Refresh를 발급하고 Refresh jti를 저장한다. 새로 로그인하면 이전 Refresh는 무효가 된다 (세션 1개) */
+    /**
+     * Access·Refresh를 발급하고 Refresh jti를 저장한다. 새로 로그인하면 이전 Refresh는 무효가 된다 (세션 1개).
+     * revoked-at을 넘겨 무효화 직후 같은 초에 발급한 Access도 Gateway를 통과하게 한다 (U10 D1).
+     */
     public TokenPairResult issue(AuthenticatedUser user) {
+        Instant revokedAt = tokenStore.findRevokedAt(user.id()).orElse(Instant.EPOCH);
         IssuedToken access = tokenIssuer.issueAccess(
-                new AccessTokenSpec(user.id(), user.role(), user.passwordChangeRequired()));
+                new AccessTokenSpec(user.id(), user.role(), user.passwordChangeRequired()), revokedAt);
         IssuedToken refresh = tokenIssuer.issueRefresh(user.id());
         tokenStore.saveRefresh(user.id(), refresh.jti(), refresh.lifetime());
         return new TokenPairResult(access.value(), refresh.value());
+    }
+
+    /**
+     * 이 사용자의 모든 토큰을 무효로 한다 (비밀번호 변경·탈퇴·역할 변경·비활성화·비밀번호 초기화).
+     * Refresh를 지우고, 지금(초) 이전에 발급된 Access를 Gateway가 거부하도록 revoked-at을 Access 유효 시간 동안 건다.
+     * 이전 revoked-at과 같은 초에 다시 로그인한 토큰은 iat가 그 다음 초로 미뤄져 있으므로, 새 revoked-at은 이전 값 + 1초 이상이어야
+     * 그 토큰까지 막힌다. 미뤄진 만큼 TTL도 늘려, 그 토큰이 만료되기 전에 키가 먼저 사라지지 않게 한다.
+     * 호출하는 Facade의 트랜잭션 안에서 부르면 Redis 실패가 DB 변경을 롤백시킨다.
+     */
+    public void revokeAll(UUID userId) {
+        tokenStore.deleteRefresh(userId);
+        Instant now = clock.instant().truncatedTo(ChronoUnit.SECONDS);
+        Instant revokedAt = tokenStore.findRevokedAt(userId)
+                .map(previous -> previous.plusSeconds(1))
+                .filter(next -> next.isAfter(now))
+                .orElse(now);
+        tokenStore.revokeAllIssuedBefore(userId, revokedAt,
+                Duration.between(now, revokedAt).plus(tokenIssuer.accessTokenLifetime()));
     }
 
     /**

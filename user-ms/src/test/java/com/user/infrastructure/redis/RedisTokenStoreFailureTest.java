@@ -68,4 +68,17 @@ class RedisTokenStoreFailureTest {
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_UNAVAILABLE));
     }
+
+    @Test
+    @DisplayName("U10: 무효화·revoked-at 조회 중 Redis 연결 실패도 AUTH_UNAVAILABLE")
+    void revokeConnectionFailure() {
+        RedisTokenStore tokenStore = tokenStore();
+
+        assertThatThrownBy(() -> tokenStore.revokeAllIssuedBefore(UUID.randomUUID(), java.time.Instant.now(), Duration.ofMinutes(30)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_UNAVAILABLE));
+        assertThatThrownBy(() -> tokenStore.findRevokedAt(UUID.randomUUID()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_UNAVAILABLE));
+    }
 }

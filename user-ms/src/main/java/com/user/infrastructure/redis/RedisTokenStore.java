@@ -10,6 +10,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -46,6 +47,27 @@ public class RedisTokenStore implements TokenStore {
     @Override
     public void deleteRefresh(UUID userId) {
         write("Refresh Token 삭제", () -> redis.delete(AuthContract.REDIS_REFRESH_PREFIX + userId));
+    }
+
+    @Override
+    public void revokeAllIssuedBefore(UUID userId, Instant revokedAt, Duration ttl) {
+        write("revoked-at 기록", () -> redis.opsForValue().set(AuthContract.REDIS_REVOKED_AT_PREFIX + userId,
+                String.valueOf(revokedAt.getEpochSecond()), ttl));
+    }
+
+    /** 숫자가 아니면 empty. 그 값은 Gateway가 깨진 상태로 보고 거부하므로 여기서 발급을 막지 않는다 */
+    @Override
+    public Optional<Instant> findRevokedAt(UUID userId) {
+        String value = call("revoked-at 조회", () -> redis.opsForValue().get(AuthContract.REDIS_REVOKED_AT_PREFIX + userId));
+        if (value == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(Instant.ofEpochSecond(Long.parseLong(value.strip())));
+        } catch (NumberFormatException e) {
+            log.warn("revoked-at 값이 epoch 초가 아닙니다: userId={}", userId);
+            return Optional.empty();
+        }
     }
 
     @Override

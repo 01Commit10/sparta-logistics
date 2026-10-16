@@ -63,6 +63,11 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     @Override
+    public boolean existsActiveBySlackIdAndIdNot(String slackId, UUID id) {
+        return jpa.existsBySlackIdAndIdNotAndDeletedAtIsNull(slackId, id);
+    }
+
+    @Override
     public long countActiveMastersForUpdate() {
         return jpa.findActiveByRoleForUpdate(UserRole.MASTER).size();
     }

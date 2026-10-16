@@ -21,6 +21,8 @@ interface UserJpaRepository extends JpaRepository<User, UUID> {
 
     boolean existsBySlackIdAndDeletedAtIsNull(String slackId);
 
+    boolean existsBySlackIdAndIdNotAndDeletedAtIsNull(String slackId, UUID id);
+
     boolean existsByRoleAndDeletedAtIsNull(UserRole role);
 
     /**
