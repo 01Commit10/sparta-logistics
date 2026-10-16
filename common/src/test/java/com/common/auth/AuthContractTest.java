@@ -8,7 +8,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Gateway·user-ms·각 서비스가 함께 쓰는 값이라 바뀌면 서비스 간 계약이 깨진다 (docs/plan/02 인증 계약 2.1, 2.3).
+ * Gateway·user-ms·각 서비스가 함께 쓰는 값이라 바뀌면 서비스 간 계약이 깨진다 (docs/plan/02 인증 계약 2.1~2.3).
  * 이 테스트가 실패하면 값을 되돌리거나, 모든 서비스와 계약 문서를 함께 바꾼다.
  */
 class AuthContractTest {
@@ -31,6 +31,14 @@ class AuthContractTest {
         assertThat(AuthContract.HEADER_TOKEN_JTI).isEqualTo("X-Token-Jti");
         assertThat(AuthContract.HEADER_TOKEN_EXP).isEqualTo("X-Token-Exp");
         assertThat(AuthContract.HEADER_REQUEST_ID).isEqualTo("X-Request-Id");
+    }
+
+    @Test
+    @DisplayName("user-ms가 쓰고 Gateway가 읽는 Redis 키 접두사")
+    void redisKeys() {
+        assertThat(AuthContract.REDIS_REFRESH_PREFIX).isEqualTo("auth:refresh:");
+        assertThat(AuthContract.REDIS_BLACKLIST_PREFIX).isEqualTo("auth:blacklist:");
+        assertThat(AuthContract.REDIS_REVOKED_AT_PREFIX).isEqualTo("auth:revoked-at:");
     }
 
     @Test
