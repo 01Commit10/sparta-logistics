@@ -2,6 +2,8 @@ package com.user.presentation.controller;
 
 import com.common.auth.AuthUser;
 import com.common.auth.web.CurrentUser;
+import com.common.page.PagePolicy;
+import com.common.page.PageResponse;
 import com.user.application.dto.DeactivateUserCommand;
 import com.user.application.dto.ResetPasswordCommand;
 import com.user.application.facade.UserAdminFacade;
@@ -12,9 +14,12 @@ import com.user.presentation.dto.request.CreateUserRequest;
 import com.user.presentation.dto.request.DeliveryManagerRequest;
 import com.user.presentation.dto.request.LinkOrganizationRequest;
 import com.user.presentation.dto.request.UpdateUserRequest;
+import com.user.presentation.dto.request.UserSearchRequest;
 import com.user.presentation.dto.response.TemporaryPasswordResponse;
 import com.user.presentation.dto.response.UserDetailResponse;
+import com.user.presentation.dto.response.UserSummaryResponse;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,6 +44,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/users")
 public class UserAdminController {
 
+    /** 정렬 허용: 생성일(기본, 역순)·로그인 ID(username)·이름. size 1~100 밖이면 10 (07 서비스 정책 1.5) */
+    private static final PagePolicy PAGE_POLICY = PagePolicy.of("username", "name");
+
     private final UserQueryService userQueryService;
     private final UserCommandService userCommandService;
     private final UserAdminFacade userAdminFacade;
@@ -57,6 +65,15 @@ public class UserAdminController {
         user.requireMaster();
         UserDetailResponse created = UserDetailResponse.from(userCommandService.createByMaster(request.toCommand(user.id())));
         return ResponseEntity.created(URI.create("/api/v1/users/" + created.id())).body(created);
+    }
+
+    /** USR-11 사용자 목록·검색 (삭제된 사용자는 includeDeleted=true일 때만) */
+    @GetMapping
+    public PageResponse<UserSummaryResponse> search(@CurrentUser AuthUser user, @Valid UserSearchRequest request,
+                                                    Pageable pageable) {
+        user.requireMaster();
+        return PageResponse.from(userQueryService.search(request.toQuery(), PAGE_POLICY.apply(pageable)),
+                UserSummaryResponse::from);
     }
 
     /** USR-12 사용자 상세 (삭제된 사용자 포함). /users/me는 MyAccountController가 먼저 받는다 (경로 우선순위) */

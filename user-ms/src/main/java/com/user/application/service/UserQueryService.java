@@ -4,9 +4,18 @@ import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
 import com.user.application.dto.AuthenticatedUser;
 import com.user.application.dto.UserResult;
+import com.user.application.dto.UserSearchQuery;
+import com.user.domain.repository.PageData;
+import com.user.domain.repository.PageQuery;
 import com.user.domain.repository.UserRepository;
+import com.user.domain.repository.UserSearchCondition;
 import com.user.domain.service.PasswordHasher;
+import com.user.domain.vo.OrganizationType;
+import com.user.domain.vo.UserRole;
 import com.user.domain.vo.Username;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,5 +72,25 @@ public class UserQueryService {
         return userRepository.findById(userId)
                 .map(UserResult::from)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+    }
+
+    /**
+     * USR-11 관리자 목록 검색 (MASTER). pageable은 presentation이 PagePolicy로 정규화해서 넘긴다 (size·정렬 필드·기본 정렬).
+     * domain Port는 Spring 타입을 모르므로 PageQuery로 바꿔 부르고, 결과를 다시 Page로 돌려준다.
+     */
+    public Page<UserResult> search(UserSearchQuery query, Pageable pageable) {
+        UserSearchCondition condition = new UserSearchCondition(query.username(), query.name(),
+                query.role() == null ? null : UserRole.valueOf(query.role()),
+                query.deliveryManager(),
+                query.organizationType() == null ? null : OrganizationType.valueOf(query.organizationType()),
+                Boolean.TRUE.equals(query.includeDeleted()));
+        PageData<UserResult> page = userRepository.search(condition, toPageQuery(pageable)).map(UserResult::from);
+        return new PageImpl<>(page.content(), pageable, page.totalElements());
+    }
+
+    private static PageQuery toPageQuery(Pageable pageable) {
+        return new PageQuery(pageable.getPageNumber(), pageable.getPageSize(), pageable.getSort().stream()
+                .map(order -> new PageQuery.Order(order.getProperty(), order.isAscending()))
+                .toList());
     }
 }
