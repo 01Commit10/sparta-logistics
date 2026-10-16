@@ -26,6 +26,9 @@ public interface UserRepository {
     /** Slack ID는 활성 사용자 사이에서만 유일하다 */
     boolean existsActiveBySlackId(String slackId);
 
+    /** Slack ID 변경: 본인을 뺀 다른 활성 사용자가 쓰는지 본다 (지금 값 그대로 저장해도 통과) */
+    boolean existsActiveBySlackIdAndIdNot(String slackId, UUID id);
+
     /** 활성 MASTER 수. 행을 잠그고 센다 (마지막 MASTER 보호의 경쟁 조건 방지). 트랜잭션 안에서 호출한다. */
     long countActiveMastersForUpdate();
 

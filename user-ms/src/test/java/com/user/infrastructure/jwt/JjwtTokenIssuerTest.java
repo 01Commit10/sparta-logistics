@@ -74,6 +74,29 @@ class JjwtTokenIssuerTest {
     }
 
     @Test
+    @DisplayName("U10 D1: revoked-at과 같은 초면 iat를 다음 초로 미룬다 (Gateway는 iat <= revoked-at을 거부)")
+    void sameSecondAsRevokedAt() {
+        IssuedToken token = issuer.issueAccess(new AccessTokenSpec(USER_ID, "USER", false), NOW_SECONDS);
+
+        Claims claims = parse(token.value());
+        assertThat(claims.getIssuedAt().toInstant()).isEqualTo(NOW_SECONDS.plusSeconds(1));
+        assertThat(claims.getExpiration().toInstant()).isEqualTo(NOW_SECONDS.plusSeconds(1).plus(Duration.ofMinutes(30)));
+        assertThat(token.issuedAt()).isEqualTo(NOW_SECONDS.plusSeconds(1));
+    }
+
+    @Test
+    @DisplayName("U10 D1: revoked-at이 이전 초면 지금 시각 그대로, 다른 인스턴스 시계가 앞서 미래면 그 다음 초")
+    void revokedAtBeforeOrAfterNow() {
+        assertThat(issuer.issueAccess(new AccessTokenSpec(USER_ID, "USER", false), NOW_SECONDS.minusSeconds(1)).issuedAt())
+                .isEqualTo(NOW_SECONDS);
+        assertThat(issuer.issueAccess(new AccessTokenSpec(USER_ID, "USER", false), Instant.EPOCH).issuedAt())
+                .isEqualTo(NOW_SECONDS);
+        assertThat(issuer.issueAccess(new AccessTokenSpec(USER_ID, "USER", false), NOW_SECONDS.plusSeconds(2)).issuedAt())
+                .isEqualTo(NOW_SECONDS.plusSeconds(3));
+        assertThat(issuer.accessTokenLifetime()).isEqualTo(Duration.ofMinutes(30));
+    }
+
+    @Test
     @DisplayName("jti는 UUID이고 발급마다 다르다")
     void uniqueJti() {
         IssuedToken first = issuer.issueRefresh(USER_ID);

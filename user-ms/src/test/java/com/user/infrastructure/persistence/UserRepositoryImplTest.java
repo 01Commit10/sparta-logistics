@@ -73,6 +73,22 @@ class UserRepositoryImplTest {
     }
 
     @Test
+    @DisplayName("U09: 본인을 뺀 활성 사용자의 Slack ID만 중복으로 본다")
+    void slackIdUsedByOthers() {
+        User me = userRepository.save(user("user01", "U001"));
+        userRepository.save(user("user02", "U002"));
+        User withdrawn = user("user03", "U003");
+        withdrawn.withdraw(withdrawn.getId());
+        userRepository.save(withdrawn);
+        flushAndClear();
+
+        assertThat(userRepository.existsActiveBySlackIdAndIdNot("U001", me.getId())).isFalse();
+        assertThat(userRepository.existsActiveBySlackIdAndIdNot("U002", me.getId())).isTrue();
+        assertThat(userRepository.existsActiveBySlackIdAndIdNot("U003", me.getId())).isFalse();
+        assertThat(userRepository.existsActiveBySlackIdAndIdNot("U999", me.getId())).isFalse();
+    }
+
+    @Test
     @DisplayName("Slack ID 중복은 활성 사용자끼리만 본다")
     void slackIdAmongActiveUsers() {
         User withdrawn = user("user01", "U001");

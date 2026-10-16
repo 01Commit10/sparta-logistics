@@ -14,6 +14,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,11 +43,33 @@ class RedisTokenStoreTest {
     StringRedisTemplate redis;
 
     private static final String BLACKLIST_KEY = "auth:blacklist:jti-access";
+    private static final String REVOKED_AT_KEY = "auth:revoked-at:00000000-0000-0000-0000-000000000001";
 
     @AfterEach
     void clean() {
         redis.delete(KEY);
         redis.delete(BLACKLIST_KEY);
+        redis.delete(REVOKED_AT_KEY);
+    }
+
+    @Test
+    @DisplayName("U10 테스트 7: auth:revoked-at:{userId} = epoch 초 문자열, TTL = Access 유효 시간 (Gateway가 읽는 계약)")
+    void revokesAll() {
+        tokenStore.revokeAllIssuedBefore(USER_ID, Instant.parse("2026-10-16T10:00:00.700Z"), Duration.ofMinutes(30));
+
+        assertThat(redis.opsForValue().get(REVOKED_AT_KEY)).isEqualTo("1792144800");
+        assertThat(redis.getExpire(REVOKED_AT_KEY)).isBetween(Duration.ofMinutes(30).toSeconds() - 5, Duration.ofMinutes(30).toSeconds());
+        assertThat(tokenStore.findRevokedAt(USER_ID)).contains(Instant.parse("2026-10-16T10:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("U10: revoked-at이 없거나 숫자가 아니면 empty (발급은 막지 않음, Gateway가 깨진 값을 따로 거부)")
+    void revokedAtAbsentOrCorrupted() {
+        assertThat(tokenStore.findRevokedAt(USER_ID)).isEmpty();
+
+        redis.opsForValue().set(REVOKED_AT_KEY, "not-a-number");
+
+        assertThat(tokenStore.findRevokedAt(USER_ID)).isEmpty();
     }
 
     @Test

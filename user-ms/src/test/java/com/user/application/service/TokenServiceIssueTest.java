@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.Clock;
 import java.util.UUID;
 
@@ -35,6 +36,18 @@ class TokenServiceIssueTest {
         assertThat(tokenIssuer.refreshUserIds()).containsExactly(USER_ID);
         assertThat(result.accessToken()).startsWith("access-");
         assertThat(result.refreshToken()).isEqualTo(tokenIssuer.lastRefresh().value());
+    }
+
+    @Test
+    @DisplayName("U10 D1: 저장된 revoked-at을 발급기에 넘긴다 (없으면 EPOCH)")
+    void passesRevokedAt() {
+        service.issue(new AuthenticatedUser(USER_ID, "USER", false));
+        Instant revokedAt = Instant.parse("2026-10-16T10:00:00Z");
+        tokenStore.revokeAllIssuedBefore(USER_ID, revokedAt, Duration.ofMinutes(30));
+
+        service.issue(new AuthenticatedUser(USER_ID, "USER", false));
+
+        assertThat(tokenIssuer.accessRevokedAts()).containsExactly(Instant.EPOCH, revokedAt);
     }
 
     @Test

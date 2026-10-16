@@ -13,6 +13,12 @@ import java.util.UUID;
 public class FakeUserRepository implements UserRepository {
 
     private final Map<UUID, User> store = new LinkedHashMap<>();
+    private int lockCount;
+
+    /** 잠금 조회(countActiveMastersForUpdate) 횟수 */
+    public int lockCount() {
+        return lockCount;
+    }
 
     @Override
     public User save(User user) {
@@ -46,13 +52,20 @@ public class FakeUserRepository implements UserRepository {
     }
 
     @Override
+    public boolean existsActiveBySlackIdAndIdNot(String slackId, UUID id) {
+        return store.values().stream().filter(User::isActive).filter(u -> !u.getId().equals(id))
+                .anyMatch(u -> u.getSlackId().equals(slackId));
+    }
+
+    @Override
     public long countActiveMastersForUpdate() {
+        lockCount++;
         return store.values().stream().filter(User::isActive).filter(User::isMaster).count();
     }
 
     @Override
     public boolean existsActiveMaster() {
-        return countActiveMastersForUpdate() > 0;
+        return store.values().stream().filter(User::isActive).anyMatch(User::isMaster);
     }
 
     public Collection<User> all() {
