@@ -1,9 +1,13 @@
 package com.user.presentation.controller;
 
+import com.common.exception.AuthErrorCode;
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
+import com.user.application.dto.LoginCommand;
+import com.user.application.dto.LoginResult;
 import com.user.application.dto.SignupCommand;
 import com.user.application.dto.UserResult;
+import com.user.application.facade.AuthFacade;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +48,9 @@ class AuthControllerTest {
 
     @MockitoBean
     UserQueryService userQueryService;
+
+    @MockitoBean
+    AuthFacade authFacade;
 
     private static final String VALID_BODY = """
             { "username": "user01", "password": "Abcd123!", "name": "홍길동", "slackId": "U001",
@@ -184,6 +191,73 @@ class AuthControllerTest {
             mockMvc.perform(get("/api/v1/auth/check-username").queryParam("username", "A!"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("INVALID_USERNAME"));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/v1/auth/login")
+    class Login {
+
+        private static final String LOGIN_BODY = """
+                { "username": "user01", "password": "Abcd123!" }
+                """;
+
+        @Test
+        @DisplayName("200과 accessToken·refreshToken·passwordChangeRequired 3개 필드를 감싸지 않고 돌려준다")
+        void ok() throws Exception {
+            given(authFacade.login(any())).willReturn(new LoginResult("access.jwt", "refresh.jwt", true));
+
+            mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(LOGIN_BODY))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(3))
+                    .andExpect(jsonPath("$.accessToken").value("access.jwt"))
+                    .andExpect(jsonPath("$.refreshToken").value("refresh.jwt"))
+                    .andExpect(jsonPath("$.passwordChangeRequired").value(true));
+
+            verify(authFacade).login(new LoginCommand("user01", "Abcd123!"));
+        }
+
+        @Test
+        @DisplayName("인증 실패는 401 INVALID_CREDENTIALS")
+        void invalidCredentials() throws Exception {
+            given(authFacade.login(any())).willThrow(new BusinessException(UserErrorCode.INVALID_CREDENTIALS));
+
+            mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(LOGIN_BODY))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+        }
+
+        @Test
+        @DisplayName("Redis 장애는 503 AUTH_UNAVAILABLE")
+        void authUnavailable() throws Exception {
+            given(authFacade.login(any())).willThrow(new BusinessException(AuthErrorCode.AUTH_UNAVAILABLE));
+
+            mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(LOGIN_BODY))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.code").value("AUTH_UNAVAILABLE"));
+        }
+
+        @ParameterizedTest(name = "{0} 빈 값 → 400")
+        @CsvSource({"username", "password"})
+        @DisplayName("빈 값은 400 INVALID_INPUT이고 인증을 시도하지 않는다")
+        void blank(String field) throws Exception {
+            String body = LOGIN_BODY.replaceFirst("\"" + field + "\": \"[^\"]*\"", "\"" + field + "\": \" \"");
+
+            mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                    .andExpect(jsonPath("$.errors[0].field").value(field));
+            verifyNoInteractions(authFacade);
+        }
+
+        @Test
+        @DisplayName("가입 규칙에 맞지 않는 ID도 400이 아니라 인증으로 넘긴다 (결과는 401)")
+        void malformedUsernameGoesToAuthentication() throws Exception {
+            given(authFacade.login(any())).willThrow(new BusinessException(UserErrorCode.INVALID_CREDENTIALS));
+
+            mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                            .content("{ \"username\": \"NOT_VALID!\", \"password\": \"x\" }"))
+                    .andExpect(status().isUnauthorized());
         }
     }
 }
