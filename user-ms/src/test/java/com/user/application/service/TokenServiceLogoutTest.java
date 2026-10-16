@@ -1,6 +1,7 @@
 package com.user.application.service;
 
 import com.user.application.dto.LogoutCommand;
+import com.user.fake.FakeRefreshTokenParser;
 import com.user.fake.FakeTokenIssuer;
 import com.user.fake.FakeTokenStore;
 import org.junit.jupiter.api.DisplayName;
@@ -23,7 +24,7 @@ class TokenServiceLogoutTest {
     private static final Instant NOW = Instant.parse("2026-10-16T10:00:00Z");
 
     private final FakeTokenStore tokenStore = new FakeTokenStore();
-    private final TokenService service = new TokenService(new FakeTokenIssuer(), tokenStore, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final TokenService service = new TokenService(new FakeTokenIssuer(), new FakeRefreshTokenParser(), tokenStore, Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
     @DisplayName("1. Access Token을 남은 유효 시간(exp - now) 동안 blacklist에 올린다")

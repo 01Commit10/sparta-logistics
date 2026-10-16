@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 가입 → 로그인 → 발급 토큰 확인까지 실제 빈으로 확인한다 (H2, 실제 BCrypt·jjwt).
+ * 가입 → 로그인 → 발급 토큰 확인(U05), 로그아웃(U08), 재발급(U07)까지 실제 빈으로 확인한다 (H2, 실제 BCrypt·jjwt).
  * Redis만 FakeTokenStore로 바꾼다 (실제 Redis는 RedisTokenStoreTest, Postman 실행 확인).
  * 토큰을 테스트 키로 검증해, 테스트가 .env의 운영 키가 아니라 config/application-test.yaml의 키를 쓰는지도 확인한다.
  */
@@ -157,5 +157,87 @@ class LoginIntegrationTest {
         assertThat(store.refreshOf(userId)).isEmpty();
         assertThat(store.blacklistTtlOf(access.getId()))
                 .hasValueSatisfying(ttl -> assertThat(ttl).isBetween(Duration.ofMinutes(29), Duration.ofMinutes(30)));
+    }
+
+    private String reissue(String refreshToken) {
+        return """
+                { "refreshToken": "%s" }
+                """.formatted(refreshToken);
+    }
+
+    @Test
+    @DisplayName("U07: 로그인 → 재발급(새 jti 저장, DB 역할 반영) → 이전 Refresh 재사용 401 → 새 Refresh도 401")
+    void reissueRotationAndReuseDetection() throws Exception {
+        signup("reissue01");
+        UUID userId = jdbc.queryForObject("select id from auth.p_users where username = 'reissue01'", UUID.class);
+        JsonNode login = objectMapper.readTree(mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON).content(login("reissue01", "Abcd123!")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        String oldRefresh = login.get("refreshToken").asText();
+        jdbc.update("update auth.p_users set role = 'MASTER' where id = ?", userId);
+
+        JsonNode reissued = objectMapper.readTree(mockMvc.perform(post("/api/v1/auth/reissue")
+                        .contentType(MediaType.APPLICATION_JSON).content(reissue(oldRefresh)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        Claims newAccess = parse(reissued.get("accessToken").asText());
+        Claims newRefresh = parse(reissued.get("refreshToken").asText());
+        FakeTokenStore store = (FakeTokenStore) tokenStore;
+        assertThat(newAccess.get("role", String.class)).isEqualTo("MASTER");
+        assertThat(newRefresh.get("typ", String.class)).isEqualTo("refresh");
+        assertThat(store.findRefreshJti(userId)).contains(newRefresh.getId());
+        assertThat(newRefresh.getId()).isNotEqualTo(parse(oldRefresh).getId());
+
+        mockMvc.perform(post("/api/v1/auth/reissue").contentType(MediaType.APPLICATION_JSON).content(reissue(oldRefresh)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("REFRESH_TOKEN_INVALID"));
+        mockMvc.perform(post("/api/v1/auth/reissue").contentType(MediaType.APPLICATION_JSON)
+                        .content(reissue(reissued.get("refreshToken").asText())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("REFRESH_TOKEN_INVALID"));
+        assertThat(store.findRefreshJti(userId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("U07: Access Token으로 재발급하면 401이고, 저장된 Refresh는 그대로 남는다")
+    void reissueWithAccessToken() throws Exception {
+        signup("reissue02");
+        UUID userId = jdbc.queryForObject("select id from auth.p_users where username = 'reissue02'", UUID.class);
+        JsonNode login = objectMapper.readTree(mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON).content(login("reissue02", "Abcd123!")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        mockMvc.perform(post("/api/v1/auth/reissue").contentType(MediaType.APPLICATION_JSON)
+                        .content(reissue(login.get("accessToken").asText())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("REFRESH_TOKEN_INVALID"));
+
+        assertThat(((FakeTokenStore) tokenStore).findRefreshJti(userId))
+                .contains(parse(login.get("refreshToken").asText()).getId());
+    }
+
+    @Test
+    @DisplayName("U07: 로그아웃한 뒤의 Refresh로는 재발급할 수 없다")
+    void reissueAfterLogout() throws Exception {
+        signup("reissue03");
+        UUID userId = jdbc.queryForObject("select id from auth.p_users where username = 'reissue03'", UUID.class);
+        JsonNode login = objectMapper.readTree(mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON).content(login("reissue03", "Abcd123!")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        Claims access = parse(login.get("accessToken").asText());
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .header("X-User-Id", userId.toString())
+                        .header("X-User-Role", "USER")
+                        .header("X-Token-Jti", access.getId())
+                        .header("X-Token-Exp", String.valueOf(access.getExpiration().toInstant().getEpochSecond())))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/v1/auth/reissue").contentType(MediaType.APPLICATION_JSON)
+                        .content(reissue(login.get("refreshToken").asText())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("REFRESH_TOKEN_INVALID"));
     }
 }

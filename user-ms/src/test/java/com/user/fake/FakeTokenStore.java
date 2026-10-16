@@ -16,6 +16,7 @@ public class FakeTokenStore implements TokenStore {
 
     private final Map<UUID, Saved> refresh = new HashMap<>();
     private final Map<String, Duration> blacklist = new HashMap<>();
+    private int deleteCount;
 
     @Override
     public void saveRefresh(UUID userId, String jti, Duration ttl) {
@@ -23,8 +24,19 @@ public class FakeTokenStore implements TokenStore {
     }
 
     @Override
+    public Optional<String> findRefreshJti(UUID userId) {
+        return refreshOf(userId).map(Saved::jti);
+    }
+
+    @Override
     public void deleteRefresh(UUID userId) {
         refresh.remove(userId);
+        deleteCount++;
+    }
+
+    /** 재사용 탐지로 지웠는지 확인한다 (지울 값이 없어도 센다) */
+    public int deleteCount() {
+        return deleteCount;
     }
 
     @Override

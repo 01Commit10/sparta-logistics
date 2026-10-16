@@ -70,6 +70,16 @@ class RedisTokenStoreTest {
     }
 
     @Test
+    @DisplayName("U07: 저장한 jti를 읽는다, 키가 없으면 empty")
+    void findsRefreshJti() {
+        assertThat(tokenStore.findRefreshJti(USER_ID)).isEmpty();
+
+        tokenStore.saveRefresh(USER_ID, "jti-1", Duration.ofDays(7));
+
+        assertThat(tokenStore.findRefreshJti(USER_ID)).contains("jti-1");
+    }
+
+    @Test
     @DisplayName("U08: Refresh 삭제 → auth:refresh:{userId} 키가 없어진다 (없을 때 지워도 오류 없음)")
     void deletesRefresh() {
         tokenStore.saveRefresh(USER_ID, "jti-1", Duration.ofDays(7));

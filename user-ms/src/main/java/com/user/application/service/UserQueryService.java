@@ -10,6 +10,7 @@ import com.user.domain.vo.Username;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -36,8 +37,13 @@ public class UserQueryService {
     public AuthenticatedUser authenticate(String username, String rawPassword) {
         return userRepository.findActiveByUsername(username)
                 .filter(user -> passwordHasher.matches(rawPassword, user.getPasswordHash()))
-                .map(user -> new AuthenticatedUser(user.getId(), user.getRole().name(), user.isPasswordChangeRequired()))
+                .map(AuthenticatedUser::from)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.INVALID_CREDENTIALS));
+    }
+
+    /** USR-03 재발급: 토큰에 든 값이 아니라 DB의 최신 역할·비밀번호 변경 필요 여부로 새 Access를 만든다 */
+    public Optional<AuthenticatedUser> findActiveAuthUser(UUID userId) {
+        return userRepository.findActiveById(userId).map(AuthenticatedUser::from);
     }
 
     /** USR-20: 탈퇴한 사용자의 ID도 재사용할 수 없으므로 삭제된 사용자까지 확인한다 */
