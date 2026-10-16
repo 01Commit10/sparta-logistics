@@ -10,6 +10,7 @@ import com.user.application.dto.CreateUserCommand;
 import com.user.application.dto.DeactivateUserCommand;
 import com.user.application.dto.InitialMasterCommand;
 import com.user.application.dto.InitialMasterResult;
+import com.user.application.dto.LinkOrganizationCommand;
 import com.user.application.dto.ResetPasswordCommand;
 import com.user.application.dto.RoleChangeResult;
 import com.user.application.dto.SignupCommand;
@@ -224,6 +225,38 @@ public class UserCommandService {
         user.requirePasswordChange(passwordHasher.hash(temporaryPassword));
         userRepository.save(user);
         return new TemporaryPasswordResult(user.getId(), user.getUsername(), temporaryPassword);
+    }
+
+    /**
+     * USR-22 재활성화 (MASTER). 비활성화·본인 탈퇴 모두 대상이고 비밀번호·역할·배송담당 여부는 그대로 둔다.
+     * 삭제된 사이 다른 활성 사용자가 같은 Slack ID를 쓰게 됐으면 DUPLICATE_SLACK_ID (먼저 Slack ID를 바꿔야 한다).
+     * 기존 토큰은 비활성화·탈퇴 때 이미 무효라 Redis 작업이 없다.
+     */
+    @Transactional
+    public UserResult restore(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        if (userRepository.existsActiveBySlackIdAndIdNot(user.getSlackId(), user.getId())) {
+            throw new BusinessException(UserErrorCode.DUPLICATE_SLACK_ID);
+        }
+        user.restore();
+        return UserResult.from(userRepository.save(user));
+    }
+
+    /**
+     * USR-16 소속 연결 (MASTER). 업체·허브가 실제로 있는지는 확인하지 않는다 (MASTER가 확인한 UUID, 2026-10-16 결정).
+     * 소속 유형이 바뀌면 소속명도 함께 보내야 한다 (U14와 같은 규칙). 같은 유형이면 생략하고 기존 이름을 유지한다.
+     */
+    @Transactional
+    public UserResult linkOrganization(LinkOrganizationCommand command) {
+        User user = findActive(command.userId());
+        OrganizationType organizationType = parseOrganizationType(command.organizationType());
+        if (organizationType != user.getOrganizationType() && command.organizationName() == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "소속 유형을 바꾸면 소속명도 함께 입력해야 합니다.");
+        }
+        user.linkOrganization(organizationType, command.organizationId(),
+                valueOr(command.organizationName(), user.getOrganizationName()));
+        return UserResult.from(userRepository.save(user));
     }
 
     /** username은 탈퇴자 포함 유일, slackId는 활성 사용자 사이에서만 유일 */

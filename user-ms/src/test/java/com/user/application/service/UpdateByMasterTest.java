@@ -59,7 +59,7 @@ class UpdateByMasterTest {
     void organizationNameOnly() {
         User user = saved("user01", OrganizationType.COMPANY, "스파르타상사");
         UUID companyId = UUID.randomUUID();
-        user.linkOrganization(OrganizationType.COMPANY, companyId);
+        user.linkOrganization(OrganizationType.COMPANY, companyId, "스파르타상사");
 
         UserResult result = service.updateByMaster(new UpdateUserCommand(user.getId(), null, null, null, "스파르타물산"));
 
@@ -86,7 +86,7 @@ class UpdateByMasterTest {
     @DisplayName("3. 소속 유형을 바꾸면 소속명도 바뀌고 연결된 조직 ID는 지워진다")
     void organizationTypeChange() {
         User user = saved("user01", OrganizationType.COMPANY, "스파르타상사");
-        user.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID());
+        user.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID(), "스파르타상사");
 
         UserResult result = service.updateByMaster(new UpdateUserCommand(user.getId(), null, null, "HUB", "서울센터"));
 

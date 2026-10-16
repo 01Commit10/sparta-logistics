@@ -361,4 +361,84 @@ class UserAdminIntegrationTest {
         assertThat(jdbc.queryForObject("select password_hash from auth.p_users where id = ?", String.class, self))
                 .isEqualTo(hashBefore);
     }
+
+    @Test
+    @DisplayName("U19: 비활성화 → 재활성화 200 → 삭제 정보 NULL, updated_by=MASTER, 기존 비밀번호 로그인, 내부 API 200. 다시 하면 409")
+    void restore() throws Exception {
+        UUID target = signup("restore01", "HUB");
+        mockMvc.perform(asMaster(delete("/api/v1/users/{userId}", target))).andExpect(status().isNoContent());
+
+        mockMvc.perform(asMaster(post("/api/v1/users/{userId}/restore", target)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.deletedBy").isEmpty());
+
+        assertThat(jdbc.queryForMap("select deleted_at, deleted_by, updated_by from auth.p_users where id = ?", target))
+                .containsEntry("deleted_at", null).containsEntry("deleted_by", null).containsEntry("updated_by", MASTER_ID);
+        login("restore01", "Abcd123!").andExpect(status().isOk())
+                .andExpect(jsonPath("$.passwordChangeRequired").value(false));
+        mockMvc.perform(get("/internal/v1/users/{userId}", target)).andExpect(status().isOk());
+        mockMvc.perform(asMaster(post("/api/v1/users/{userId}/restore", target)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("USER_NOT_DELETED"));
+    }
+
+    @Test
+    @DisplayName("U19: 탈퇴 후 다른 사용자가 같은 Slack ID로 가입 → 재활성화 409 DUPLICATE_SLACK_ID, 삭제 상태 그대로")
+    void restoreSlackIdTaken() throws Exception {
+        UUID gone = signup("restore02", "HUB");
+        mockMvc.perform(delete("/api/v1/users/me").header("X-User-Id", gone.toString()).header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON).content("{ \"password\": \"Abcd123!\" }"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content("""
+                        { "username": "restore03", "password": "Abcd123!", "name": "김배송", "slackId": "U-restore02",
+                          "organizationType": "HUB", "organizationName": "서울센터" }
+                        """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(asMaster(post("/api/v1/users/{userId}/restore", gone)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_SLACK_ID"));
+        assertThat(jdbc.queryForObject("select deleted_at is not null from auth.p_users where id = ?", Boolean.class, gone))
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("U20: 소속 연결 → DB organization_id·updated_by=MASTER, 상세 조회에 organizationId (완료 기준). 정보 수정으로 유형 바꾸면 지워진다")
+    void linkOrganization() throws Exception {
+        UUID user = signup("link01", "COMPANY");
+        UUID companyId = UUID.randomUUID();
+
+        mockMvc.perform(asMaster(patch("/api/v1/users/{userId}/organization", user)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"organizationType\": \"COMPANY\", \"organizationId\": \"%s\" }".formatted(companyId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationId").value(companyId.toString()))
+                .andExpect(jsonPath("$.organizationName").value("서울센터"));
+
+        assertThat(jdbc.queryForMap("select organization_type, organization_id, updated_by from auth.p_users where id = ?", user))
+                .containsEntry("organization_type", "COMPANY").containsEntry("organization_id", companyId)
+                .containsEntry("updated_by", MASTER_ID);
+        mockMvc.perform(asMaster(get("/api/v1/users/{userId}", user)))
+                .andExpect(jsonPath("$.organizationId").value(companyId.toString()));
+
+        mockMvc.perform(asMaster(patch("/api/v1/users/{userId}", user)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"organizationType\": \"HUB\", \"organizationName\": \"경기센터\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationId").isEmpty());
+    }
+
+    @Test
+    @DisplayName("U20: 배송담당자를 업체에 연결 → 409 DELIVERY_MANAGER_REQUIRES_HUB, DB 그대로")
+    void linkDeliveryManagerToCompany() throws Exception {
+        UUID driver = signup("link02", "HUB");
+        mockMvc.perform(deliveryManager(driver, true)).andExpect(status().isOk());
+
+        mockMvc.perform(asMaster(patch("/api/v1/users/{userId}/organization", driver)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"organizationType\": \"COMPANY\", \"organizationId\": \"%s\", \"organizationName\": \"스파르타상사\" }"
+                                .formatted(UUID.randomUUID())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DELIVERY_MANAGER_REQUIRES_HUB"));
+        assertThat(jdbc.queryForMap("select organization_type, organization_id from auth.p_users where id = ?", driver))
+                .containsEntry("organization_type", "HUB").containsEntry("organization_id", null);
+    }
 }

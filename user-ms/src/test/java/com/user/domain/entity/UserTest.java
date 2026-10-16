@@ -166,17 +166,48 @@ class UserTest {
             User user = signupUser();
             UUID companyId = UUID.randomUUID();
 
-            user.linkOrganization(OrganizationType.COMPANY, companyId);
+            user.linkOrganization(OrganizationType.COMPANY, companyId, "스파르타상사");
             assertThat(user.getOrganizationId()).isEqualTo(companyId);
 
-            assertError(() -> user.linkOrganization(OrganizationType.HQ, UUID.randomUUID()), UserErrorCode.INVALID_ORGANIZATION);
+            assertError(() -> user.linkOrganization(OrganizationType.HQ, UUID.randomUUID(), "본사"), UserErrorCode.INVALID_ORGANIZATION);
+        }
+
+        @Test
+        @DisplayName("소속 연결 (U20): 유형·ID·이름을 함께 바꾸고, ID가 없으면 INVALID_ORGANIZATION")
+        void linkOrganization_changesTypeAndName() {
+            User user = signupUser();
+            UUID hubId = UUID.randomUUID();
+
+            user.linkOrganization(OrganizationType.HUB, hubId, "서울센터");
+
+            assertThat(user.getOrganizationType()).isEqualTo(OrganizationType.HUB);
+            assertThat(user.getOrganizationId()).isEqualTo(hubId);
+            assertThat(user.getOrganizationName()).isEqualTo("서울센터");
+            assertError(() -> user.linkOrganization(OrganizationType.HUB, null, "서울센터"), UserErrorCode.INVALID_ORGANIZATION);
+            assertThat(user.getOrganizationId()).isEqualTo(hubId);
+        }
+
+        @Test
+        @DisplayName("소속 연결 (U20): 배송담당자는 허브에만 연결된다 (업체면 DELIVERY_MANAGER_REQUIRES_HUB, 그대로)")
+        void linkOrganization_deliveryManagerStaysHub() {
+            User driver = User.createByMaster(USER_ID, Username.of("courier01"), "배송원", "hashed", "U002",
+                    OrganizationType.HUB, "서울센터", UserRole.USER, true, MASTER_ID);
+            UUID hubId = UUID.randomUUID();
+
+            driver.linkOrganization(OrganizationType.HUB, hubId, "서울센터");
+            assertThat(driver.getOrganizationId()).isEqualTo(hubId);
+
+            assertError(() -> driver.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID(), "스파르타상사"),
+                    UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
+            assertThat(driver.getOrganizationType()).isEqualTo(OrganizationType.HUB);
+            assertThat(driver.getOrganizationId()).isEqualTo(hubId);
         }
 
         @Test
         @DisplayName("정보 수정에서 소속 유형이 바뀌면 연결된 조직 ID가 지워진다")
         void updateProfile_resetsOrganizationId() {
             User user = signupUser();
-            user.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID());
+            user.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID(), "스파르타상사");
 
             user.updateProfile("홍길동", "U001", OrganizationType.HUB, "서울센터");
 
@@ -189,7 +220,7 @@ class UserTest {
         void updateProfile_keepsOrganizationId() {
             User user = signupUser();
             UUID companyId = UUID.randomUUID();
-            user.linkOrganization(OrganizationType.COMPANY, companyId);
+            user.linkOrganization(OrganizationType.COMPANY, companyId, "스파르타상사");
 
             user.updateProfile("홍길순", "U009", OrganizationType.COMPANY, "새상호");
 

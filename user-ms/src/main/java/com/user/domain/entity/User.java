@@ -194,13 +194,18 @@ public class User extends BaseEntity {
         }
     }
 
-    /** 가입 때 입력한 소속을 실제 업체·허브 ID와 연결한다. 본사(HQ)는 연결할 조직이 없다. */
-    public void linkOrganization(OrganizationType organizationType, UUID organizationId) {
+    /**
+     * 소속을 실제 업체·허브 ID와 연결한다 (유형·이름도 함께 바꿀 수 있다). 본사(HQ)는 연결할 조직이 없다.
+     * 배송담당자는 허브 소속만 (업체로 옮기려면 먼저 배송담당을 해제한다).
+     */
+    public void linkOrganization(OrganizationType organizationType, UUID organizationId, String organizationName) {
         if (!organizationType.isLinkable() || organizationId == null) {
             throw new BusinessException(UserErrorCode.INVALID_ORGANIZATION);
         }
+        checkDeliveryManagerOrganization(deliveryManager, organizationType);
         this.organizationType = organizationType;
         this.organizationId = organizationId;
+        this.organizationName = organizationName;
     }
 
     /** 탈퇴(본인) 또는 비활성화(MASTER). 논리 삭제. 삭제 시각은 BaseEntity가 현재 시각으로 기록한다. */

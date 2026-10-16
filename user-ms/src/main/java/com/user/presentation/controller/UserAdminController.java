@@ -10,6 +10,7 @@ import com.user.application.service.UserQueryService;
 import com.user.presentation.dto.request.ChangeRoleRequest;
 import com.user.presentation.dto.request.CreateUserRequest;
 import com.user.presentation.dto.request.DeliveryManagerRequest;
+import com.user.presentation.dto.request.LinkOrganizationRequest;
 import com.user.presentation.dto.request.UpdateUserRequest;
 import com.user.presentation.dto.response.TemporaryPasswordResponse;
 import com.user.presentation.dto.response.UserDetailResponse;
@@ -89,6 +90,14 @@ public class UserAdminController {
         return UserDetailResponse.from(userCommandService.assignDeliveryManager(request.toCommand(userId)));
     }
 
+    /** USR-16 소속 연결 (업체·허브 UUID). 소속 유형이 바뀌면 소속명도 함께 보낸다 */
+    @PatchMapping("/{userId}/organization")
+    public UserDetailResponse linkOrganization(@CurrentUser AuthUser user, @PathVariable UUID userId,
+                                               @Valid @RequestBody LinkOrganizationRequest request) {
+        user.requireMaster();
+        return UserDetailResponse.from(userCommandService.linkOrganization(request.toCommand(userId)));
+    }
+
     /** USR-21 비밀번호 초기화. 임시 비밀번호는 응답으로 1회만 나가므로 캐시하지 않게 한다 */
     @PostMapping("/{userId}/password-reset")
     public ResponseEntity<TemporaryPasswordResponse> resetPassword(@CurrentUser AuthUser user, @PathVariable UUID userId) {
@@ -96,6 +105,13 @@ public class UserAdminController {
         TemporaryPasswordResponse response = TemporaryPasswordResponse.from(
                 userAdminFacade.resetPassword(new ResetPasswordCommand(userId, user.id())));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+    }
+
+    /** USR-22 재활성화 (비활성화·탈퇴한 사용자). 비밀번호는 그대로라 기존 비밀번호로 로그인한다 */
+    @PostMapping("/{userId}/restore")
+    public UserDetailResponse restore(@CurrentUser AuthUser user, @PathVariable UUID userId) {
+        user.requireMaster();
+        return UserDetailResponse.from(userCommandService.restore(userId));
     }
 
     /** USR-17 비활성화 (논리 삭제, 대상 토큰 무효화). 본인은 탈퇴(DELETE /users/me)를 써야 한다 */
