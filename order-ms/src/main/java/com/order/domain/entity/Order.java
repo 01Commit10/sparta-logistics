@@ -52,13 +52,12 @@ public class Order extends BaseEntity {
     @Column(nullable = false)
     private UUID orderedBy;         // 주문자 ID
 
-
     public static Order create(UUID requesterCompanyId, UUID supplierCompanyId,
                                UUID productId, int quantity, BigDecimal unitPrice,
                                String requestNote, UUID orderedBy) {
-        if (quantity < 1) {
-            throw new BusinessException(OrderErrorCode.INVALID_QUANTITY);
-        }
+        validateQuantity(quantity);
+        validateUnitPrice(unitPrice);
+
         Order order = new Order();
         order.requesterCompanyId = requesterCompanyId;
         order.supplierCompanyId = supplierCompanyId;
@@ -68,7 +67,20 @@ public class Order extends BaseEntity {
         order.totalAmount = unitPrice.multiply(BigDecimal.valueOf(quantity));
         order.requestNote = requestNote;
         order.orderedBy = orderedBy;
-        order.orderStatus = OrderStatus.CREATED;
+        order.orderStatus = OrderStatus.PROCESSING;
         return order;
     }
+
+    private static void validateQuantity(int quantity) {
+        if (quantity < 1) {
+            throw new BusinessException(OrderErrorCode.INVALID_QUANTITY);
+        }
+    }
+
+    private static void validateUnitPrice(BigDecimal unitPrice) {
+        if (unitPrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException(OrderErrorCode.INVALID_UNIT_PRICE);
+        }
+    }
+
 }

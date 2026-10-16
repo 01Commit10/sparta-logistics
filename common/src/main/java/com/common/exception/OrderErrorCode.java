@@ -12,7 +12,8 @@ import org.springframework.http.HttpStatus;
 public enum OrderErrorCode implements ErrorCode {
 
     // 400 - 입력 규칙 위반
-    INVALID_QUANTITY(HttpStatus.BAD_REQUEST, "수량은 1 이상 입력해주세요."),
+    INVALID_QUANTITY(HttpStatus.BAD_REQUEST, "주문 수량은 1 이상 입력해주세요."),
+    INVALID_UNIT_PRICE(HttpStatus.BAD_REQUEST, "주문 단가가 0원 이상인지 확인해주세요."),
 
 
     // 403 - 권한 없음

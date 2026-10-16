@@ -32,18 +32,18 @@ public class OrderTest {
     }
 
     @Test
-    @DisplayName("주문을 생성하면 총액은 단가 × 수량이고, 상태는 CREATED이다")
+    @DisplayName("주문을 생성하면 총액은 단가 × 수량이고, 상태는 PROCESSING 이다")
     void create_order() {
         Order order = createOrder(3, UNIT_PRICE);
 
         assertThat(order.getTotalAmount()).isEqualByComparingTo("3000.00");
-        assertThat(order.getOrderStatus()).isEqualTo(OrderStatus.CREATED);
+        assertThat(order.getOrderStatus()).isEqualTo(OrderStatus.PROCESSING);
         assertThat(order.getQuantity()).isEqualTo(3);
     }
 
-    @ParameterizedTest(name = "수량이 {0}이면 예외가 발생한다")
+    @ParameterizedTest(name = "주문 수량이 {0}이면 예외가 발생한다")
     @ValueSource(ints = {0, -1})
-    @DisplayName("수량이 0 이하면 주문을 생성하지 않는다")
+    @DisplayName("주문 수량이 0 이하면 주문을 생성하지 않는다")
     void create_order_fail_when_quantity_is_not_positive(int quantity) {
         assertThatThrownBy(() -> createOrder(quantity, UNIT_PRICE))
                 .asInstanceOf(type(BusinessException.class))
@@ -52,12 +52,31 @@ public class OrderTest {
     }
 
     @Test
-    @DisplayName("수량이 1이면 주문을 생성할 수 있다 (경계값)")
+    @DisplayName("주문 수량이 1이면 주문을 생성할 수 있다 (경계값)")
     void create_order_with_minimum_quantity() {
         Order order = createOrder(1, UNIT_PRICE);
 
         assertThat(order.getQuantity()).isEqualTo(1);
         assertThat(order.getTotalAmount()).isEqualByComparingTo("1000.00");
+    }
+
+    @ParameterizedTest(name = "주문 단가가 {0}이면 예외가 발생한다.")
+    @ValueSource(strings = {"-1", "-0.01"})
+    @DisplayName("주문 단가가 0원 미만이면 주문을 생성할 수 없다.")
+    void create_order_fail_when_unit_price_is_negative(BigDecimal unitPrice) {
+        assertThatThrownBy(() -> createOrder(1, unitPrice))
+                .asInstanceOf(type(BusinessException.class))
+                .extracting(BusinessException::getErrorCode)
+                .isEqualTo(OrderErrorCode.INVALID_UNIT_PRICE);
+    }
+
+    @Test
+    @DisplayName("단가가 0원이면 주문을 생성할 수 있고 총액은 0원이다 (경계값)")
+    void create_order_with_zero_unit_price() {
+        Order order = createOrder(3, BigDecimal.ZERO);
+
+        assertThat(order.getUnitPriceSnapshot()).isEqualByComparingTo("0");
+        assertThat(order.getTotalAmount()).isEqualByComparingTo("0");
     }
 
 
