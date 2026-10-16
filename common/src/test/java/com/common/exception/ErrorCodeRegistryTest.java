@@ -18,6 +18,7 @@ class ErrorCodeRegistryTest {
     void findsRegisteredCode() {
         assertThat(ErrorCodeRegistry.find("INVALID_CREDENTIALS")).containsSame(UserErrorCode.INVALID_CREDENTIALS);
         assertThat(ErrorCodeRegistry.find("TOKEN_EXPIRED")).containsSame(AuthErrorCode.TOKEN_EXPIRED);
+        assertThat(ErrorCodeRegistry.find("COMPANY_HUB_NOT_FOUND")).containsSame(CompanyErrorCode.COMPANY_HUB_NOT_FOUND);
         assertThat(ErrorCodeRegistry.find("RESOURCE_NOT_FOUND")).containsSame(CommonErrorCode.RESOURCE_NOT_FOUND);
     }
 
@@ -34,6 +35,7 @@ class ErrorCodeRegistryTest {
     void all() {
         assertThat(ErrorCodeRegistry.all())
                 .contains(CommonErrorCode.INVALID_INPUT, AuthErrorCode.AUTH_UNAVAILABLE, UserErrorCode.LAST_MASTER)
-                .hasSize(CommonErrorCode.values().length + AuthErrorCode.values().length + UserErrorCode.values().length);
+                .hasSize(CommonErrorCode.values().length + AuthErrorCode.values().length + UserErrorCode.values().length
+                        + CompanyErrorCode.values().length);
     }
 }
