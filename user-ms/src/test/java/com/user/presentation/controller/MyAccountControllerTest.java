@@ -60,7 +60,7 @@ class MyAccountControllerTest {
 
     private static UserResult result(String slackId) {
         return new UserResult(USER_ID, "user01", "홍길동", slackId, "USER", false, "COMPANY", "부산수산",
-                null, true, true, LocalDateTime.of(2026, 10, 15, 9, 0));
+                null, true, true, LocalDateTime.of(2026, 10, 15, 9, 0), null, null, null, null, null);
     }
 
     private static MockHttpServletRequestBuilder asUser(MockHttpServletRequestBuilder request) {
