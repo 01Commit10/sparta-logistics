@@ -7,7 +7,10 @@ import com.user.application.dto.LoginCommand;
 import com.user.application.dto.LoginResult;
 import com.user.application.dto.SignupCommand;
 import com.user.application.dto.UserResult;
+import com.common.auth.AuthContract;
+import com.user.application.dto.LogoutCommand;
 import com.user.application.facade.AuthFacade;
+import com.user.application.service.TokenService;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
 import org.junit.jupiter.api.DisplayName;
@@ -51,6 +54,9 @@ class AuthControllerTest {
 
     @MockitoBean
     AuthFacade authFacade;
+
+    @MockitoBean
+    TokenService tokenService;
 
     private static final String VALID_BODY = """
             { "username": "user01", "password": "Abcd123!", "name": "홍길동", "slackId": "U001",
@@ -258,6 +264,61 @@ class AuthControllerTest {
             mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                             .content("{ \"username\": \"NOT_VALID!\", \"password\": \"x\" }"))
                     .andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/v1/auth/logout")
+    class Logout {
+
+        private static final long EXP = 1792117822L;
+
+        private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder logout() {
+            return post("/api/v1/auth/logout")
+                    .header(AuthContract.HEADER_USER_ID, USER_ID.toString())
+                    .header(AuthContract.HEADER_USER_ROLE, "USER")
+                    .header(AuthContract.HEADER_TOKEN_JTI, "jti-1")
+                    .header(AuthContract.HEADER_TOKEN_EXP, String.valueOf(EXP));
+        }
+
+        @Test
+        @DisplayName("204, Gateway가 넣은 사용자 ID·jti·exp로 로그아웃한다")
+        void noContent() throws Exception {
+            mockMvc.perform(logout()).andExpect(status().isNoContent());
+
+            verify(tokenService).logout(new LogoutCommand(USER_ID, "jti-1", java.time.Instant.ofEpochSecond(EXP)));
+        }
+
+        @ParameterizedTest(name = "{0} 없음 → 401")
+        @CsvSource({"X-User-Id", "X-Token-Jti", "X-Token-Exp"})
+        @DisplayName("Gateway가 넣는 헤더가 없으면 401 UNAUTHENTICATED (Gateway를 거치지 않은 요청), 로그아웃하지 않는다")
+        void missingGatewayHeader(String header) throws Exception {
+            var request = post("/api/v1/auth/logout");
+            if (!header.equals("X-User-Id")) {
+                request.header(AuthContract.HEADER_USER_ID, USER_ID.toString()).header(AuthContract.HEADER_USER_ROLE, "USER");
+            }
+            if (!header.equals("X-Token-Jti")) {
+                request.header(AuthContract.HEADER_TOKEN_JTI, "jti-1");
+            }
+            if (!header.equals("X-Token-Exp")) {
+                request.header(AuthContract.HEADER_TOKEN_EXP, String.valueOf(EXP));
+            }
+
+            mockMvc.perform(request)
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+            verifyNoInteractions(tokenService);
+        }
+
+        @Test
+        @DisplayName("Redis 장애는 503 AUTH_UNAVAILABLE")
+        void authUnavailable() throws Exception {
+            org.mockito.BDDMockito.willThrow(new BusinessException(AuthErrorCode.AUTH_UNAVAILABLE))
+                    .given(tokenService).logout(any());
+
+            mockMvc.perform(logout())
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.code").value("AUTH_UNAVAILABLE"));
         }
     }
 }

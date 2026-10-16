@@ -15,10 +15,25 @@ public class FakeTokenStore implements TokenStore {
     }
 
     private final Map<UUID, Saved> refresh = new HashMap<>();
+    private final Map<String, Duration> blacklist = new HashMap<>();
 
     @Override
     public void saveRefresh(UUID userId, String jti, Duration ttl) {
         refresh.put(userId, new Saved(jti, ttl));
+    }
+
+    @Override
+    public void deleteRefresh(UUID userId) {
+        refresh.remove(userId);
+    }
+
+    @Override
+    public void blacklist(String jti, Duration ttl) {
+        blacklist.put(jti, ttl);
+    }
+
+    public Optional<Duration> blacklistTtlOf(String jti) {
+        return Optional.ofNullable(blacklist.get(jti));
     }
 
     public Optional<Saved> refreshOf(UUID userId) {

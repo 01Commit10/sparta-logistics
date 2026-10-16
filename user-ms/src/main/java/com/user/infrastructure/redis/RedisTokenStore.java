@@ -27,12 +27,29 @@ public class RedisTokenStore implements TokenStore {
         this.redis = redis;
     }
 
+    /** 로그아웃한 Access Token의 값. Gateway는 키가 있는지만 본다 (02 인증 계약 2.2) */
+    private static final String BLACKLIST_VALUE = "logout";
+
     @Override
     public void saveRefresh(UUID userId, String jti, Duration ttl) {
+        write("Refresh Token 저장", () -> redis.opsForValue().set(AuthContract.REDIS_REFRESH_PREFIX + userId, jti, ttl));
+    }
+
+    @Override
+    public void deleteRefresh(UUID userId) {
+        write("Refresh Token 삭제", () -> redis.delete(AuthContract.REDIS_REFRESH_PREFIX + userId));
+    }
+
+    @Override
+    public void blacklist(String jti, Duration ttl) {
+        write("Access Token blacklist", () -> redis.opsForValue().set(AuthContract.REDIS_BLACKLIST_PREFIX + jti, BLACKLIST_VALUE, ttl));
+    }
+
+    private void write(String action, Runnable command) {
         try {
-            redis.opsForValue().set(AuthContract.REDIS_REFRESH_PREFIX + userId, jti, ttl);
+            command.run();
         } catch (DataAccessException e) {
-            log.warn("Refresh Token 상태를 Redis에 저장하지 못했습니다: {}", e.getClass().getSimpleName());
+            log.warn("{}: Redis에 기록하지 못했습니다: {}", action, e.getClass().getSimpleName());
             throw new BusinessException(AuthErrorCode.AUTH_UNAVAILABLE);
         }
     }

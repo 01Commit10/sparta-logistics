@@ -134,4 +134,28 @@ class LoginIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
+
+    @Test
+    @DisplayName("U08: 로그인 → 로그아웃(Gateway가 넣는 헤더) → Access jti가 남은 시간 동안 blacklist, Refresh 삭제")
+    void loginThenLogout() throws Exception {
+        signup("logout01");
+        UUID userId = jdbc.queryForObject("select id from auth.p_users where username = 'logout01'", UUID.class);
+        String response = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON).content(login("logout01", "Abcd123!")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Claims access = parse(objectMapper.readTree(response).get("accessToken").asText());
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .header("X-User-Id", userId.toString())
+                        .header("X-User-Role", "USER")
+                        .header("X-Token-Jti", access.getId())
+                        .header("X-Token-Exp", String.valueOf(access.getExpiration().toInstant().getEpochSecond())))
+                .andExpect(status().isNoContent());
+
+        FakeTokenStore store = (FakeTokenStore) tokenStore;
+        assertThat(store.refreshOf(userId)).isEmpty();
+        assertThat(store.blacklistTtlOf(access.getId()))
+                .hasValueSatisfying(ttl -> assertThat(ttl).isBetween(Duration.ofMinutes(29), Duration.ofMinutes(30)));
+    }
 }

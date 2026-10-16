@@ -15,6 +15,7 @@ import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +31,7 @@ class AuthFacadeLoginTest {
     private final FakeTokenIssuer tokenIssuer = new FakeTokenIssuer();
     private final FakeTokenStore tokenStore = new FakeTokenStore();
     private final AuthFacade facade = new AuthFacade(
-            new UserQueryService(userRepository, passwordHasher), new TokenService(tokenIssuer, tokenStore));
+            new UserQueryService(userRepository, passwordHasher), new TokenService(tokenIssuer, tokenStore, Clock.systemUTC()));
 
     private User savedMaster() {
         User master = User.initialMaster(UUID.randomUUID(), Username.of("master01"), "관리자",
