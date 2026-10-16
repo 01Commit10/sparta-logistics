@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: company-service
+  profiles:
+    include: common
+#  config:
+#    import: classpath:application-common.yaml
+
+server:
+  port: 19091
+
+db:
+  schema: company

@@ -8,12 +8,12 @@ rootProject.name = 'sparta_logistics'
 include 'common'
 
 // 인프라
-include 'eureka-registry'
-include 'gateway-edge'
+include 'eureka-server'
+include 'gateway-server'
 
 // 도메인 서비스
-include 'company-ms'
-include 'delivery-ms'
-include 'hub-ms'
-include 'order-ms'
-include 'user-ms'
+include 'company-service'
+include 'delivery-service'
+include 'hub-service'
+include 'order-service'
+include 'user-service'
