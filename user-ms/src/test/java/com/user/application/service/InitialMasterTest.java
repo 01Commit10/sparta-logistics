@@ -9,6 +9,7 @@ import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.UserRole;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InitialMasterTest {
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher());
+    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher(), new FakeTemporaryPasswordGenerator());
 
     private static final InitialMasterCommand COMMAND =
             new InitialMasterCommand("master01", "Master!2345", "관리자", "U00MASTER01");

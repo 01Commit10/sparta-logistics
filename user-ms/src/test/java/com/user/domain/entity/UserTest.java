@@ -61,7 +61,7 @@ class UserTest {
         }
 
         @Test
-        @DisplayName("MASTER 생성: 역할·배송담당 여부를 지정하고 작성자는 MASTER")
+        @DisplayName("MASTER 생성: 역할·배송담당 여부를 지정하고 작성자는 MASTER, MASTER가 정한 비밀번호라 변경 필요")
         void createByMaster() {
             User user = User.createByMaster(USER_ID, Username.of("courier01"), "배송원", "hashed", "U002",
                     OrganizationType.HUB, "서울센터", UserRole.USER, true, MASTER_ID);
@@ -69,6 +69,8 @@ class UserTest {
             assertThat(user.getRole()).isEqualTo(UserRole.USER);
             assertThat(user.isDeliveryManager()).isTrue();
             assertThat(user.getCreatedBy()).isEqualTo(MASTER_ID);
+            assertThat(user.isPasswordChangeRequired()).isTrue();
+            assertThat(user.isActive()).isTrue();
         }
 
         @Test
@@ -164,17 +166,48 @@ class UserTest {
             User user = signupUser();
             UUID companyId = UUID.randomUUID();
 
-            user.linkOrganization(OrganizationType.COMPANY, companyId);
+            user.linkOrganization(OrganizationType.COMPANY, companyId, "스파르타상사");
             assertThat(user.getOrganizationId()).isEqualTo(companyId);
 
-            assertError(() -> user.linkOrganization(OrganizationType.HQ, UUID.randomUUID()), UserErrorCode.INVALID_ORGANIZATION);
+            assertError(() -> user.linkOrganization(OrganizationType.HQ, UUID.randomUUID(), "본사"), UserErrorCode.INVALID_ORGANIZATION);
+        }
+
+        @Test
+        @DisplayName("소속 연결 (U20): 유형·ID·이름을 함께 바꾸고, ID가 없으면 INVALID_ORGANIZATION")
+        void linkOrganization_changesTypeAndName() {
+            User user = signupUser();
+            UUID hubId = UUID.randomUUID();
+
+            user.linkOrganization(OrganizationType.HUB, hubId, "서울센터");
+
+            assertThat(user.getOrganizationType()).isEqualTo(OrganizationType.HUB);
+            assertThat(user.getOrganizationId()).isEqualTo(hubId);
+            assertThat(user.getOrganizationName()).isEqualTo("서울센터");
+            assertError(() -> user.linkOrganization(OrganizationType.HUB, null, "서울센터"), UserErrorCode.INVALID_ORGANIZATION);
+            assertThat(user.getOrganizationId()).isEqualTo(hubId);
+        }
+
+        @Test
+        @DisplayName("소속 연결 (U20): 배송담당자는 허브에만 연결된다 (업체면 DELIVERY_MANAGER_REQUIRES_HUB, 그대로)")
+        void linkOrganization_deliveryManagerStaysHub() {
+            User driver = User.createByMaster(USER_ID, Username.of("courier01"), "배송원", "hashed", "U002",
+                    OrganizationType.HUB, "서울센터", UserRole.USER, true, MASTER_ID);
+            UUID hubId = UUID.randomUUID();
+
+            driver.linkOrganization(OrganizationType.HUB, hubId, "서울센터");
+            assertThat(driver.getOrganizationId()).isEqualTo(hubId);
+
+            assertError(() -> driver.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID(), "스파르타상사"),
+                    UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
+            assertThat(driver.getOrganizationType()).isEqualTo(OrganizationType.HUB);
+            assertThat(driver.getOrganizationId()).isEqualTo(hubId);
         }
 
         @Test
         @DisplayName("정보 수정에서 소속 유형이 바뀌면 연결된 조직 ID가 지워진다")
         void updateProfile_resetsOrganizationId() {
             User user = signupUser();
-            user.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID());
+            user.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID(), "스파르타상사");
 
             user.updateProfile("홍길동", "U001", OrganizationType.HUB, "서울센터");
 
@@ -187,7 +220,7 @@ class UserTest {
         void updateProfile_keepsOrganizationId() {
             User user = signupUser();
             UUID companyId = UUID.randomUUID();
-            user.linkOrganization(OrganizationType.COMPANY, companyId);
+            user.linkOrganization(OrganizationType.COMPANY, companyId, "스파르타상사");
 
             user.updateProfile("홍길순", "U009", OrganizationType.COMPANY, "새상호");
 
@@ -197,15 +230,121 @@ class UserTest {
         }
 
         @Test
-        @DisplayName("역할 변경과 배송담당자 지정")
-        void roleAndDeliveryManager() {
+        @DisplayName("역할 변경: USER↔MASTER")
+        void changeRole() {
             User user = signupUser();
 
             user.changeRole(UserRole.MASTER);
+            assertThat(user.isMaster()).isTrue();
+
+            user.changeRole(UserRole.USER);
+            assertThat(user.isMaster()).isFalse();
+        }
+
+        @Test
+        @DisplayName("본사(HQ) 소속 MASTER는 USER로 바꿀 수 없다 (U15)")
+        void changeRole_hqStaysMaster() {
+            User master = User.initialMaster(MASTER_ID, Username.of("master01"), "관리자", "hashed", "U000");
+
+            assertError(() -> master.changeRole(UserRole.USER), UserErrorCode.INVALID_ORGANIZATION);
+            assertThat(master.isMaster()).isTrue();
+        }
+
+        @Test
+        @DisplayName("배송담당자는 허브가 아닌 소속으로 옮길 수 없다, 바뀌지 않는다 (U14). 허브 안에서 이름만 바꾸는 건 된다")
+        void updateProfile_deliveryManagerStaysInHub() {
+            User driver = User.signup(USER_ID, Username.of("driver01"), "김배송", "hashed", "U010",
+                    OrganizationType.HUB, "서울센터");
+            driver.assignDeliveryManager(true);
+
+            assertError(() -> driver.updateProfile("김배송", "U010", OrganizationType.COMPANY, "스파르타상사"),
+                    UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
+            assertThat(driver.getOrganizationType()).isEqualTo(OrganizationType.HUB);
+            assertThat(driver.getOrganizationName()).isEqualTo("서울센터");
+
+            driver.updateProfile("김배송", "U010", OrganizationType.HUB, "경기남부센터");
+            assertThat(driver.getOrganizationName()).isEqualTo("경기남부센터");
+        }
+
+        @Test
+        @DisplayName("정보 수정으로 USER를 본사(HQ)로 옮길 수 없다, 바뀌지 않는다")
+        void updateProfile_hqOnlyForMaster() {
+            User user = signupUser();
+
+            assertError(() -> user.updateProfile("홍길동", "U001", OrganizationType.HQ, "본사"),
+                    UserErrorCode.INVALID_ORGANIZATION);
+            assertThat(user.getOrganizationType()).isEqualTo(OrganizationType.COMPANY);
+        }
+    }
+
+    @Nested
+    @DisplayName("배송담당자는 허브 소속만 (U16)")
+    class DeliveryManager {
+
+        private User hubUser() {
+            return User.signup(USER_ID, Username.of("driver01"), "김배송", "hashed", "U010",
+                    OrganizationType.HUB, "서울센터");
+        }
+
+        @Test
+        @DisplayName("허브 소속 사용자는 지정하고 해제할 수 있다")
+        void hubUser_assignAndUnassign() {
+            User user = hubUser();
+
+            user.assignDeliveryManager(true);
+            assertThat(user.isDeliveryManager()).isTrue();
+
+            user.assignDeliveryManager(false);
+            assertThat(user.isDeliveryManager()).isFalse();
+        }
+
+        @Test
+        @DisplayName("이미 지정된 사용자를 다시 지정해도 그대로다 (멱등)")
+        void idempotent() {
+            User user = hubUser();
             user.assignDeliveryManager(true);
 
-            assertThat(user.isMaster()).isTrue();
+            user.assignDeliveryManager(true);
+
             assertThat(user.isDeliveryManager()).isTrue();
+        }
+
+        @Test
+        @DisplayName("업체 소속은 DELIVERY_MANAGER_REQUIRES_HUB, 바뀌지 않는다")
+        void companyUser_rejected() {
+            User user = signupUser();
+
+            assertError(() -> user.assignDeliveryManager(true), UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
+            assertThat(user.isDeliveryManager()).isFalse();
+        }
+
+        @Test
+        @DisplayName("본사(HQ) 소속 MASTER도 지정할 수 없다")
+        void hqMaster_rejected() {
+            User master = User.initialMaster(MASTER_ID, Username.of("master01"), "관리자", "hashed", "U000");
+
+            assertError(() -> master.assignDeliveryManager(true), UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
+        }
+
+        @Test
+        @DisplayName("해제는 소속과 관계없이 언제나 된다")
+        void unassign_anyOrganization() {
+            User user = signupUser();
+
+            user.assignDeliveryManager(false);
+
+            assertThat(user.isDeliveryManager()).isFalse();
+        }
+
+        @Test
+        @DisplayName("MASTER 생성에서도 허브가 아닌 배송담당자는 만들 수 없다 (U12)")
+        void createByMaster_requiresHub() {
+            assertError(() -> User.createByMaster(USER_ID, Username.of("courier02"), "배송원", "hashed", "U011",
+                            OrganizationType.COMPANY, "스파르타상사", UserRole.USER, true, MASTER_ID),
+                    UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
+            assertError(() -> User.createByMaster(USER_ID, Username.of("master03"), "관리자", "hashed", "U012",
+                            OrganizationType.HQ, "본사", UserRole.MASTER, true, MASTER_ID),
+                    UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
         }
     }
 }

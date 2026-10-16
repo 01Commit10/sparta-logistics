@@ -99,15 +99,20 @@ public class User extends BaseEntity {
         return user;
     }
 
-    /** MASTER가 만든 계정: 역할·배송담당 여부 지정 가능. 본사(HQ)는 MASTER 역할만. 작성자는 MASTER. */
+    /**
+     * MASTER가 만든 계정: 역할·배송담당 여부 지정 가능. 본사(HQ)는 MASTER 역할만, 배송담당자는 허브 소속만. 작성자는 MASTER.
+     * 비밀번호를 MASTER도 알고 있으므로 초기화(A12)처럼 다음 로그인 후 변경을 강제한다.
+     */
     public static User createByMaster(UUID id, Username username, String name, String passwordHash, String slackId,
                                       OrganizationType organizationType, String organizationName,
                                       UserRole role, boolean deliveryManager, UUID masterId) {
         if (organizationType == OrganizationType.HQ && role != UserRole.MASTER) {
             throw new BusinessException(UserErrorCode.INVALID_ORGANIZATION);
         }
+        checkDeliveryManagerOrganization(deliveryManager, organizationType);
         User user = new User(id, username, name, passwordHash, slackId, role, deliveryManager,
                 organizationType, organizationName);
+        user.passwordChangeRequired = true;
         user.recordCreatedBy(masterId);
         return user;
     }
@@ -143,11 +148,15 @@ public class User extends BaseEntity {
         this.slackId = slackId;
     }
 
-    /** MASTER의 정보 수정. 소속 유형이 바뀌면 연결된 조직 ID는 다시 연결해야 하므로 지운다. */
+    /**
+     * MASTER의 정보 수정. 소속 유형이 바뀌면 연결된 조직 ID는 다시 연결해야 하므로 지운다.
+     * 본사(HQ)는 MASTER만, 배송담당자는 허브 소속만 (허브가 아닌 곳으로 옮기려면 먼저 배송담당을 해제한다).
+     */
     public void updateProfile(String name, String slackId, OrganizationType organizationType, String organizationName) {
         if (organizationType == OrganizationType.HQ && !isMaster()) {
             throw new BusinessException(UserErrorCode.INVALID_ORGANIZATION);
         }
+        checkDeliveryManagerOrganization(deliveryManager, organizationType);
         if (this.organizationType != organizationType) {
             this.organizationId = null;
         }
@@ -157,21 +166,46 @@ public class User extends BaseEntity {
         this.organizationName = organizationName;
     }
 
+    /** 역할 변경. 마지막 MASTER 보호는 호출하는 쪽 (잠금 조회가 필요). */
     public void changeRole(UserRole role) {
+        checkRoleChangeable(role);
         this.role = role;
     }
 
+    /**
+     * 본사(HQ) 소속은 MASTER만 가능하므로 USER로 바꿀 수 없다 (먼저 소속을 바꾼다).
+     * 잠금 조회 전에 부를 수 있도록 공개한다 (잠금 없이 판단할 수 있는 규칙을 먼저 본다).
+     */
+    public void checkRoleChangeable(UserRole role) {
+        if (organizationType == OrganizationType.HQ && role != UserRole.MASTER) {
+            throw new BusinessException(UserErrorCode.INVALID_ORGANIZATION);
+        }
+    }
+
+    /** 배송담당자 지정·해제. 담당자의 소속 허브가 출발지 기준이므로 허브 소속만 지정할 수 있다. 해제는 언제나 된다. */
     public void assignDeliveryManager(boolean deliveryManager) {
+        checkDeliveryManagerOrganization(deliveryManager, organizationType);
         this.deliveryManager = deliveryManager;
     }
 
-    /** 가입 때 입력한 소속을 실제 업체·허브 ID와 연결한다. 본사(HQ)는 연결할 조직이 없다. */
-    public void linkOrganization(OrganizationType organizationType, UUID organizationId) {
+    private static void checkDeliveryManagerOrganization(boolean deliveryManager, OrganizationType organizationType) {
+        if (deliveryManager && organizationType != OrganizationType.HUB) {
+            throw new BusinessException(UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
+        }
+    }
+
+    /**
+     * 소속을 실제 업체·허브 ID와 연결한다 (유형·이름도 함께 바꿀 수 있다). 본사(HQ)는 연결할 조직이 없다.
+     * 배송담당자는 허브 소속만 (업체로 옮기려면 먼저 배송담당을 해제한다).
+     */
+    public void linkOrganization(OrganizationType organizationType, UUID organizationId, String organizationName) {
         if (!organizationType.isLinkable() || organizationId == null) {
             throw new BusinessException(UserErrorCode.INVALID_ORGANIZATION);
         }
+        checkDeliveryManagerOrganization(deliveryManager, organizationType);
         this.organizationType = organizationType;
         this.organizationId = organizationId;
+        this.organizationName = organizationName;
     }
 
     /** 탈퇴(본인) 또는 비활성화(MASTER). 논리 삭제. 삭제 시각은 BaseEntity가 현재 시각으로 기록한다. */

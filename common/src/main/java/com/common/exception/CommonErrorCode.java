@@ -10,6 +10,7 @@ public enum CommonErrorCode implements ErrorCode {
 
     // 400
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "잘못된 요청입니다."),
+    INVALID_SORT_PROPERTY(HttpStatus.BAD_REQUEST, "정렬할 수 없는 필드입니다."),
 
     // 401 - Gateway를 거치지 않아 X-User-* 헤더가 없는 경우 등
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
