@@ -5,15 +5,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.web.method.support.HandlerMethodArgumentResolver;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,24 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * 실제 MVC 요청으로 입구 검사·리졸버·공통 오류 형식을 함께 확인한다 (C01 13-7, 17).
+ * 등록은 자동 설정(AutoConfigureWebMvc.imports의 CommonAuthWebAutoConfiguration)에 맡긴다. 서비스의 @WebMvcTest와 같은 조건.
  */
 @WebMvcTest(CurrentUserTestController.class)
-@Import(CurrentUserWebMvcTest.ManualRegistration.class)
 class CurrentUserWebMvcTest {
-
-    // 6단계에서 CommonAuthWebAutoConfiguration으로 대체
-    @TestConfiguration
-    static class ManualRegistration implements WebMvcConfigurer {
-        @Override
-        public void addInterceptors(InterceptorRegistry registry) {
-            registry.addInterceptor(new CurrentUserHeaderInterceptor());
-        }
-
-        @Override
-        public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-            resolvers.add(new CurrentUserArgumentResolver());
-        }
-    }
 
     static final String ID = UUID.randomUUID().toString();
 
