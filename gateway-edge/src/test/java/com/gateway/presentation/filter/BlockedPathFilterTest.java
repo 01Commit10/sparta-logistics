@@ -6,10 +6,12 @@ import com.gateway.presentation.error.ErrorResponseWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 
+import java.net.URI;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +33,31 @@ class BlockedPathFilterTest {
         assertThat(chain.wasCalled()).isFalse();
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(exchange.getResponse().getBodyAsString().block()).contains("\"code\":\"RESOURCE_NOT_FOUND\"");
+    }
+
+    @Test
+    @DisplayName("인코딩으로 숨긴 내부 경로도 404로 막는다")
+    void blocksEncodedInternalPath() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.method(HttpMethod.GET, URI.create("/%69nternal/v1/users/1")));
+        CapturingChain chain = new CapturingChain();
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.wasCalled()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("해석이 달라질 수 있는 경로는 400 INVALID_INPUT으로 끝낸다 (내부 경로 판단보다 먼저)")
+    void rejectsMalformedPath() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.method(HttpMethod.GET, URI.create("/api/v1/%2e%2e/internal/x")));
+        CapturingChain chain = new CapturingChain();
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.wasCalled()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exchange.getResponse().getBodyAsString().block()).contains("\"code\":\"INVALID_INPUT\"");
     }
 
     @Test
