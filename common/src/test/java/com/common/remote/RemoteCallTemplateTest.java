@@ -180,6 +180,78 @@ class RemoteCallTemplateTest {
         }
 
         @Test
+        @DisplayName("리뷰: 타임아웃 뒤 재시도가 5xx·연결 실패로 끝나도 결과 모름(Timeout)이다 (첫 요청이 처리됐을 수 있음, 재시도 실패는 suppressed)")
+        void timeoutThenServiceErrorStaysUnknown() {
+            AtomicInteger calls = new AtomicInteger();
+            RemoteServiceException retryFailure = new RemoteServiceException(HUB, 503);
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw feignIo(new SocketTimeoutException("Read timed out"));
+                }
+                throw retryFailure;
+            })).isInstanceOfSatisfying(RemoteTimeoutException.class, e -> {
+                assertThat(e.getTarget()).isEqualTo(HUB);
+                assertThat(e.getSuppressed()).containsExactly(retryFailure);
+            });
+            assertThat(calls).hasValue(2);
+        }
+
+        @Test
+        @DisplayName("리뷰: 타임아웃 뒤 재시도가 Circuit Breaker OPEN에 막혀도 결과 모름(Timeout)이다")
+        void timeoutThenCircuitOpenStaysUnknown() {
+            AtomicInteger calls = new AtomicInteger();
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw feignIo(new SocketTimeoutException("Read timed out"));
+                }
+                throw noFallback(circuitOpen());
+            })).isInstanceOf(RemoteTimeoutException.class);
+            assertThat(calls).hasValue(2);
+        }
+
+        @Test
+        @DisplayName("리뷰: 타임아웃 뒤 재시도가 업무 거절(4xx)이면 그 응답을 쓴다 (멱등성 키로 받은 확정 응답)")
+        void timeoutThenBusinessUsesAnswer() {
+            AtomicInteger calls = new AtomicInteger();
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw feignIo(new SocketTimeoutException("Read timed out"));
+                }
+                throw new RemoteBusinessException(HUB, 409, UserErrorCode.DUPLICATE_USERNAME, "중복");
+            })).isInstanceOf(RemoteBusinessException.class);
+        }
+
+        @Test
+        @DisplayName("5xx 뒤 재시도도 5xx면 처리 안 됨(Service)이다 (두 번 다 처리되지 않음)")
+        void serviceErrorTwiceStaysService() {
+            AtomicInteger calls = new AtomicInteger();
+            RemoteServiceException second = new RemoteServiceException(HUB, 502);
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw new RemoteServiceException(HUB, 503);
+                }
+                throw second;
+            })).isSameAs(second);
+        }
+
+        @Test
+        @DisplayName("5xx 뒤 재시도가 타임아웃이면 결과 모름(Timeout)이다")
+        void serviceErrorThenTimeoutIsUnknown() {
+            AtomicInteger calls = new AtomicInteger();
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw new RemoteServiceException(HUB, 503);
+                }
+                throw feignIo(new SocketTimeoutException("Read timed out"));
+            })).isInstanceOf(RemoteTimeoutException.class);
+        }
+
+        @Test
         @DisplayName("업무 거절(4xx)은 다시 보내도 같으므로 재시도하지 않는다")
         void noRetryOnBusiness() {
             AtomicInteger calls = new AtomicInteger();
