@@ -84,7 +84,7 @@ class InitialMasterTest {
     void rejectsReusedUsername() {
         User withdrawn = User.initialMaster(UUID.randomUUID(),
                 Username.of("master01"), "옛관리자", "hashed", "U00OLD");
-        withdrawn.withdraw(withdrawn.getId(), java.time.LocalDateTime.now());
+        withdrawn.withdraw(withdrawn.getId());
         userRepository.save(withdrawn);
 
         assertThatThrownBy(() -> service.createInitialMasterIfAbsent(COMMAND))

@@ -1,5 +1,6 @@
 package com.user.domain.entity;
 
+import com.common.entity.BaseEntity;
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
 import com.user.domain.service.PasswordPolicy;
@@ -17,7 +18,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -31,7 +31,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "p_users", uniqueConstraints = @UniqueConstraint(name = User.UK_USERNAME, columnNames = "username"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class User extends AuditableEntity {
+public class User extends BaseEntity {
 
     /** 탈퇴 포함 username 유일 제약 이름. 저장 시 위반을 DUPLICATE_USERNAME으로 바꿀 때 쓴다 */
     public static final String UK_USERNAME = "uk_p_users_username";
@@ -112,7 +112,7 @@ public class User extends AuditableEntity {
         return user;
     }
 
-    /** 기동 시 MASTER가 없을 때 .env 값으로 만드는 첫 관리자. 시스템 작업이라 작성자는 없다(NULL). */
+    /** 기동 시 MASTER가 없을 때 .env 값으로 만드는 첫 관리자. 요청 밖 작업이라 작성자는 시스템 UUID(JPA Auditing). */
     public static User initialMaster(UUID id, Username username, String name, String passwordHash, String slackId) {
         return new User(id, username, name, passwordHash, slackId, UserRole.MASTER, false,
                 OrganizationType.HQ, "본사");
@@ -174,19 +174,20 @@ public class User extends AuditableEntity {
         this.organizationId = organizationId;
     }
 
-    /** 탈퇴(본인) 또는 비활성화(MASTER). 논리 삭제. */
-    public void withdraw(UUID actorId, LocalDateTime now) {
+    /** 탈퇴(본인) 또는 비활성화(MASTER). 논리 삭제. 삭제 시각은 BaseEntity가 현재 시각으로 기록한다. */
+    public void withdraw(UUID actorId) {
         if (isDeleted()) {
             throw new BusinessException(UserErrorCode.USER_ALREADY_DELETED);
         }
-        markDeleted(actorId, now);
+        softDelete(actorId);
     }
 
-    /** MASTER의 재활성화 */
+    /** MASTER의 재활성화. BaseEntity.restore()와 달리 삭제되지 않은 사용자면 거절한다. */
+    @Override
     public void restore() {
         if (!isDeleted()) {
             throw new BusinessException(UserErrorCode.USER_NOT_DELETED);
         }
-        clearDeleted();
+        super.restore();
     }
 }

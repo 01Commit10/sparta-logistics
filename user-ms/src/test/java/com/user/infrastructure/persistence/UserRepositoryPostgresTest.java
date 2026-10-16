@@ -26,7 +26,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -94,7 +93,7 @@ class UserRepositoryPostgresTest {
     void slackIdReusableAfterWithdraw() {
         tx().executeWithoutResult(s -> {
             User withdrawn = user("user01", "U001");
-            withdrawn.withdraw(withdrawn.getId(), LocalDateTime.now());
+            withdrawn.withdraw(withdrawn.getId());
             userRepository.save(withdrawn);
         });
 
@@ -108,7 +107,7 @@ class UserRepositoryPostgresTest {
     void usernameNeverReused() {
         tx().executeWithoutResult(s -> {
             User withdrawn = user("user01", "U001");
-            withdrawn.withdraw(withdrawn.getId(), LocalDateTime.now());
+            withdrawn.withdraw(withdrawn.getId());
             userRepository.save(withdrawn);
         });
 

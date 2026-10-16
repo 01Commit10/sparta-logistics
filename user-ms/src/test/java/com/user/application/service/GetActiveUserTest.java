@@ -10,7 +10,6 @@ import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,7 +54,7 @@ class GetActiveUserTest {
     @DisplayName("탈퇴·비활성화된 사용자는 USER_NOT_FOUND")
     void deleted() {
         User user = saved("user01", "U001");
-        user.withdraw(user.getId(), LocalDateTime.now());
+        user.withdraw(user.getId());
 
         assertNotFound(user.getId());
     }

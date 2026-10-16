@@ -1,5 +1,7 @@
 package com.user.presentation.bootstrap;
 
+import com.common.auth.AuthContract;
+
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
 import com.user.application.dto.InitialMasterCommand;
@@ -60,7 +62,7 @@ class InitialMasterPostgresTest {
     }
 
     @Test
-    @DisplayName("기동하면 PostgreSQL 제약을 통과한 MASTER 1행이 생긴다 (HQ·조직 ID 없음·created_by 없음·BCrypt)")
+    @DisplayName("기동하면 PostgreSQL 제약을 통과한 MASTER 1행이 생긴다 (HQ·조직 ID 없음·created_by 시스템·BCrypt)")
     void createdOnStartup() {
         Map<String, Object> row = jdbc.queryForMap("""
                 select role, organization_type, organization_id, organization_name, created_by, password_hash,
@@ -72,7 +74,7 @@ class InitialMasterPostgresTest {
         assertThat(row.get("organization_type")).isEqualTo("HQ");
         assertThat(row.get("organization_id")).isNull();
         assertThat(row.get("organization_name")).isEqualTo("본사");
-        assertThat(row.get("created_by")).isNull();
+        assertThat(row.get("created_by")).isEqualTo(AuthContract.SYSTEM_USER_ID);   // 요청 밖 작업 (07 정책 1.4)
         assertThat((String) row.get("password_hash")).startsWith("$2").doesNotContain("Master!2345");
         assertThat(row.get("is_delivery_manager")).isEqualTo(false);
         assertThat(row.get("deleted_at")).isNull();

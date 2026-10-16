@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,15 +54,15 @@ class UserRepositoryImplTest {
 
         User found = userRepository.findById(saved.getId()).orElseThrow();
         assertThat(found.getUsername()).isEqualTo("user01");
-        assertThat(found.getCreatedBy()).isEqualTo(saved.getId());
         assertThat(found.getCreatedAt()).isNotNull();
+        // 작업자(created_by 등)는 요청 안·밖에 따라 달라 UserAuditingTest에서 확인한다
     }
 
     @Test
     @DisplayName("탈퇴한 사용자는 활성 조회에서 빠지지만 ID 중복 검사에는 걸린다")
     void deletedUser() {
         User user = user("user01", "U001");
-        user.withdraw(user.getId(), LocalDateTime.now());
+        user.withdraw(user.getId());
         userRepository.save(user);
         flushAndClear();
 
@@ -77,7 +76,7 @@ class UserRepositoryImplTest {
     @DisplayName("Slack ID 중복은 활성 사용자끼리만 본다")
     void slackIdAmongActiveUsers() {
         User withdrawn = user("user01", "U001");
-        withdrawn.withdraw(withdrawn.getId(), LocalDateTime.now());
+        withdrawn.withdraw(withdrawn.getId());
         userRepository.save(withdrawn);
         userRepository.save(user("user02", "U002"));
         flushAndClear();
@@ -91,7 +90,7 @@ class UserRepositoryImplTest {
     void countActiveMasters() {
         userRepository.save(master("master01", "M001"));
         User withdrawnMaster = master("master02", "M002");
-        withdrawnMaster.withdraw(withdrawnMaster.getId(), LocalDateTime.now());
+        withdrawnMaster.withdraw(withdrawnMaster.getId());
         userRepository.save(withdrawnMaster);
         userRepository.save(user("user01", "U001"));
         flushAndClear();
