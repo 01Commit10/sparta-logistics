@@ -1,5 +1,7 @@
 package com.common.auth;
 
+import java.util.UUID;
+
 /**
  * 서비스 간 인증 계약 값 (docs/plan/02 인증 계약 2.1, 2.3). 상수만 두고 로직(발급·파싱·검증)은 각 서비스에 둔다.
  * <ul>
@@ -26,6 +28,14 @@ public final class AuthContract {
     public static final String HEADER_TOKEN_JTI = "X-Token-Jti";
     /** 토큰 exp (epoch 초). user-ms 로그아웃에서 blacklist TTL 계산에 쓴다 */
     public static final String HEADER_TOKEN_EXP = "X-Token-Exp";
+    /** 요청 추적 ID. Gateway가 넣고(GW-08) 서비스 간 Feign 호출에 그대로 이어 보낸다 */
+    public static final String HEADER_REQUEST_ID = "X-Request-Id";
+
+    /**
+     * 요청 밖 작업(스케줄러, 기동 시 초기화, 시드)의 감사 작업자 (07 정책 1.4).
+     * 실제 사용자는 무작위 UUID v4라 이 값과 겹치지 않는다
+     */
+    public static final UUID SYSTEM_USER_ID = new UUID(0L, 0L);
 
     private AuthContract() {
     }

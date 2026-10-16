@@ -3,6 +3,8 @@ package com.common.auth;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -28,5 +30,12 @@ class AuthContractTest {
         assertThat(AuthContract.HEADER_USER_ROLE).isEqualTo("X-User-Role");
         assertThat(AuthContract.HEADER_TOKEN_JTI).isEqualTo("X-Token-Jti");
         assertThat(AuthContract.HEADER_TOKEN_EXP).isEqualTo("X-Token-Exp");
+        assertThat(AuthContract.HEADER_REQUEST_ID).isEqualTo("X-Request-Id");
+    }
+
+    @Test
+    @DisplayName("요청 밖 작업자(시스템) UUID는 모두 0이다 (07 정책 1.4)")
+    void systemUserId() {
+        assertThat(AuthContract.SYSTEM_USER_ID).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000000"));
     }
 }

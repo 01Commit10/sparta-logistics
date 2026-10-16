@@ -3,6 +3,10 @@ package com.common.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.common.audit.UserIdAuditorAware;
+import com.common.auth.AuthContract;
+import com.common.auth.AuthRole;
+import com.common.auth.AuthUser;
+import com.common.auth.CurrentUserProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Optional;
 import java.util.UUID;
@@ -61,6 +65,42 @@ class CommonJpaAuditingAutoConfigurationTest {
             assertThat(context).hasBean("jpaAuditingHandler");
             assertThat(context).doesNotHaveBean(AuditorAware.class);
         });
+    }
+
+    @Test
+    void auditorWorksWithoutCurrentUserProviderBean() {
+        // @DataJpaTest처럼 웹 자동 설정이 없어 Provider 빈이 없어도 기본 Provider로 동작 (요청 밖 → 시스템)
+        runner.run(context -> {
+            assertThat(context).doesNotHaveBean(CurrentUserProvider.class);
+            assertThat(context.getBean(AuditorAware.class).getCurrentAuditor()).contains(AuthContract.SYSTEM_USER_ID);
+        });
+    }
+
+    @Test
+    void auditorUsesCurrentUserProviderBean() {
+        runner.withUserConfiguration(FixedProviderConfig.class).run(context -> {
+            assertThat(context.getBean(AuditorAware.class).getCurrentAuditor()).contains(FixedProviderConfig.USER_ID);
+        });
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class FixedProviderConfig {
+        static final UUID USER_ID = UUID.randomUUID();
+
+        @Bean
+        CurrentUserProvider fixedProvider() {
+            return new CurrentUserProvider() {
+                @Override
+                public Optional<AuthUser> current() {
+                    return Optional.of(new AuthUser(USER_ID, AuthRole.USER));
+                }
+
+                @Override
+                public boolean inRequest() {
+                    return true;
+                }
+            };
+        }
     }
 
     @Configuration(proxyBeanMethods = false)
