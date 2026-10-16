@@ -4,6 +4,14 @@ spring:
   profiles:
     include: common
 
+  jpa:
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      mode: always
+      data-locations:
+        - classpath:db/seed/hubs.sql
 
 server:
   port: 19093
