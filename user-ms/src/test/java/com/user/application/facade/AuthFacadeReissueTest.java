@@ -36,8 +36,8 @@ class AuthFacadeReissueTest {
     private final FakeTokenIssuer tokenIssuer = new FakeTokenIssuer();
     private final FakeTokenStore tokenStore = new FakeTokenStore();
     private final AuthFacade facade = new AuthFacade(
-            new UserQueryService(userRepository, passwordHasher),
-            new TokenService(tokenIssuer, new FakeRefreshTokenParser(tokenIssuer), tokenStore, Clock.systemUTC()));
+            new UserQueryService(userRepository),
+            new TokenService(tokenIssuer, new FakeRefreshTokenParser(tokenIssuer), tokenStore, Clock.systemUTC()), passwordHasher);
 
     private User savedUser() {
         return userRepository.save(User.signup(UUID.randomUUID(), Username.of("user01"), "홍길동",

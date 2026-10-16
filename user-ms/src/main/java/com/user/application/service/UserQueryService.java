@@ -3,13 +3,14 @@ package com.user.application.service;
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
 import com.user.application.dto.AuthenticatedUser;
+import com.user.application.dto.UserCredential;
 import com.user.application.dto.UserResult;
 import com.user.application.dto.UserSearchQuery;
+import com.user.domain.entity.User;
 import com.user.domain.repository.PageData;
 import com.user.domain.repository.PageQuery;
 import com.user.domain.repository.UserRepository;
 import com.user.domain.repository.UserSearchCondition;
-import com.user.domain.service.PasswordHasher;
 import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.UserRole;
 import com.user.domain.vo.Username;
@@ -30,24 +31,22 @@ import java.util.UUID;
 public class UserQueryService {
 
     private final UserRepository userRepository;
-    private final PasswordHasher passwordHasher;
 
-    public UserQueryService(UserRepository userRepository, PasswordHasher passwordHasher) {
+    public UserQueryService(UserRepository userRepository) {
         this.userRepository = userRepository;
-        this.passwordHasher = passwordHasher;
     }
 
     /**
-     * USR-02 로그인: 활성 사용자의 ID·비밀번호를 확인한다.
-     * 없는 ID·틀린 비밀번호·탈퇴(비활성화) 계정은 모두 같은 INVALID_CREDENTIALS (어느 쪽인지 드러내지 않음).
-     * 없는 ID는 비밀번호 비교를 건너뛴다. ID 존재 여부는 공개 API(check-username, USR-20)가 이미 알려 주므로
-     * 응답 시간을 맞춰도 숨겨지는 정보가 없다 (U05 D2).
+     * USR-02 로그인 1단계: 활성 사용자의 ID. 없는 ID·탈퇴(비활성화) 계정은 empty (AuthFacade가 INVALID_CREDENTIALS로 바꾼다).
+     * ID 존재 여부는 공개 API(check-username, USR-20)가 이미 알려 주므로 없는 ID는 비밀번호 비교를 건너뛴다 (U05 D2).
      */
-    public AuthenticatedUser authenticate(String username, String rawPassword) {
-        return userRepository.findActiveByUsername(username)
-                .filter(user -> passwordHasher.matches(rawPassword, user.getPasswordHash()))
-                .map(AuthenticatedUser::from)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.INVALID_CREDENTIALS));
+    public Optional<UUID> findActiveIdByUsername(String username) {
+        return userRepository.findActiveByUsername(username).map(User::getId);
+    }
+
+    /** USR-02 로그인 2단계: 비밀번호 확인에 쓸 해시와 토큰에 넣을 값. BCrypt 비교는 이 읽기 트랜잭션 밖에서 한다 */
+    public Optional<UserCredential> findActiveCredential(UUID userId) {
+        return userRepository.findActiveById(userId).map(UserCredential::from);
     }
 
     /** USR-03 재발급: 토큰에 든 값이 아니라 DB의 최신 역할·비밀번호 변경 필요 여부로 새 Access를 만든다 */

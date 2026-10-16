@@ -44,15 +44,27 @@ public class RemoteCallTemplate {
     /**
      * 실패하면 한 번만 다시 보낸다. <b>멱등성 키가 있어 두 번 처리돼도 결과가 같은 호출에만</b> 쓴다 (SYS-13 6장).
      * 업무 거절(4xx)과 Circuit Breaker OPEN은 다시 보내도 같으므로 재시도하지 않는다.
+     * <p>
+     * 첫 시도가 타임아웃(결과 모름)이면 재시도가 5xx·연결 실패·OPEN(처리 안 됨)으로 끝나도 첫 요청이 처리됐을 수 있으므로
+     * 첫 타임아웃을 던진다 (재시도 실패는 suppressed). 처리 안 됨으로 알리면 호출한 쪽이 보상(재고 복구 등)을 건너뛴다.
+     * 재시도가 성공하거나 4xx로 답하면 멱등성 키로 받은 확정 응답이라 그대로 쓴다.
      */
     public <T> T executeWithRetryOnce(String target, Supplier<T> call) {
         try {
             return execute(target, call);
-        } catch (RemoteTimeoutException | RemoteServiceException e) {
-            if (isCircuitOpen(e.getCause())) {
-                throw e;
+        } catch (RemoteTimeoutException | RemoteServiceException first) {
+            if (isCircuitOpen(first.getCause())) {
+                throw first;
             }
-            return execute(target, call);
+            try {
+                return execute(target, call);
+            } catch (RemoteServiceException retryFailure) {
+                if (first instanceof RemoteTimeoutException) {
+                    first.addSuppressed(retryFailure);
+                    throw first;
+                }
+                throw retryFailure;
+            }
         }
     }
 

@@ -39,7 +39,7 @@ class VerifyRefreshTest {
     void matches() {
         tokenStore.saveRefresh(USER_ID, "jti-1", Duration.ofDays(7));
 
-        RefreshTokenClaims claims = service.verifyRefresh(TOKEN);
+        RefreshTokenClaims claims = service.verifyRefresh(TOKEN).claims();
 
         assertThat(claims).isEqualTo(new RefreshTokenClaims(USER_ID, "jti-1"));
         assertThat(tokenStore.findRefreshJti(USER_ID)).contains("jti-1");

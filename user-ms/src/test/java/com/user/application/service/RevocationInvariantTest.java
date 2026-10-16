@@ -51,14 +51,14 @@ class RevocationInvariantTest {
     void revokeLoginRepeatedWithinOneSecond() {
         AuthenticatedUser user = new AuthenticatedUser(USER_ID, "USER", false);
 
-        TokenPairResult first = service.issue(user);
+        TokenPairResult first = service.issue(user, service.revocationSnapshot(USER_ID)).orElseThrow();
         service.revokeAll(USER_ID);
-        TokenPairResult second = service.issue(user);
+        TokenPairResult second = service.issue(user, service.revocationSnapshot(USER_ID)).orElseThrow();
         assertThat(gatewayRejects(first)).isTrue();
         assertThat(gatewayRejects(second)).isFalse();
 
         service.revokeAll(USER_ID);
-        TokenPairResult third = service.issue(user);
+        TokenPairResult third = service.issue(user, service.revocationSnapshot(USER_ID)).orElseThrow();
 
         assertThat(gatewayRejects(first)).isTrue();
         assertThat(gatewayRejects(second)).as("무효화 전에 받은(미래로 미룬) 토큰도 거부").isTrue();
