@@ -1,5 +1,5 @@
 com.common.config.CommonExceptionAutoConfiguration
 com.common.config.CommonRedisAutoConfiguration
 com.common.config.CommonJpaAuditingAutoConfiguration
-com.common.config.CommonFeignAutoConfiguration
 com.common.config.CommonAuthWebAutoConfiguration
+com.common.config.CommonAuthFeignAutoConfiguration
