@@ -3,9 +3,11 @@ package com.user.presentation.controller;
 import com.common.auth.AuthUser;
 import com.common.auth.web.CurrentUser;
 import com.user.application.service.UserCommandService;
+import com.user.application.service.UserQueryService;
 import com.user.presentation.dto.request.DeliveryManagerRequest;
 import com.user.presentation.dto.response.UserDetailResponse;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,10 +24,19 @@ import java.util.UUID;
 @RequestMapping("/api/v1/users")
 public class UserAdminController {
 
+    private final UserQueryService userQueryService;
     private final UserCommandService userCommandService;
 
-    public UserAdminController(UserCommandService userCommandService) {
+    public UserAdminController(UserQueryService userQueryService, UserCommandService userCommandService) {
+        this.userQueryService = userQueryService;
         this.userCommandService = userCommandService;
+    }
+
+    /** USR-12 사용자 상세 (삭제된 사용자 포함). /users/me는 MyAccountController가 먼저 받는다 (경로 우선순위) */
+    @GetMapping("/{userId}")
+    public UserDetailResponse getDetail(@CurrentUser AuthUser user, @PathVariable UUID userId) {
+        user.requireMaster();
+        return UserDetailResponse.from(userQueryService.getUser(userId));
     }
 
     /** USR-15 배송담당자 지정·해제 */

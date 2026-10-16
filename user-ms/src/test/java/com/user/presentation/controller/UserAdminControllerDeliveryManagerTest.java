@@ -6,6 +6,7 @@ import com.common.exception.UserErrorCode;
 import com.user.application.dto.AssignDeliveryManagerCommand;
 import com.user.application.dto.UserResult;
 import com.user.application.service.UserCommandService;
+import com.user.application.service.UserQueryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,11 +45,15 @@ class UserAdminControllerDeliveryManagerTest {
     MockMvc mockMvc;
 
     @MockitoBean
+    UserQueryService userQueryService;
+
+    @MockitoBean
     UserCommandService userCommandService;
 
     private static UserResult result(boolean deliveryManager) {
         return new UserResult(TARGET_ID, "driver01", "김배송", "U001", "USER", deliveryManager, "HUB", "서울센터",
-                null, false, true, LocalDateTime.of(2026, 10, 15, 9, 0), LocalDateTime.of(2026, 10, 16, 9, 0), null);
+                null, false, true, LocalDateTime.of(2026, 10, 15, 9, 0), TARGET_ID,
+                LocalDateTime.of(2026, 10, 16, 9, 0), MASTER_ID, null, null);
     }
 
     private static MockHttpServletRequestBuilder as(String role, UUID id, String body) {
@@ -73,6 +78,7 @@ class UserAdminControllerDeliveryManagerTest {
                 .andExpect(jsonPath("$.organizationType").value("HUB"))
                 .andExpect(jsonPath("$.active").value(true))
                 .andExpect(jsonPath("$.updatedAt").exists())
+                .andExpect(jsonPath("$.updatedBy").value(MASTER_ID.toString()))
                 .andReturn().getResponse().getContentAsString();
 
         verify(userCommandService).assignDeliveryManager(new AssignDeliveryManagerCommand(TARGET_ID, value));

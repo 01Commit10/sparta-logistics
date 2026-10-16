@@ -44,7 +44,7 @@ class InternalUserControllerTest {
 
     private static UserResult result() {
         return new UserResult(USER_ID, "driver01", "홍길동", "U001", "USER", true, "HUB", "서울센터",
-                null, false, true, LocalDateTime.of(2026, 10, 15, 9, 0), null, null);
+                null, false, true, LocalDateTime.of(2026, 10, 15, 9, 0), null, null, null, null, null);
     }
 
     @Test

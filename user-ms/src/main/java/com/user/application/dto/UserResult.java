@@ -22,8 +22,11 @@ public record UserResult(
         boolean passwordChangeRequired,
         boolean active,
         LocalDateTime createdAt,
+        UUID createdBy,
         LocalDateTime updatedAt,
-        LocalDateTime deletedAt
+        UUID updatedBy,
+        LocalDateTime deletedAt,
+        UUID deletedBy
 ) {
 
     public static UserResult from(User user) {
@@ -40,7 +43,10 @@ public record UserResult(
                 user.isPasswordChangeRequired(),
                 user.isActive(),
                 user.getCreatedAt(),
+                user.getCreatedBy(),
                 user.getUpdatedAt(),
-                user.getDeletedAt());
+                user.getUpdatedBy(),
+                user.getDeletedAt(),
+                user.getDeletedBy());
     }
 }

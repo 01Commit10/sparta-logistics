@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -70,7 +71,9 @@ class UserAdminIntegrationTest {
 
         mockMvc.perform(deliveryManager(driver, true))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.isDeliveryManager").value(true));
+                .andExpect(jsonPath("$.isDeliveryManager").value(true))
+                .andExpect(jsonPath("$.createdBy").value(driver.toString()))
+                .andExpect(jsonPath("$.updatedBy").value(MASTER_ID.toString()));
 
         assertThat(jdbc.queryForMap("select is_delivery_manager, updated_by from auth.p_users where id = ?", driver))
                 .containsEntry("is_delivery_manager", true)
@@ -97,6 +100,40 @@ class UserAdminIntegrationTest {
 
         assertThat(jdbc.queryForObject("select is_delivery_manager from auth.p_users where id = ?", Boolean.class, staff))
                 .isFalse();
+    }
+
+    private static MockHttpServletRequestBuilder asMaster(MockHttpServletRequestBuilder request) {
+        return request.header("X-User-Id", MASTER_ID.toString()).header("X-User-Role", "MASTER");
+    }
+
+    @Test
+    @DisplayName("U13 상세: 활성 사용자 작성자=본인, 탈퇴 후에도 조회되고 active=false·삭제자=본인")
+    void detailIncludesDeleted() throws Exception {
+        UUID user = signup("detail01", "HUB");
+
+        mockMvc.perform(asMaster(get("/api/v1/users/{userId}", user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("detail01"))
+                .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.createdBy").value(user.toString()))
+                .andExpect(jsonPath("$.deletedAt").doesNotExist());
+
+        mockMvc.perform(delete("/api/v1/users/me").header("X-User-Id", user.toString()).header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON).content("{ \"password\": \"Abcd123!\" }"))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(asMaster(get("/api/v1/users/{userId}", user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(false))
+                .andExpect(jsonPath("$.deletedAt").isNotEmpty())
+                .andExpect(jsonPath("$.deletedBy").value(user.toString()));
+    }
+
+    @Test
+    @DisplayName("U13 상세: MASTER의 GET /users/me는 상세가 아니라 내 정보 API로 간다 (경로 우선순위)")
+    void meIsNotUserId() throws Exception {
+        mockMvc.perform(asMaster(get("/api/v1/users/me")))
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
     }
 
     @Test
