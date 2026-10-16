@@ -31,7 +31,8 @@ import java.util.List;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private static final String USER_HEADER_PREFIX = "X-User-";
+    // Gateway가 토큰에서 만들어 넣는 헤더. 없으면 Gateway를 거치지 않은 요청이므로 400이 아니라 401
+    private static final List<String> GATEWAY_AUTH_HEADER_PREFIXES = List.of("X-User-", "X-Token-");
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
@@ -87,7 +88,8 @@ public class GlobalExceptionHandler {
     // X-User-* 헤더가 없으면 Gateway를 거치지 않은 요청으로 보고 401 (헤더명은 대소문자를 구분하지 않음)
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ErrorResponse> handleMissingHeader(MissingRequestHeaderException e) {
-        if (e.getHeaderName().regionMatches(true, 0, USER_HEADER_PREFIX, 0, USER_HEADER_PREFIX.length())) {
+        if (GATEWAY_AUTH_HEADER_PREFIXES.stream().anyMatch(prefix ->
+                e.getHeaderName().regionMatches(true, 0, prefix, 0, prefix.length()))) {
             log.warn("[MissingUserHeader] {}", e.getHeaderName());
             return toResponse(CommonErrorCode.UNAUTHENTICATED);
         }

@@ -85,4 +85,18 @@ class CurrentUserWebMvcTest {
     void optionalInvalid() throws Exception {
         unauthenticated(call("/test/optional", null, "USER"));
     }
+
+    @Test
+    @DisplayName("Gateway가 넣는 X-Token-* 헤더가 없으면 401 UNAUTHENTICATED (Gateway를 거치지 않은 요청, X-User-*와 같은 취급)")
+    void missingTokenHeader() throws Exception {
+        unauthenticated(call("/test/token-header", ID, "USER"));
+    }
+
+    @Test
+    @DisplayName("클라이언트가 넣는 다른 필수 헤더가 없으면 400 INVALID_INPUT")
+    void missingClientHeader() throws Exception {
+        call("/test/client-header", null, null)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
 }
