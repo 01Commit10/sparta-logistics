@@ -1,5 +1,6 @@
 plugins {
     id 'java-library'
+    id 'java-test-fixtures' // 테스트 전용 리소스
 }
 
 dependencies {
@@ -7,4 +8,37 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-starter-data-jpa'
     compileOnly 'org.springframework.boot:spring-boot-starter-validation'
     compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    // Feign Circuit Breaker (C02). Feign을 쓰는 서비스가 openfeign과 함께 추가한다
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
+    compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+
+    // 레디스
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-redis'
+    compileOnly 'org.springframework.boot:spring-boot-starter-cache'
+
+    // 전역 예외처리 검증용 (도메인 서비스와 같은 servlet + validation 환경)
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Redis 직렬화 검증용
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-cache'
+
+    // BaseEntity·JPA Auditing 검증용
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testRuntimeOnly 'com.h2database:h2'
+
+    // Feign 헤더 전달(C01)·장애 대응(C02) 검증용
+    testImplementation 'io.github.openfeign:feign-core'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer'   // 서비스와 같이 이름(lb)으로 호출
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
+    testImplementation 'org.wiremock:wiremock-standalone:3.9.2'
+}
+
+// 도메인 서비스(Spring Boot 플러그인 적용)와 동일하게 파라미터 이름을 보존.
+tasks.named('compileTestJava') {
+    options.compilerArgs << '-parameters'
 }

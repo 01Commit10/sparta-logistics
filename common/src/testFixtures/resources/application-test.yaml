@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:${db.schema};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        hbm2ddl:
+          create_namespaces: true   # default_schema(db.schema)를 H2에 생성
+  cache:
+    type: none   # 테스트 환경엔 Redis가 없으므로 캐시 비활성화 (@Cacheable은 매번 실제 메서드 호출)
+
+eureka:
+  client:
+    enabled: false
+
+management:
+  health:
+    redis:
+      enabled: false
