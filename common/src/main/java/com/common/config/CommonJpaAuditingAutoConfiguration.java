@@ -1,7 +1,10 @@
 package com.common.config;
 
 import com.common.audit.UserIdAuditorAware;
+import com.common.auth.CurrentUserProvider;
+import com.common.auth.web.RequestHeaderCurrentUserProvider;
 import jakarta.persistence.EntityManager;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -36,10 +39,11 @@ public class CommonJpaAuditingAutoConfiguration {
     static class UserIdAuditorConfiguration {
 
         // 서비스에서 작업자 결정 방식을 바꾸려면 AuditorAware 빈을 등록해 덮어쓰기 가능.
+        // CurrentUserProvider 빈이 없으면(@DataJpaTest 등 웹 자동 설정이 없는 경우) 기본 구현을 쓴다.
         @Bean
         @ConditionalOnMissingBean(AuditorAware.class)
-        AuditorAware<UUID> userIdAuditorAware() {
-            return new UserIdAuditorAware();
+        AuditorAware<UUID> userIdAuditorAware(ObjectProvider<CurrentUserProvider> currentUserProvider) {
+            return new UserIdAuditorAware(currentUserProvider.getIfAvailable(RequestHeaderCurrentUserProvider::new));
         }
     }
 }
