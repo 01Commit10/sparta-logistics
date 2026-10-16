@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,6 +14,8 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -90,5 +94,45 @@ class SignupIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(node.toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_ORGANIZATION"));
+    }
+    @ParameterizedTest(name = "{0}")
+    @DisplayName("username·비밀번호 규칙을 어기면 400이고 DB에 행이 생기지 않는다")
+    @CsvSource({
+            "username 대문자,     Bad01,      Abcd123!,   INVALID_USERNAME",
+            "username 3자,        abc,        Abcd123!,   INVALID_USERNAME",
+            "username 11자,       abcdefghijk, Abcd123!,  INVALID_USERNAME",
+            "비밀번호 7자,        pw0001,     Abc123!,    INVALID_PASSWORD",
+            "비밀번호 16자,       pw0002,     Abcd1234!Abcd12x, INVALID_PASSWORD",
+            "비밀번호 특수문자 없음, pw0003,  Abcd1234,   INVALID_PASSWORD",
+            "비밀번호 대문자 없음, pw0004,    abcd123!,   INVALID_PASSWORD"
+    })
+    void invalidUsernameOrPassword(String caseName, String username, String password, String code) throws Exception {
+        long before = jdbc.queryForObject("select count(*) from auth.p_users", Long.class);
+        JsonNode node = objectMapper.readTree(body(username, "UINV" + Math.abs(caseName.hashCode())));
+        ((ObjectNode) node).put("password", password);
+
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON).content(node.toString()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(code));
+
+        assertThat(jdbc.queryForObject("select count(*) from auth.p_users", Long.class)).isEqualTo(before);
+    }
+
+    @Test
+    @DisplayName("가입 응답에는 정해진 7개 필드만 있고 비밀번호·해시·감사 필드는 없다")
+    void responseFieldsOnly() throws Exception {
+        String response = mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON).content(body("resp01", "URESP01")))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode json = objectMapper.readTree(response);
+        List<String> fields = new ArrayList<>();
+        json.fieldNames().forEachRemaining(fields::add);
+        assertThat(fields).containsExactlyInAnyOrder(
+                "id", "username", "name", "slackId", "role", "organizationType", "organizationName");
+        assertThat(response).doesNotContain("Abcd123!").doesNotContain("$2");
+        assertThat(json.get("role").asText()).isEqualTo("USER");
     }
 }
