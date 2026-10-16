@@ -9,9 +9,11 @@ import com.user.application.service.TokenService;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
 import com.user.presentation.dto.request.LoginRequest;
+import com.user.presentation.dto.request.ReissueRequest;
 import com.user.presentation.dto.request.SignupRequest;
 import com.user.presentation.dto.response.LoginResponse;
 import com.user.presentation.dto.response.SignupResponse;
+import com.user.presentation.dto.response.TokenResponse;
 import com.user.presentation.dto.response.UsernameAvailabilityResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -27,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 
 /**
- * 인증 API (docs/design/04 API 명세서 Auth). 가입·ID 확인·로그인은 Gateway 공개 경로라 X-User-* 헤더가 없고,
+ * 인증 API (docs/design/04 API 명세서 Auth). 가입·ID 확인·로그인·재발급은 Gateway 공개 경로라 X-User-* 헤더가 없고,
  * 로그아웃은 Gateway가 검증한 토큰의 값(X-User-*, X-Token-*)을 헤더로 받는다.
  */
 @RestController
@@ -64,6 +66,12 @@ public class AuthController {
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
         return LoginResponse.from(authFacade.login(request.toCommand()));
+    }
+
+    /** USR-03 토큰 재발급 (Gateway 공개 경로). Refresh도 새로 바뀌므로 응답의 두 토큰으로 모두 교체해야 한다 */
+    @PostMapping("/reissue")
+    public TokenResponse reissue(@Valid @RequestBody ReissueRequest request) {
+        return TokenResponse.from(authFacade.reissue(request.refreshToken()));
     }
 
     /** USR-04 로그아웃. 토큰을 다시 파싱하지 않는다 (검증은 Gateway 한 곳). 헤더가 없으면 401 (Gateway를 거치지 않은 요청) */

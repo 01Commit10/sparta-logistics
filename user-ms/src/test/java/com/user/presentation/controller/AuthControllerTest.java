@@ -6,6 +6,7 @@ import com.common.exception.UserErrorCode;
 import com.user.application.dto.LoginCommand;
 import com.user.application.dto.LoginResult;
 import com.user.application.dto.SignupCommand;
+import com.user.application.dto.TokenPairResult;
 import com.user.application.dto.UserResult;
 import com.common.auth.AuthContract;
 import com.user.application.dto.LogoutCommand;
@@ -264,6 +265,58 @@ class AuthControllerTest {
             mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                             .content("{ \"username\": \"NOT_VALID!\", \"password\": \"x\" }"))
                     .andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/v1/auth/reissue")
+    class Reissue {
+
+        private static final String REISSUE_BODY = """
+                { "refreshToken": "refresh.jwt" }
+                """;
+
+        @Test
+        @DisplayName("200과 새 accessToken·refreshToken 2개 필드를 감싸지 않고 돌려준다")
+        void ok() throws Exception {
+            given(authFacade.reissue("refresh.jwt")).willReturn(new TokenPairResult("new-access.jwt", "new-refresh.jwt"));
+
+            mockMvc.perform(post("/api/v1/auth/reissue").contentType(MediaType.APPLICATION_JSON).content(REISSUE_BODY))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(2))
+                    .andExpect(jsonPath("$.accessToken").value("new-access.jwt"))
+                    .andExpect(jsonPath("$.refreshToken").value("new-refresh.jwt"));
+        }
+
+        @Test
+        @DisplayName("검증 실패는 401 REFRESH_TOKEN_INVALID")
+        void invalid() throws Exception {
+            given(authFacade.reissue(any())).willThrow(new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID));
+
+            mockMvc.perform(post("/api/v1/auth/reissue").contentType(MediaType.APPLICATION_JSON).content(REISSUE_BODY))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("REFRESH_TOKEN_INVALID"));
+        }
+
+        @Test
+        @DisplayName("Redis 장애는 503 AUTH_UNAVAILABLE")
+        void authUnavailable() throws Exception {
+            given(authFacade.reissue(any())).willThrow(new BusinessException(AuthErrorCode.AUTH_UNAVAILABLE));
+
+            mockMvc.perform(post("/api/v1/auth/reissue").contentType(MediaType.APPLICATION_JSON).content(REISSUE_BODY))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.code").value("AUTH_UNAVAILABLE"));
+        }
+
+        @ParameterizedTest(name = "본문 {0} → 400")
+        @org.junit.jupiter.params.provider.ValueSource(strings = {"{}", "{ \"refreshToken\": \"\" }", "{ \"refreshToken\": \" \" }"})
+        @DisplayName("refreshToken이 없거나 빈 값이면 400 INVALID_INPUT이고 재발급을 시도하지 않는다")
+        void blank(String body) throws Exception {
+            mockMvc.perform(post("/api/v1/auth/reissue").contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                    .andExpect(jsonPath("$.errors[0].field").value("refreshToken"));
+            verifyNoInteractions(authFacade);
         }
     }
 

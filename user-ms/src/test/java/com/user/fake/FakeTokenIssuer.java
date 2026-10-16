@@ -2,12 +2,14 @@ package com.user.fake;
 
 import com.user.domain.token.AccessTokenSpec;
 import com.user.domain.token.IssuedToken;
+import com.user.domain.token.RefreshTokenClaims;
 import com.user.domain.token.TokenIssuer;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /** 테스트용: 서명 없이 순번이 붙은 토큰을 만든다. 발급 요청을 기록한다. */
@@ -44,6 +46,16 @@ public class FakeTokenIssuer implements TokenIssuer {
 
     public List<UUID> refreshUserIds() {
         return refreshUserIds;
+    }
+
+    /** FakeRefreshTokenParser가 이 발급기가 만든 Refresh를 통과시킬 때 쓴다 */
+    public Optional<RefreshTokenClaims> refreshClaimsOf(String value) {
+        for (int i = 0; i < refreshTokens.size(); i++) {
+            if (refreshTokens.get(i).value().equals(value)) {
+                return Optional.of(new RefreshTokenClaims(refreshUserIds.get(i), refreshTokens.get(i).jti()));
+            }
+        }
+        return Optional.empty();
     }
 
     public IssuedToken lastRefresh() {

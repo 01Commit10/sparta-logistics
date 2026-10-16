@@ -3,6 +3,7 @@ package com.user.application.service;
 import com.user.application.dto.AuthenticatedUser;
 import com.user.application.dto.TokenPairResult;
 import com.user.domain.token.AccessTokenSpec;
+import com.user.fake.FakeRefreshTokenParser;
 import com.user.fake.FakeTokenIssuer;
 import com.user.fake.FakeTokenStore;
 import org.junit.jupiter.api.DisplayName;
@@ -23,7 +24,7 @@ class TokenServiceIssueTest {
 
     private final FakeTokenIssuer tokenIssuer = new FakeTokenIssuer();
     private final FakeTokenStore tokenStore = new FakeTokenStore();
-    private final TokenService service = new TokenService(tokenIssuer, tokenStore, Clock.systemUTC());
+    private final TokenService service = new TokenService(tokenIssuer, new FakeRefreshTokenParser(), tokenStore, Clock.systemUTC());
 
     @Test
     @DisplayName("Access에는 사용자 ID·역할·변경 필요 여부를 담고, Refresh는 사용자 ID로 발급한다")

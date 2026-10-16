@@ -10,11 +10,13 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
- * 토큰 상태를 Redis에 기록한다. 키는 common AuthContract의 접두사를 쓴다 (docs/plan/02 인증 계약 2.2).
- * Redis 오류(연결 실패·시간 초과·인증 실패)는 토큰 상태를 남길 수 없다는 뜻이라 503 AUTH_UNAVAILABLE로 바꾼다.
+ * 토큰 상태를 Redis에 기록하고 읽는다. 키는 common AuthContract의 접두사를 쓴다 (docs/plan/02 인증 계약 2.2).
+ * Redis 오류(연결 실패·시간 초과·인증 실패)는 토큰 상태를 남기거나 확인할 수 없다는 뜻이라 503 AUTH_UNAVAILABLE로 바꾼다.
  * 로그에는 예외 종류만 남긴다 (jti·키 값 없음).
  */
 @Slf4j
@@ -36,6 +38,12 @@ public class RedisTokenStore implements TokenStore {
     }
 
     @Override
+    public Optional<String> findRefreshJti(UUID userId) {
+        return Optional.ofNullable(call("Refresh Token 조회",
+                () -> redis.opsForValue().get(AuthContract.REDIS_REFRESH_PREFIX + userId)));
+    }
+
+    @Override
     public void deleteRefresh(UUID userId) {
         write("Refresh Token 삭제", () -> redis.delete(AuthContract.REDIS_REFRESH_PREFIX + userId));
     }
@@ -46,10 +54,17 @@ public class RedisTokenStore implements TokenStore {
     }
 
     private void write(String action, Runnable command) {
-        try {
+        call(action, () -> {
             command.run();
+            return null;
+        });
+    }
+
+    private <T> T call(String action, Supplier<T> command) {
+        try {
+            return command.get();
         } catch (DataAccessException e) {
-            log.warn("{}: Redis에 기록하지 못했습니다: {}", action, e.getClass().getSimpleName());
+            log.warn("{}: Redis를 사용하지 못했습니다: {}", action, e.getClass().getSimpleName());
             throw new BusinessException(AuthErrorCode.AUTH_UNAVAILABLE);
         }
     }

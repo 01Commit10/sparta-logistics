@@ -58,4 +58,14 @@ class RedisTokenStoreFailureTest {
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_UNAVAILABLE));
     }
+
+    @Test
+    @DisplayName("U07: 재발급 중 Redis 연결 실패도 AUTH_UNAVAILABLE (Refresh가 없다는 401로 바꾸지 않음)")
+    void reissueConnectionFailure() {
+        RedisTokenStore tokenStore = tokenStore();
+
+        assertThatThrownBy(() -> tokenStore.findRefreshJti(UUID.randomUUID()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_UNAVAILABLE));
+    }
 }

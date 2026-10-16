@@ -9,6 +9,7 @@ import com.user.application.service.UserQueryService;
 import com.user.domain.entity.User;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeRefreshTokenParser;
 import com.user.fake.FakeTokenIssuer;
 import com.user.fake.FakeTokenStore;
 import com.user.fake.FakeUserRepository;
@@ -31,7 +32,7 @@ class AuthFacadeLoginTest {
     private final FakeTokenIssuer tokenIssuer = new FakeTokenIssuer();
     private final FakeTokenStore tokenStore = new FakeTokenStore();
     private final AuthFacade facade = new AuthFacade(
-            new UserQueryService(userRepository, passwordHasher), new TokenService(tokenIssuer, tokenStore, Clock.systemUTC()));
+            new UserQueryService(userRepository, passwordHasher), new TokenService(tokenIssuer, new FakeRefreshTokenParser(), tokenStore, Clock.systemUTC()));
 
     private User savedMaster() {
         User master = User.initialMaster(UUID.randomUUID(), Username.of("master01"), "관리자",

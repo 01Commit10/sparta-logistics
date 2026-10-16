@@ -1,12 +1,17 @@
 package com.user.application.service;
 
+import com.common.exception.AuthErrorCode;
+import com.common.exception.BusinessException;
 import com.user.application.dto.AuthenticatedUser;
 import com.user.application.dto.LogoutCommand;
 import com.user.application.dto.TokenPairResult;
 import com.user.domain.token.AccessTokenSpec;
 import com.user.domain.token.IssuedToken;
+import com.user.domain.token.RefreshTokenClaims;
+import com.user.domain.token.RefreshTokenParser;
 import com.user.domain.token.TokenIssuer;
 import com.user.domain.token.TokenStore;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -15,15 +20,18 @@ import java.time.Duration;
 /**
  * 토큰 발급·상태 기록 유스케이스 (token 도메인). DB를 쓰지 않으므로 트랜잭션이 없다.
  */
+@Slf4j
 @Service
 public class TokenService {
 
     private final TokenIssuer tokenIssuer;
+    private final RefreshTokenParser refreshTokenParser;
     private final TokenStore tokenStore;
     private final Clock clock;
 
-    public TokenService(TokenIssuer tokenIssuer, TokenStore tokenStore, Clock clock) {
+    public TokenService(TokenIssuer tokenIssuer, RefreshTokenParser refreshTokenParser, TokenStore tokenStore, Clock clock) {
         this.tokenIssuer = tokenIssuer;
+        this.refreshTokenParser = refreshTokenParser;
         this.tokenStore = tokenStore;
         this.clock = clock;
     }
@@ -35,6 +43,24 @@ public class TokenService {
         IssuedToken refresh = tokenIssuer.issueRefresh(user.id());
         tokenStore.saveRefresh(user.id(), refresh.jti(), refresh.lifetime());
         return new TokenPairResult(access.value(), refresh.value());
+    }
+
+    /**
+     * USR-03 재발급: Refresh Token이 지금 저장된 그 토큰인지 확인한다. 실패 사유는 모두 REFRESH_TOKEN_INVALID.
+     * 서명이 맞는데 저장된 jti와 다르면 이미 교체된 토큰이 다시 쓰인 것(유출 의심)이라 저장값을 지운다.
+     * 그러면 공격자와 사용자 모두 재발급할 수 없고 다시 로그인해야 한다. 이미 발급된 Access는 만료(30분)까지 남는다 (U07 D2).
+     * 읽고 비교한 뒤 저장하는 사이에 같은 토큰으로 온 요청은 둘 다 통과할 수 있다. 다음 재발급에서 재사용으로 걸린다 (U07 D1).
+     */
+    public RefreshTokenClaims verifyRefresh(String refreshToken) {
+        RefreshTokenClaims claims = refreshTokenParser.parse(refreshToken);
+        String storedJti = tokenStore.findRefreshJti(claims.userId())
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID));
+        if (!storedJti.equals(claims.jti())) {
+            tokenStore.deleteRefresh(claims.userId());
+            log.warn("이미 교체된 Refresh Token이 다시 쓰여 저장된 Refresh를 지웠습니다: userId={}", claims.userId());
+            throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_INVALID);
+        }
+        return claims;
     }
 
     /**
