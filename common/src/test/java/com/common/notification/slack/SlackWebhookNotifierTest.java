@@ -296,6 +296,28 @@ class SlackWebhookNotifierTest {
         assertThat(ref).hasSize(64);
     }
 
+    @Test
+    @DisplayName("9-1. send(null)은 호출한 쪽에 예외 없이 보내지 않고 WARN \"메시지 없음\"을 남긴다 (P5)")
+    void nullMessage(CapturedOutput output) {
+        assertThatCode(() -> notifier.send(null)).doesNotThrowAnyException();
+
+        awaitLog(output, "Slack 알림 메시지 없음");
+        assertThat(lineOf(output, "Slack 알림 메시지 없음")).contains("WARN", "ref=-");
+        assertThat(SLACK.getAllServeEvents()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("9-2. supplier가 null이거나 null을 돌려주면 예외 없이 보내지 않고 WARN \"메시지 없음\"을 남긴다 (P5)")
+    void nullSupplierOrResult(CapturedOutput output) {
+        assertThatCode(() -> notifier.send("order-1", null)).doesNotThrowAnyException();
+        notifier.send("order-2", () -> null);
+
+        await().atMost(Duration.ofSeconds(5))
+                .until(() -> output.getAll().lines().filter(l -> l.contains("Slack 알림 메시지 없음")).count() == 2);
+        assertThat(output.getAll()).contains("ref=order-1", "ref=order-2").doesNotContain("NullPointerException");
+        assertThat(SLACK.getAllServeEvents()).isEmpty();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             "ftp://hooks.slack.com/services/T000/B000/secret-token",

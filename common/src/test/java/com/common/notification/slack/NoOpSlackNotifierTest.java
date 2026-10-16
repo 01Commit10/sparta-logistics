@@ -31,4 +31,11 @@ class NoOpSlackNotifierTest {
 
         assertThat(calls).hasValue(0);
     }
+
+    @Test
+    @DisplayName("9-3. null 메시지·null supplier에도 예외가 없다 (P5)")
+    void ignoresNull() {
+        assertThatCode(() -> notifier.send(null)).doesNotThrowAnyException();
+        assertThatCode(() -> notifier.send("order-1", null)).doesNotThrowAnyException();
+    }
 }

@@ -31,4 +31,12 @@ public record SlackProperties(
     public boolean enabled() {
         return !webhookUrl.isEmpty();
     }
+
+    /** Webhook URL은 비밀값이라 가린다(N3). 설정 객체가 로그·예외 메시지에 찍혀도 새지 않게 한다. */
+    @Override
+    public String toString() {
+        return "SlackProperties[webhookUrl=" + (enabled() ? "****" : "(미설정)")
+                + ", connectTimeout=" + connectTimeout + ", readTimeout=" + readTimeout
+                + ", poolSize=" + poolSize + ", queueCapacity=" + queueCapacity + ", shutdownWait=" + shutdownWait + "]";
+    }
 }

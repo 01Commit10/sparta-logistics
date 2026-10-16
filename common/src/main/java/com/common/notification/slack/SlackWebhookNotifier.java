@@ -71,7 +71,7 @@ public class SlackWebhookNotifier implements SlackNotifier, DisposableBean {
 
     @Override
     public void send(SlackMessage message) {
-        send(message.reference(), () -> message);
+        send(message == null ? null : message.reference(), () -> message);
     }
 
     @Override
@@ -79,7 +79,8 @@ public class SlackWebhookNotifier implements SlackNotifier, DisposableBean {
         String ref = logValue(reference);
         String requestId = logValue(currentRequestId());
         try {
-            executor.execute(() -> deliver(ref, requestId, message));
+            Supplier<SlackMessage> supplier = message == null ? () -> null : message;
+            executor.execute(() -> deliver(ref, requestId, supplier));
         } catch (TaskRejectedException e) {
             log.warn("Slack 알림 버림(대기열 가득 또는 종료됨) ref={} requestId={}", ref, requestId);
         }
@@ -96,6 +97,10 @@ public class SlackWebhookNotifier implements SlackNotifier, DisposableBean {
             message = supplier.get();
         } catch (RuntimeException e) {
             log.warn("Slack 알림 메시지 조립 실패 ref={} requestId={} cause={}", ref, requestId, rootCauseName(e));
+            return;
+        }
+        if (message == null) {
+            log.warn("Slack 알림 메시지 없음 ref={} requestId={}", ref, requestId);
             return;
         }
         try {
