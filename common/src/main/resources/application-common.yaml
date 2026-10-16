@@ -38,6 +38,14 @@ spring:
         # 요청 컨텍스트(사용자 헤더 전달)·트랜잭션·MDC가 유지된다
         disable-thread-pool: true
 
+# Slack 알림 (NTF). Servlet 서비스에서 SlackNotifier 빈으로 쓴다
+common:
+  notification:
+    slack:
+      webhook-url: ${SLACK_WEBHOOK_URL:}            # 비어 있으면 알림 끔(NoOp). 비밀값이라 .env에만 둔다
+      connect-timeout: ${SLACK_CONNECT_TIMEOUT:1s}
+      read-timeout: ${SLACK_READ_TIMEOUT:2s}
+
 eureka:
   client:
     service-url:
