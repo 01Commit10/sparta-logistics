@@ -57,4 +57,11 @@ public class UserQueryService {
                 .map(UserResult::from)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
     }
+
+    /** USR-12 관리자 상세 조회 (MASTER): 탈퇴·비활성화된 사용자도 보여 준다 (active=false, 삭제 일시·삭제자) */
+    public UserResult getUser(UUID userId) {
+        return userRepository.findById(userId)
+                .map(UserResult::from)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+    }
 }

@@ -1,12 +1,18 @@
 package com.user.application.service;
 
 import com.common.exception.BusinessException;
+import com.common.exception.CommonErrorCode;
 import com.common.exception.UserErrorCode;
+import com.user.application.dto.AssignDeliveryManagerCommand;
 import com.user.application.dto.ChangePasswordCommand;
+import com.user.application.dto.ChangeRoleCommand;
+import com.user.application.dto.DeactivateUserCommand;
 import com.user.application.dto.InitialMasterCommand;
 import com.user.application.dto.InitialMasterResult;
+import com.user.application.dto.RoleChangeResult;
 import com.user.application.dto.SignupCommand;
 import com.user.application.dto.UpdateSlackIdCommand;
+import com.user.application.dto.UpdateUserCommand;
 import com.user.application.dto.UserResult;
 import com.user.application.dto.WithdrawCommand;
 import com.user.domain.entity.User;
@@ -15,6 +21,7 @@ import com.user.domain.service.LastMasterGuard;
 import com.user.domain.service.PasswordHasher;
 import com.user.domain.service.PasswordPolicy;
 import com.user.domain.vo.OrganizationType;
+import com.user.domain.vo.UserRole;
 import com.user.domain.vo.Username;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -117,6 +124,73 @@ public class UserCommandService {
         userRepository.save(user);
     }
 
+    /**
+     * USR-15 배송담당자 지정·해제 (MASTER). 허브 소속이 아니면 DELIVERY_MANAGER_REQUIRES_HUB.
+     * 배송담당 여부는 토큰 claim에 없으므로 토큰을 무효화하지 않는다. delivery-ms는 내부 API로 바로 새 값을 읽는다.
+     */
+    @Transactional
+    public UserResult assignDeliveryManager(AssignDeliveryManagerCommand command) {
+        User user = findActive(command.userId());
+        user.assignDeliveryManager(command.deliveryManager());
+        return UserResult.from(userRepository.save(user));
+    }
+
+    /**
+     * USR-13 MASTER의 정보 수정 (부분 수정). 대상은 활성 사용자만.
+     * 소속 유형을 바꾸면 소속명도 함께 보내야 한다 (유형과 이름이 어긋나지 않게). Slack ID 중복은 다른 활성 사용자 기준.
+     */
+    @Transactional
+    public UserResult updateByMaster(UpdateUserCommand command) {
+        User user = findActive(command.userId());
+        OrganizationType organizationType = command.organizationType() == null
+                ? user.getOrganizationType() : parseOrganizationType(command.organizationType());
+        if (organizationType != user.getOrganizationType() && command.organizationName() == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "소속 유형을 바꾸면 소속명도 함께 입력해야 합니다.");
+        }
+        String slackId = valueOr(command.slackId(), user.getSlackId());
+        if (userRepository.existsActiveBySlackIdAndIdNot(slackId, user.getId())) {
+            throw new BusinessException(UserErrorCode.DUPLICATE_SLACK_ID);
+        }
+        user.updateProfile(valueOr(command.name(), user.getName()), slackId, organizationType,
+                valueOr(command.organizationName(), user.getOrganizationName()));
+        return UserResult.from(userRepository.save(user));
+    }
+
+    /**
+     * USR-14 역할 변경. MASTER→USER면 활성 MASTER를 잠가 세어 마지막 MASTER를 지킨다 (본인 강등 포함).
+     * 트랜잭션과 토큰 무효화는 UserAdminFacade가 한다 (역할은 Access claim에 있다).
+     */
+    public RoleChangeResult changeRole(ChangeRoleCommand command) {
+        User user = findActive(command.userId());
+        UserRole role = UserRole.valueOf(command.role());
+        if (user.getRole() == role) {
+            return new RoleChangeResult(UserResult.from(user), false);
+        }
+        user.checkRoleChangeable(role);
+        if (user.isMaster()) {
+            LastMasterGuard.checkRemovable(user, userRepository.countActiveMastersForUpdate());
+        }
+        user.changeRole(role);
+        return new RoleChangeResult(UserResult.from(userRepository.save(user)), true);
+    }
+
+    /**
+     * USR-17 비활성화 (MASTER). 탈퇴와 같은 논리 삭제이고 삭제자만 MASTER다. 트랜잭션은 UserAdminFacade가 연다.
+     * 이미 삭제된 사용자는 USER_ALREADY_DELETED (조회는 삭제 포함). 배송담당 여부·역할은 재활성화를 위해 그대로 둔다.
+     */
+    public void deactivate(DeactivateUserCommand command) {
+        if (command.userId().equals(command.masterId())) {
+            throw new BusinessException(UserErrorCode.CANNOT_DEACTIVATE_SELF);
+        }
+        User user = userRepository.findById(command.userId())
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        if (user.isActive() && user.isMaster()) {
+            LastMasterGuard.checkRemovable(user, userRepository.countActiveMastersForUpdate());
+        }
+        user.withdraw(command.masterId());
+        userRepository.save(user);
+    }
+
     /** 본인 확인용 비밀번호 재입력. 틀리면 로그인 실패와 같은 INVALID_CREDENTIALS */
     private void verifyPassword(User user, String rawPassword) {
         if (!passwordHasher.matches(rawPassword, user.getPasswordHash())) {
@@ -128,6 +202,10 @@ public class UserCommandService {
     private User findActive(UUID userId) {
         return userRepository.findActiveById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+    }
+
+    private static String valueOr(String value, String current) {
+        return value == null ? current : value;
     }
 
     private static OrganizationType parseOrganizationType(String value) {
