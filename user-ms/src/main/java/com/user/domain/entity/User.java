@@ -99,13 +99,14 @@ public class User extends BaseEntity {
         return user;
     }
 
-    /** MASTER가 만든 계정: 역할·배송담당 여부 지정 가능. 본사(HQ)는 MASTER 역할만. 작성자는 MASTER. */
+    /** MASTER가 만든 계정: 역할·배송담당 여부 지정 가능. 본사(HQ)는 MASTER 역할만, 배송담당자는 허브 소속만. 작성자는 MASTER. */
     public static User createByMaster(UUID id, Username username, String name, String passwordHash, String slackId,
                                       OrganizationType organizationType, String organizationName,
                                       UserRole role, boolean deliveryManager, UUID masterId) {
         if (organizationType == OrganizationType.HQ && role != UserRole.MASTER) {
             throw new BusinessException(UserErrorCode.INVALID_ORGANIZATION);
         }
+        checkDeliveryManagerOrganization(deliveryManager, organizationType);
         User user = new User(id, username, name, passwordHash, slackId, role, deliveryManager,
                 organizationType, organizationName);
         user.recordCreatedBy(masterId);
@@ -161,8 +162,16 @@ public class User extends BaseEntity {
         this.role = role;
     }
 
+    /** 배송담당자 지정·해제. 담당자의 소속 허브가 출발지 기준이므로 허브 소속만 지정할 수 있다. 해제는 언제나 된다. */
     public void assignDeliveryManager(boolean deliveryManager) {
+        checkDeliveryManagerOrganization(deliveryManager, organizationType);
         this.deliveryManager = deliveryManager;
+    }
+
+    private static void checkDeliveryManagerOrganization(boolean deliveryManager, OrganizationType organizationType) {
+        if (deliveryManager && organizationType != OrganizationType.HUB) {
+            throw new BusinessException(UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
+        }
     }
 
     /** 가입 때 입력한 소속을 실제 업체·허브 ID와 연결한다. 본사(HQ)는 연결할 조직이 없다. */

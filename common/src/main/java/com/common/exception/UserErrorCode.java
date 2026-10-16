@@ -29,6 +29,8 @@ public enum UserErrorCode implements ErrorCode {
     LAST_MASTER(HttpStatus.CONFLICT, "마지막 관리자는 탈퇴·강등·비활성화할 수 없습니다."),
     USER_ALREADY_DELETED(HttpStatus.CONFLICT, "이미 삭제된 사용자입니다."),
     USER_NOT_DELETED(HttpStatus.CONFLICT, "삭제되지 않은 사용자입니다."),
+    // 배송담당자의 소속 허브가 출발지 기준이므로 허브 소속만 지정할 수 있다 (U16)
+    DELIVERY_MANAGER_REQUIRES_HUB(HttpStatus.CONFLICT, "허브 소속 사용자만 배송담당자로 지정할 수 있습니다."),
     ;
 
     private final HttpStatus httpStatus;

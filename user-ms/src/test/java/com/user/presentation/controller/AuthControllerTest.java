@@ -66,7 +66,7 @@ class AuthControllerTest {
 
     private static UserResult result() {
         return new UserResult(USER_ID, "user01", "홍길동", "U001", "USER", false, "COMPANY", "부산수산",
-                null, false, true, LocalDateTime.of(2026, 10, 15, 9, 0));
+                null, false, true, LocalDateTime.of(2026, 10, 15, 9, 0), null, null);
     }
 
     @Nested

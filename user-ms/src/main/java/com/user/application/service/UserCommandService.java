@@ -2,6 +2,7 @@ package com.user.application.service;
 
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
+import com.user.application.dto.AssignDeliveryManagerCommand;
 import com.user.application.dto.ChangePasswordCommand;
 import com.user.application.dto.InitialMasterCommand;
 import com.user.application.dto.InitialMasterResult;
@@ -115,6 +116,17 @@ public class UserCommandService {
         }
         user.withdraw(user.getId());
         userRepository.save(user);
+    }
+
+    /**
+     * USR-15 배송담당자 지정·해제 (MASTER). 허브 소속이 아니면 DELIVERY_MANAGER_REQUIRES_HUB.
+     * 배송담당 여부는 토큰 claim에 없으므로 토큰을 무효화하지 않는다. delivery-ms는 내부 API로 바로 새 값을 읽는다.
+     */
+    @Transactional
+    public UserResult assignDeliveryManager(AssignDeliveryManagerCommand command) {
+        User user = findActive(command.userId());
+        user.assignDeliveryManager(command.deliveryManager());
+        return UserResult.from(userRepository.save(user));
     }
 
     /** 본인 확인용 비밀번호 재입력. 틀리면 로그인 실패와 같은 INVALID_CREDENTIALS */

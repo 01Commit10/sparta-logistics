@@ -21,7 +21,9 @@ public record UserResult(
         UUID organizationId,
         boolean passwordChangeRequired,
         boolean active,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        LocalDateTime deletedAt
 ) {
 
     public static UserResult from(User user) {
@@ -37,6 +39,8 @@ public record UserResult(
                 user.getOrganizationId(),
                 user.isPasswordChangeRequired(),
                 user.isActive(),
-                user.getCreatedAt());
+                user.getCreatedAt(),
+                user.getUpdatedAt(),
+                user.getDeletedAt());
     }
 }
