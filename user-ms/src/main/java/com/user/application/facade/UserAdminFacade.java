@@ -1,6 +1,9 @@
 package com.user.application.facade;
 
+import com.user.application.dto.ChangeRoleCommand;
 import com.user.application.dto.DeactivateUserCommand;
+import com.user.application.dto.RoleChangeResult;
+import com.user.application.dto.UserResult;
 import com.user.application.service.TokenService;
 import com.user.application.service.UserCommandService;
 import org.springframework.stereotype.Service;
@@ -26,5 +29,15 @@ public class UserAdminFacade {
     public void deactivate(DeactivateUserCommand command) {
         userCommandService.deactivate(command);
         tokenService.revokeAll(command.userId());
+    }
+
+    /** USR-14 역할 변경. 실제로 바뀐 경우에만 대상의 토큰을 무효화한다 (role claim이 달라지므로) */
+    @Transactional
+    public UserResult changeRole(ChangeRoleCommand command) {
+        RoleChangeResult result = userCommandService.changeRole(command);
+        if (result.changed()) {
+            tokenService.revokeAll(command.userId());
+        }
+        return result.user();
     }
 }

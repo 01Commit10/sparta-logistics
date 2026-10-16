@@ -27,7 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 토큰 무효화(Redis)가 실패하면 비밀번호 변경·탈퇴·비활성화가 DB에 남지 않는다
+ * 토큰 무효화(Redis)가 실패하면 비밀번호 변경·탈퇴·비활성화·역할 변경이 DB에 남지 않는다
  * (U10 테스트 6, @Transactional은 AccountFacade·UserAdminFacade).
  */
 @SpringBootTest
@@ -106,5 +106,20 @@ class AccountRollbackTest {
 
         assertThat(jdbc.queryForObject("select deleted_at is null from auth.p_users where id = ?", Boolean.class, target))
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName("U15: 역할 변경 중 Redis 실패 → 503, 역할은 그대로다 (DB 롤백)")
+    void changeRoleRollsBack() throws Exception {
+        UUID target = signup("rb04");
+
+        mockMvc.perform(patch("/api/v1/users/{userId}/role", target)
+                        .header("X-User-Id", "00000000-0000-0000-0000-0000000000aa").header("X-User-Role", "MASTER")
+                        .contentType(MediaType.APPLICATION_JSON).content("{ \"role\": \"MASTER\" }"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("AUTH_UNAVAILABLE"));
+
+        assertThat(jdbc.queryForObject("select role from auth.p_users where id = ?", String.class, target))
+                .isEqualTo("USER");
     }
 }

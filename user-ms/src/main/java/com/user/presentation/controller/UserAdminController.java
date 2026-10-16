@@ -6,7 +6,9 @@ import com.user.application.dto.DeactivateUserCommand;
 import com.user.application.facade.UserAdminFacade;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
+import com.user.presentation.dto.request.ChangeRoleRequest;
 import com.user.presentation.dto.request.DeliveryManagerRequest;
+import com.user.presentation.dto.request.UpdateUserRequest;
 import com.user.presentation.dto.response.UserDetailResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -45,6 +47,22 @@ public class UserAdminController {
     public UserDetailResponse getDetail(@CurrentUser AuthUser user, @PathVariable UUID userId) {
         user.requireMaster();
         return UserDetailResponse.from(userQueryService.getUser(userId));
+    }
+
+    /** USR-13 정보 수정 (이름·Slack ID·소속 유형·소속명, 부분 수정) */
+    @PatchMapping("/{userId}")
+    public UserDetailResponse update(@CurrentUser AuthUser user, @PathVariable UUID userId,
+                                     @Valid @RequestBody UpdateUserRequest request) {
+        user.requireMaster();
+        return UserDetailResponse.from(userCommandService.updateByMaster(request.toCommand(userId)));
+    }
+
+    /** USR-14 역할 변경. 바뀐 사용자의 기존 토큰은 무효가 된다 (본인 강등이면 본인도 다시 로그인) */
+    @PatchMapping("/{userId}/role")
+    public UserDetailResponse changeRole(@CurrentUser AuthUser user, @PathVariable UUID userId,
+                                         @Valid @RequestBody ChangeRoleRequest request) {
+        user.requireMaster();
+        return UserDetailResponse.from(userAdminFacade.changeRole(request.toCommand(userId)));
     }
 
     /** USR-15 배송담당자 지정·해제 */

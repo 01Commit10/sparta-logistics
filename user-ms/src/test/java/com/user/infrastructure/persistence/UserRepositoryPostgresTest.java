@@ -158,7 +158,9 @@ class UserRepositoryPostgresTest {
     @DisplayName("활성 MASTER 수를 셀 때 행을 잠가, 동시에 들어온 다른 요청은 먼저 요청이 끝난 뒤의 값을 본다")
     void countActiveMastersLocksRows() throws Exception {
         User first = master("master01", "M001");
-        User second = master("master02", "M002");
+        // 본사(HQ) 소속은 USER로 바꿀 수 없으므로 강등 대상은 허브 소속 MASTER
+        User second = User.createByMaster(UUID.randomUUID(), Username.of("master02"), "관리자", "hashed", "M002",
+                OrganizationType.HUB, "서울센터", UserRole.MASTER, false, first.getId());
         tx().executeWithoutResult(s -> {
             userRepository.save(first);
             userRepository.save(second);

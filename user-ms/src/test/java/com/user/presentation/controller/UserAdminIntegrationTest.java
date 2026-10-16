@@ -183,6 +183,59 @@ class UserAdminIntegrationTest {
     }
 
     @Test
+    @DisplayName("U14: 정보 수정 → 보낸 필드만 DB 반영, 역할·배송담당은 본문에 있어도 그대로, updated_by=MASTER")
+    void updateByMaster() throws Exception {
+        UUID user = signup("upd01", "COMPANY");
+
+        mockMvc.perform(asMaster(patch("/api/v1/users/{userId}", user)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"name\": \"김철수\", \"organizationType\": \"HUB\", \"organizationName\": \"서울센터\", \"role\": \"MASTER\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("김철수"))
+                .andExpect(jsonPath("$.role").value("USER"));
+
+        assertThat(jdbc.queryForMap("select name, slack_id, role, organization_type, organization_name, updated_by from auth.p_users where id = ?", user))
+                .containsEntry("name", "김철수")
+                .containsEntry("slack_id", "U-upd01")
+                .containsEntry("role", "USER")
+                .containsEntry("organization_type", "HUB")
+                .containsEntry("organization_name", "서울센터")
+                .containsEntry("updated_by", MASTER_ID);
+    }
+
+    @Test
+    @DisplayName("U14: 다른 사용자의 Slack ID → 409 DUPLICATE_SLACK_ID")
+    void updateDuplicateSlackId() throws Exception {
+        UUID user = signup("upd02", "COMPANY");
+        signup("upd03", "COMPANY");
+
+        mockMvc.perform(asMaster(patch("/api/v1/users/{userId}", user)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"slackId\": \"U-upd03\" }"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_SLACK_ID"));
+    }
+
+    @Test
+    @DisplayName("U15: USER→MASTER → 200, DB 역할 변경, 대상 토큰 무효. 같은 역할 다시 → 토큰 그대로")
+    void changeRole() throws Exception {
+        UUID user = signup("role01", "HUB");
+        FakeTokenStore store = (FakeTokenStore) tokenStore;
+
+        mockMvc.perform(asMaster(patch("/api/v1/users/{userId}/role", user)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"role\": \"MASTER\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("MASTER"))
+                .andExpect(jsonPath("$.updatedBy").value(MASTER_ID.toString()));
+
+        assertThat(jdbc.queryForObject("select role from auth.p_users where id = ?", String.class, user)).isEqualTo("MASTER");
+        var revokedAt = store.revokedOf(user).orElseThrow();
+
+        mockMvc.perform(asMaster(patch("/api/v1/users/{userId}/role", user)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"role\": \"MASTER\" }"))
+                .andExpect(status().isOk());
+        assertThat(store.revokedOf(user)).contains(revokedAt);
+    }
+
+    @Test
     @DisplayName("U16: 없는 사용자 → 404 USER_NOT_FOUND")
     void unknownUser() throws Exception {
         mockMvc.perform(deliveryManager(UUID.randomUUID(), true))

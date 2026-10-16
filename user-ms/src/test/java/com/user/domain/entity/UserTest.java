@@ -197,13 +197,50 @@ class UserTest {
         }
 
         @Test
-        @DisplayName("역할 변경")
+        @DisplayName("역할 변경: USER↔MASTER")
         void changeRole() {
             User user = signupUser();
 
             user.changeRole(UserRole.MASTER);
-
             assertThat(user.isMaster()).isTrue();
+
+            user.changeRole(UserRole.USER);
+            assertThat(user.isMaster()).isFalse();
+        }
+
+        @Test
+        @DisplayName("본사(HQ) 소속 MASTER는 USER로 바꿀 수 없다 (U15)")
+        void changeRole_hqStaysMaster() {
+            User master = User.initialMaster(MASTER_ID, Username.of("master01"), "관리자", "hashed", "U000");
+
+            assertError(() -> master.changeRole(UserRole.USER), UserErrorCode.INVALID_ORGANIZATION);
+            assertThat(master.isMaster()).isTrue();
+        }
+
+        @Test
+        @DisplayName("배송담당자는 허브가 아닌 소속으로 옮길 수 없다, 바뀌지 않는다 (U14). 허브 안에서 이름만 바꾸는 건 된다")
+        void updateProfile_deliveryManagerStaysInHub() {
+            User driver = User.signup(USER_ID, Username.of("driver01"), "김배송", "hashed", "U010",
+                    OrganizationType.HUB, "서울센터");
+            driver.assignDeliveryManager(true);
+
+            assertError(() -> driver.updateProfile("김배송", "U010", OrganizationType.COMPANY, "스파르타상사"),
+                    UserErrorCode.DELIVERY_MANAGER_REQUIRES_HUB);
+            assertThat(driver.getOrganizationType()).isEqualTo(OrganizationType.HUB);
+            assertThat(driver.getOrganizationName()).isEqualTo("서울센터");
+
+            driver.updateProfile("김배송", "U010", OrganizationType.HUB, "경기남부센터");
+            assertThat(driver.getOrganizationName()).isEqualTo("경기남부센터");
+        }
+
+        @Test
+        @DisplayName("정보 수정으로 USER를 본사(HQ)로 옮길 수 없다, 바뀌지 않는다")
+        void updateProfile_hqOnlyForMaster() {
+            User user = signupUser();
+
+            assertError(() -> user.updateProfile("홍길동", "U001", OrganizationType.HQ, "본사"),
+                    UserErrorCode.INVALID_ORGANIZATION);
+            assertThat(user.getOrganizationType()).isEqualTo(OrganizationType.COMPANY);
         }
     }
 
