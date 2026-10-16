@@ -3,6 +3,7 @@ package com.user.presentation.controller;
 import com.common.auth.AuthUser;
 import com.common.auth.web.CurrentUser;
 import com.user.application.dto.DeactivateUserCommand;
+import com.user.application.dto.ResetPasswordCommand;
 import com.user.application.facade.UserAdminFacade;
 import com.user.application.service.UserCommandService;
 import com.user.application.service.UserQueryService;
@@ -10,8 +11,10 @@ import com.user.presentation.dto.request.ChangeRoleRequest;
 import com.user.presentation.dto.request.CreateUserRequest;
 import com.user.presentation.dto.request.DeliveryManagerRequest;
 import com.user.presentation.dto.request.UpdateUserRequest;
+import com.user.presentation.dto.response.TemporaryPasswordResponse;
 import com.user.presentation.dto.response.UserDetailResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -84,6 +87,15 @@ public class UserAdminController {
                                                     @Valid @RequestBody DeliveryManagerRequest request) {
         user.requireMaster();
         return UserDetailResponse.from(userCommandService.assignDeliveryManager(request.toCommand(userId)));
+    }
+
+    /** USR-21 비밀번호 초기화. 임시 비밀번호는 응답으로 1회만 나가므로 캐시하지 않게 한다 */
+    @PostMapping("/{userId}/password-reset")
+    public ResponseEntity<TemporaryPasswordResponse> resetPassword(@CurrentUser AuthUser user, @PathVariable UUID userId) {
+        user.requireMaster();
+        TemporaryPasswordResponse response = TemporaryPasswordResponse.from(
+                userAdminFacade.resetPassword(new ResetPasswordCommand(userId, user.id())));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
     }
 
     /** USR-17 비활성화 (논리 삭제, 대상 토큰 무효화). 본인은 탈퇴(DELETE /users/me)를 써야 한다 */

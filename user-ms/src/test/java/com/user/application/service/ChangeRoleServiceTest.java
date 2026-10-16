@@ -9,6 +9,7 @@ import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.UserRole;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ChangeRoleServiceTest {
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher());
+    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher(), new FakeTemporaryPasswordGenerator());
 
     private User savedUser(String username) {
         return userRepository.save(User.signup(UUID.randomUUID(), Username.of(username), "홍길동", "hashed",

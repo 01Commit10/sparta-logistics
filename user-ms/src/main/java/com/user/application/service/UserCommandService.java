@@ -10,8 +10,10 @@ import com.user.application.dto.CreateUserCommand;
 import com.user.application.dto.DeactivateUserCommand;
 import com.user.application.dto.InitialMasterCommand;
 import com.user.application.dto.InitialMasterResult;
+import com.user.application.dto.ResetPasswordCommand;
 import com.user.application.dto.RoleChangeResult;
 import com.user.application.dto.SignupCommand;
+import com.user.application.dto.TemporaryPasswordResult;
 import com.user.application.dto.UpdateSlackIdCommand;
 import com.user.application.dto.UpdateUserCommand;
 import com.user.application.dto.UserResult;
@@ -21,6 +23,7 @@ import com.user.domain.repository.UserRepository;
 import com.user.domain.service.LastMasterGuard;
 import com.user.domain.service.PasswordHasher;
 import com.user.domain.service.PasswordPolicy;
+import com.user.domain.service.TemporaryPasswordGenerator;
 import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.UserRole;
 import com.user.domain.vo.Username;
@@ -38,10 +41,13 @@ public class UserCommandService {
 
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
+    private final TemporaryPasswordGenerator temporaryPasswordGenerator;
 
-    public UserCommandService(UserRepository userRepository, PasswordHasher passwordHasher) {
+    public UserCommandService(UserRepository userRepository, PasswordHasher passwordHasher,
+                              TemporaryPasswordGenerator temporaryPasswordGenerator) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
+        this.temporaryPasswordGenerator = temporaryPasswordGenerator;
     }
 
     /** USR-19: 활성 MASTER가 하나도 없을 때만 .env 값으로 첫 MASTER를 만든다. */
@@ -203,6 +209,21 @@ public class UserCommandService {
         }
         user.withdraw(command.masterId());
         userRepository.save(user);
+    }
+
+    /**
+     * USR-21 비밀번호 초기화 (MASTER, 오프라인 문의 후). 임시 비밀번호의 해시만 저장하고 다음 로그인 후 변경을 강제한다.
+     * 현재 비밀번호를 확인하지 않으므로 본인은 비밀번호 변경을 써야 한다. 트랜잭션과 토큰 무효화는 UserAdminFacade가 한다.
+     */
+    public TemporaryPasswordResult resetPassword(ResetPasswordCommand command) {
+        if (command.userId().equals(command.masterId())) {
+            throw new BusinessException(UserErrorCode.CANNOT_RESET_OWN_PASSWORD);
+        }
+        User user = findActive(command.userId());
+        String temporaryPassword = temporaryPasswordGenerator.generate();
+        user.requirePasswordChange(passwordHasher.hash(temporaryPassword));
+        userRepository.save(user);
+        return new TemporaryPasswordResult(user.getId(), user.getUsername(), temporaryPassword);
     }
 
     /** username은 탈퇴자 포함 유일, slackId는 활성 사용자 사이에서만 유일 */

@@ -8,6 +8,7 @@ import com.user.domain.entity.User;
 import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AssignDeliveryManagerTest {
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher());
+    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher(), new FakeTemporaryPasswordGenerator());
 
     private User saved(String username, OrganizationType organizationType) {
         return userRepository.save(User.signup(UUID.randomUUID(), Username.of(username), "김배송", "hashed",

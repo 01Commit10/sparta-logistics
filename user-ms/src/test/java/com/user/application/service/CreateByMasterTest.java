@@ -8,6 +8,7 @@ import com.user.domain.entity.User;
 import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ class CreateByMasterTest {
     private static final UUID MASTER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher());
+    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher(), new FakeTemporaryPasswordGenerator());
 
     private static CreateUserCommand command(String username, String password, String slackId,
                                              String organizationType, String role, boolean deliveryManager) {

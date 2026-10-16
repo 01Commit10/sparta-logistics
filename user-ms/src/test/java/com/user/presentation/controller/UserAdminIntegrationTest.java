@@ -1,20 +1,29 @@
 package com.user.presentation.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jayway.jsonpath.JsonPath;
 import com.user.domain.token.TokenStore;
 import com.user.fake.FakeTokenStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.util.Base64;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,6 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,6 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@ExtendWith(OutputCaptureExtension.class)
 class UserAdminIntegrationTest {
 
     private static final UUID MASTER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
@@ -283,5 +294,71 @@ class UserAdminIntegrationTest {
                 .andExpect(jsonPath("$.code").value("DUPLICATE_USERNAME"));
         assertThat(jdbc.queryForObject("select count(*) from auth.p_users where username = 'dupnew01'", Integer.class))
                 .isEqualTo(1);
+    }
+
+    private ResultActions login(String username, String password) throws Exception {
+        return mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"username\": \"%s\", \"password\": \"%s\" }".formatted(username, password)));
+    }
+
+    private static Map<?, ?> accessClaims(MvcResult login) throws Exception {
+        String token = JsonPath.read(login.getResponse().getContentAsString(), "$.accessToken");
+        return new ObjectMapper().readValue(Base64.getUrlDecoder().decode(token.split("\\.")[1]), Map.class);
+    }
+
+    @Test
+    @DisplayName("U18: 초기화 → 200 no-store, 기존 토큰 무효, 이전 비밀번호 401, 임시 비밀번호 로그인 pcr=true → 변경 → 재로그인 pcr=false."
+            + " DB·로그에 원문 없음")
+    void resetPasswordFlow(CapturedOutput output) throws Exception {
+        UUID target = signup("reset01", "HUB");
+        login("reset01", "Abcd123!").andExpect(status().isOk());
+        FakeTokenStore store = (FakeTokenStore) tokenStore;
+
+        String body = mockMvc.perform(asMaster(post("/api/v1/users/{userId}/password-reset", target)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.userId").value(target.toString()))
+                .andExpect(jsonPath("$.username").value("reset01"))
+                .andReturn().getResponse().getContentAsString();
+        String temporary = JsonPath.read(body, "$.temporaryPassword");
+
+        assertThat(store.revokedOf(target)).isPresent();
+        assertThat(store.refreshOf(target)).isEmpty();
+        var row = jdbc.queryForMap("select password_hash, password_change_required, updated_by from auth.p_users where id = ?", target);
+        assertThat(row).containsEntry("password_change_required", true).containsEntry("updated_by", MASTER_ID);
+        assertThat((String) row.get("password_hash")).startsWith("$2").doesNotContain(temporary);
+
+        login("reset01", "Abcd123!").andExpect(status().isUnauthorized());
+        MvcResult temporaryLogin = login("reset01", temporary)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.passwordChangeRequired").value(true))
+                .andReturn();
+        assertThat(accessClaims(temporaryLogin).get("pcr")).isEqualTo(true);
+
+        mockMvc.perform(patch("/api/v1/users/me/password").header("X-User-Id", target.toString()).header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"currentPassword\": \"%s\", \"newPassword\": \"Newpw123!\" }".formatted(temporary)))
+                .andExpect(status().isNoContent());
+        Thread.sleep(1_100);
+        MvcResult changed = login("reset01", "Newpw123!")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.passwordChangeRequired").value(false))
+                .andReturn();
+        assertThat(accessClaims(changed).get("pcr")).isEqualTo(false);
+        assertThat(output.getAll()).doesNotContain(temporary);
+    }
+
+    @Test
+    @DisplayName("U18: MASTER 본인 초기화 → 409 CANNOT_RESET_OWN_PASSWORD, 비밀번호 그대로")
+    void resetOwnPassword() throws Exception {
+        UUID self = signup("reset02", "HUB");
+        String hashBefore = jdbc.queryForObject("select password_hash from auth.p_users where id = ?", String.class, self);
+
+        mockMvc.perform(post("/api/v1/users/{userId}/password-reset", self)
+                        .header("X-User-Id", self.toString()).header("X-User-Role", "MASTER"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CANNOT_RESET_OWN_PASSWORD"));
+        assertThat(jdbc.queryForObject("select password_hash from auth.p_users where id = ?", String.class, self))
+                .isEqualTo(hashBefore);
     }
 }
