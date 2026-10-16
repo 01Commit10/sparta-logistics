@@ -157,6 +157,43 @@ class AuthenticationServiceTest {
     }
 
     @Nested
+    @DisplayName("경로 정규화 (인가 우회 방지)")
+    class PathNormalization {
+
+        @Test
+        @DisplayName("퍼센트 인코딩으로 MASTER 경로를 숨겨도 디코딩한 경로로 판단해 ACCESS_DENIED")
+        void encodedMasterPath() {
+            AuthenticationService service = new AuthenticationService(POLICY, new FakeTokenVerifier(validToken(Role.USER)), new FakeTokenStateReader());
+
+            StepVerifier.create(service.authenticate(request("GET", "/api/v1/%75sers/u-1", "Bearer t")))
+                    .assertNext(result -> assertDenied(result, CommonErrorCode.ACCESS_DENIED))
+                    .verifyComplete();
+        }
+
+        @Test
+        @DisplayName("해석이 달라질 수 있는 경로(;, 인코딩된 점 등)는 토큰 검증 전에 INVALID_INPUT")
+        void malformedPath() {
+            FakeTokenVerifier verifier = new FakeTokenVerifier(validToken(Role.MASTER));
+            AuthenticationService service = new AuthenticationService(POLICY, verifier, new FakeTokenStateReader());
+
+            StepVerifier.create(service.authenticate(request("GET", "/api/v1/users;x/u-1", "Bearer t")))
+                    .assertNext(result -> assertDenied(result, CommonErrorCode.INVALID_INPUT))
+                    .verifyComplete();
+            assertThat(verifier.received()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("HEAD는 GET 규칙을 따른다 (USER의 HEAD /users/* → ACCESS_DENIED)")
+        void headFollowsGet() {
+            AuthenticationService service = new AuthenticationService(POLICY, new FakeTokenVerifier(validToken(Role.USER)), new FakeTokenStateReader());
+
+            StepVerifier.create(service.authenticate(request("HEAD", "/api/v1/users/u-1", "Bearer t")))
+                    .assertNext(result -> assertDenied(result, CommonErrorCode.ACCESS_DENIED))
+                    .verifyComplete();
+        }
+    }
+
+    @Nested
     @DisplayName("토큰 상태·비밀번호 변경 강제 (GW-07)")
     class TokenStateCheck {
 

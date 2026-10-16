@@ -39,6 +39,24 @@ class EndpointRuleTest {
     }
 
     @Test
+    @DisplayName("HEAD 요청은 GET 규칙에도 매칭된다 (HEAD는 GET과 같은 처리를 하고 본문만 뺀다)")
+    void headMatchesGetRule() {
+        EndpointRule rule = EndpointRule.parse("GET /api/v1/users/*");
+
+        assertThat(rule.matches("HEAD", "/api/v1/users/u-1")).isTrue();
+        assertThat(rule.matches("head", "/api/v1/users/u-1")).isTrue();
+    }
+
+    @Test
+    @DisplayName("HEAD만 적은 규칙에 GET은 매칭되지 않는다")
+    void getDoesNotMatchHeadRule() {
+        EndpointRule rule = EndpointRule.parse("HEAD /a/*");
+
+        assertThat(rule.matches("HEAD", "/a/1")).isTrue();
+        assertThat(rule.matches("GET", "/a/1")).isFalse();
+    }
+
+    @Test
     @DisplayName("규칙의 메서드·공백도 정리해서 읽는다")
     void trimsSpec() {
         EndpointRule rule = EndpointRule.parse("  get , patch   /a/* ");

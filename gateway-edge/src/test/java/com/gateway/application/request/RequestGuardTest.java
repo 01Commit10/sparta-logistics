@@ -21,6 +21,13 @@ class RequestGuardTest {
     }
 
     @Test
+    @DisplayName("정책 비교용 경로는 디코딩한 값이고, 해석이 달라질 수 있는 경로는 비어 있다")
+    void policyPath() {
+        assertThat(guard.policyPath("/%69nternal/v1/users/1")).contains("/internal/v1/users/1");
+        assertThat(guard.policyPath("/api/v1/%2e%2e/internal/x")).isEmpty();
+    }
+
+    @Test
     @DisplayName("신뢰 헤더 판단을 도메인 규칙에 맡긴다")
     void isTrustedHeader() {
         assertThat(guard.isTrustedHeader("X-User-Id")).isTrue();

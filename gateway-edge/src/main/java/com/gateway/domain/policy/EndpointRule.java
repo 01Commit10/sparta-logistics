@@ -8,10 +8,13 @@ import java.util.stream.Collectors;
 /**
  * 메서드 + 경로 규칙 하나. 설정 형식은 {@code "GET,PATCH /api/v1/users/*"}이고, 메서드 {@code *}는 전체를 뜻한다.
  * 경로 비교는 {@link PathRule}을 따른다.
+ * HEAD 요청은 GET 규칙에도 매칭된다. 서비스(Spring MVC)는 HEAD를 GET 핸들러로 처리하므로, GET만 막으면 HEAD로 우회된다.
  */
 public final class EndpointRule {
 
     private static final String ANY_METHOD = "*";
+    private static final String GET = "GET";
+    private static final String HEAD = "HEAD";
     private static final Set<String> KNOWN_METHODS =
             Set.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
 
@@ -39,7 +42,9 @@ public final class EndpointRule {
     }
 
     public boolean matches(String method, String requestPath) {
-        boolean methodMatches = methods.contains(ANY_METHOD) || methods.contains(method.toUpperCase(Locale.ROOT));
+        String upper = method.toUpperCase(Locale.ROOT);
+        boolean methodMatches = methods.contains(ANY_METHOD) || methods.contains(upper)
+                || (HEAD.equals(upper) && methods.contains(GET));
         return methodMatches && path.matches(requestPath);
     }
 
