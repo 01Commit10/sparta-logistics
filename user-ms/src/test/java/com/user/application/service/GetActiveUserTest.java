@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class GetActiveUserTest {
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserQueryService service = new UserQueryService(userRepository, new FakePasswordHasher());
+    private final UserQueryService service = new UserQueryService(userRepository);
 
     private User saved(String username, String slackId) {
         return userRepository.save(User.signup(UUID.randomUUID(), Username.of(username), "홍길동", "hashed", slackId,

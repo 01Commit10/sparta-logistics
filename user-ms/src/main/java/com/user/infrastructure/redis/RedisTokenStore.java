@@ -7,10 +7,12 @@ import com.user.domain.token.TokenStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -33,6 +35,9 @@ public class RedisTokenStore implements TokenStore {
     /** 로그아웃한 Access Token의 값. Gateway는 키가 있는지만 본다 (02 인증 계약 2.2) */
     private static final String BLACKLIST_VALUE = "logout";
 
+    private static final RedisScript<Long> DELETE_IF_MATCHES = RedisScript.of(
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end", Long.class);
+
     @Override
     public void saveRefresh(UUID userId, String jti, Duration ttl) {
         write("Refresh Token 저장", () -> redis.opsForValue().set(AuthContract.REDIS_REFRESH_PREFIX + userId, jti, ttl));
@@ -47,6 +52,13 @@ public class RedisTokenStore implements TokenStore {
     @Override
     public void deleteRefresh(UUID userId) {
         write("Refresh Token 삭제", () -> redis.delete(AuthContract.REDIS_REFRESH_PREFIX + userId));
+    }
+
+    /** 읽고 비교하고 지우는 것을 Redis 안에서 한 번에 한다 (그 사이에 다른 로그인이 저장한 jti를 지우지 않게) */
+    @Override
+    public void deleteRefreshIfMatches(UUID userId, String jti) {
+        write("Refresh Token 조건부 삭제", () -> redis.execute(DELETE_IF_MATCHES,
+                List.of(AuthContract.REDIS_REFRESH_PREFIX + userId), jti));
     }
 
     @Override

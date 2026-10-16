@@ -81,4 +81,14 @@ class RedisTokenStoreFailureTest {
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_UNAVAILABLE));
     }
+
+    @Test
+    @DisplayName("리뷰: 내 Refresh만 지우기(Lua) 중 Redis 연결 실패도 AUTH_UNAVAILABLE")
+    void deleteIfMatchesConnectionFailure() {
+        RedisTokenStore tokenStore = tokenStore();
+
+        assertThatThrownBy(() -> tokenStore.deleteRefreshIfMatches(UUID.randomUUID(), "jti-1"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_UNAVAILABLE));
+    }
 }

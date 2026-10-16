@@ -23,6 +23,12 @@ public class FakeUserRepository implements UserRepository {
     private int lockCount;
     private UserSearchCondition lastCondition;
     private PageQuery lastPageQuery;
+    private Runnable afterNextFindActiveById;
+
+    /** 다음 findActiveById가 값을 읽은 직후 한 번 실행한다 (읽은 뒤 다른 요청이 끼어드는 경우) */
+    public void afterNextFindActiveById(Runnable action) {
+        this.afterNextFindActiveById = action;
+    }
 
     /** 잠금 조회(countActiveMastersForUpdate) 횟수 */
     public int lockCount() {
@@ -42,7 +48,13 @@ public class FakeUserRepository implements UserRepository {
 
     @Override
     public Optional<User> findActiveById(UUID id) {
-        return findById(id).filter(User::isActive);
+        Optional<User> found = findById(id).filter(User::isActive);
+        Runnable action = afterNextFindActiveById;
+        afterNextFindActiveById = null;
+        if (action != null) {
+            action.run();
+        }
+        return found;
     }
 
     @Override

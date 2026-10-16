@@ -33,7 +33,7 @@ class UserSearchServiceTest {
     private static final Pageable DEFAULT_PAGE = PageRequest.of(0, 10, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.asc("id")));
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserQueryService service = new UserQueryService(userRepository, new FakePasswordHasher());
+    private final UserQueryService service = new UserQueryService(userRepository);
 
     private User signup(String username, String name, OrganizationType type) {
         return userRepository.save(User.signup(UUID.randomUUID(), Username.of(username), name, "hashed",
