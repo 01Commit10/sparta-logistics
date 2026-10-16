@@ -20,6 +20,7 @@ class AuthErrorCodeTest {
             "TOKEN_REVOKED,            UNAUTHORIZED",
             "PASSWORD_CHANGE_REQUIRED, FORBIDDEN",
             "AUTH_UNAVAILABLE,         SERVICE_UNAVAILABLE",
+            "REFRESH_TOKEN_INVALID,    UNAUTHORIZED",
     })
     @DisplayName("설계 문서의 HTTP 상태와 같다")
     void statusMatchesDesign(AuthErrorCode code, HttpStatus status) {

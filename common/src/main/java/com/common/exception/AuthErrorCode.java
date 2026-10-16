@@ -18,6 +18,8 @@ public enum AuthErrorCode implements ErrorCode {
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "인증 토큰이 만료되었습니다."),
     TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "유효하지 않은 인증 토큰입니다."),
     TOKEN_REVOKED(HttpStatus.UNAUTHORIZED, "더 이상 사용할 수 없는 인증 토큰입니다. 다시 로그인해 주세요."),
+    // user-ms 재발급: 서명·만료·종류 오류, 로그아웃·교체된 토큰, 비활성 사용자를 구분하지 않는다 (U07)
+    REFRESH_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "유효하지 않은 Refresh Token입니다. 다시 로그인해 주세요."),
 
     // 403 - 관리자가 초기화한 비밀번호를 아직 변경하지 않음
     PASSWORD_CHANGE_REQUIRED(HttpStatus.FORBIDDEN, "비밀번호를 변경한 뒤 이용할 수 있습니다."),
