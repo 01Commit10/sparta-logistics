@@ -2,7 +2,9 @@ package com.user.application.facade;
 
 import com.user.application.dto.ChangeRoleCommand;
 import com.user.application.dto.DeactivateUserCommand;
+import com.user.application.dto.ResetPasswordCommand;
 import com.user.application.dto.RoleChangeResult;
+import com.user.application.dto.TemporaryPasswordResult;
 import com.user.application.dto.UserResult;
 import com.user.application.service.TokenService;
 import com.user.application.service.UserCommandService;
@@ -39,5 +41,13 @@ public class UserAdminFacade {
             tokenService.revokeAll(command.userId());
         }
         return result.user();
+    }
+
+    /** USR-21 비밀번호 초기화. 대상이 이미 받은 토큰을 무효로 해 임시 비밀번호로 다시 로그인하게 한다 */
+    @Transactional
+    public TemporaryPasswordResult resetPassword(ResetPasswordCommand command) {
+        TemporaryPasswordResult result = userCommandService.resetPassword(command);
+        tokenService.revokeAll(command.userId());
+        return result;
     }
 }

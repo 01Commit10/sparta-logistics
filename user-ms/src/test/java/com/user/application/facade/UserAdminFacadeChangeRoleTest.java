@@ -12,6 +12,7 @@ import com.user.fake.FakePasswordHasher;
 import com.user.fake.FakeRefreshTokenParser;
 import com.user.fake.FakeTokenIssuer;
 import com.user.fake.FakeTokenStore;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,7 @@ class UserAdminFacadeChangeRoleTest {
     private final FakeUserRepository userRepository = new FakeUserRepository();
     private final FakeTokenStore tokenStore = new FakeTokenStore();
     private final UserAdminFacade facade = new UserAdminFacade(
-            new UserCommandService(userRepository, new FakePasswordHasher()),
+            new UserCommandService(userRepository, new FakePasswordHasher(), new FakeTemporaryPasswordGenerator()),
             new TokenService(new FakeTokenIssuer(), new FakeRefreshTokenParser(), tokenStore, Clock.systemUTC()));
 
     private User loggedIn() {

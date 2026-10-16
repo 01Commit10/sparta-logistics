@@ -8,6 +8,7 @@ import com.user.domain.entity.User;
 import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class SignupTest {
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher());
+    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher(), new FakeTemporaryPasswordGenerator());
 
     private static SignupCommand command(String username, String password, String slackId, String organizationType) {
         return new SignupCommand(username, password, "홍길동", slackId, organizationType, "부산수산");

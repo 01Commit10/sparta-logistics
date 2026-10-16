@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * 토큰 무효화(Redis)가 실패하면 비밀번호 변경·탈퇴·비활성화·역할 변경이 DB에 남지 않는다
- * (U10 테스트 6, @Transactional은 AccountFacade·UserAdminFacade).
+ * (U10 테스트 6, U18 비밀번호 초기화 포함, @Transactional은 AccountFacade·UserAdminFacade).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -121,5 +121,22 @@ class AccountRollbackTest {
 
         assertThat(jdbc.queryForObject("select role from auth.p_users where id = ?", String.class, target))
                 .isEqualTo("USER");
+    }
+
+    @Test
+    @DisplayName("U18: 비밀번호 초기화 중 Redis 실패 → 503, 임시 비밀번호가 응답에 없고 이전 비밀번호·변경 불필요 상태 그대로 (DB 롤백)")
+    void resetPasswordRollsBack() throws Exception {
+        UUID target = signup("rb05");
+        String hashBefore = jdbc.queryForObject("select password_hash from auth.p_users where id = ?", String.class, target);
+
+        mockMvc.perform(post("/api/v1/users/{userId}/password-reset", target)
+                        .header("X-User-Id", "00000000-0000-0000-0000-0000000000aa").header("X-User-Role", "MASTER"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("AUTH_UNAVAILABLE"))
+                .andExpect(jsonPath("$.temporaryPassword").doesNotExist());
+
+        assertThat(jdbc.queryForMap("select password_hash, password_change_required from auth.p_users where id = ?", target))
+                .containsEntry("password_hash", hashBefore)
+                .containsEntry("password_change_required", false);
     }
 }
