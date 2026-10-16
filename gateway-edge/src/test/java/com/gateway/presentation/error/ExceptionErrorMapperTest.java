@@ -73,6 +73,13 @@ class ExceptionErrorMapperTest {
     }
 
     @Test
+    @DisplayName("SCG CircuitBreaker 필터가 열림을 바꿔 던진 ServiceUnavailableException → SERVICE_UNAVAILABLE (GW-10, fallbackUri 없음)")
+    void circuitOpen_wrappedByGateway() {
+        assertThat(mapper.map(new org.springframework.cloud.gateway.support.ServiceUnavailableException()))
+                .isEqualTo(CommonErrorCode.SERVICE_UNAVAILABLE);
+    }
+
+    @Test
     @DisplayName("원인 예외로 감싸져 있어도 원인으로 판단한다")
     void unwrapsCause() {
         assertThat(mapper.map(new RuntimeException(new ConnectException("Connection refused"))))

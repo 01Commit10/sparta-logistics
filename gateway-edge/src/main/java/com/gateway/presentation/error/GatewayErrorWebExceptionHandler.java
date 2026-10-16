@@ -1,5 +1,6 @@
 package com.gateway.presentation.error;
 
+import com.common.auth.AuthContract;
 import com.common.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
@@ -34,7 +35,8 @@ public class GatewayErrorWebExceptionHandler implements ErrorWebExceptionHandler
         ErrorCode errorCode = mapper.map(error);
         String path = exchange.getRequest().getPath().value();
         if (errorCode.getHttpStatus().is5xxServerError()) {
-            log.warn("[GatewayError] {} {} → {} ({})", exchange.getRequest().getMethod(), path, errorCode.getCode(), error.toString());
+            log.warn("[GatewayError] {} {} → {} ({}) requestId={}", exchange.getRequest().getMethod(), path, errorCode.getCode(),
+                    error.toString(), exchange.getRequest().getHeaders().getFirst(AuthContract.HEADER_REQUEST_ID));
         } else {
             log.debug("[GatewayError] {} {} → {}", exchange.getRequest().getMethod(), path, errorCode.getCode());
         }

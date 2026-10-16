@@ -13,3 +13,8 @@ spring:
 # 테스트 전용 키 (운영 키 아님)
 jwt:
   secret-key: dGVzdC1zZWNyZXQta2V5LWZvci1nYXRld2F5LWVkZ2UtMzJieXRlcyE=
+
+# 타임아웃을 줄여 통합 테스트를 빠르게 한다 (GW-09). 운영 값은 TimeoutPropertiesTest가 application.yaml로 확인한다
+GW_RESPONSE_TIMEOUT: 1s
+GW_ORDER_RESPONSE_TIMEOUT_MS: 3000
+GW_CB_OPEN_WAIT: 1s

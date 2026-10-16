@@ -87,6 +87,7 @@ class AuthenticationFilterTest {
         assertThat(headers.getFirst("X-Token-Jti")).isEqualTo("jti-1");
         assertThat(headers.getFirst("X-Token-Exp")).isEqualTo(String.valueOf(ISSUED_AT.plusSeconds(1800).getEpochSecond()));
         assertThat(headers.getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer t");
+        assertThat(exchange.<String>getAttribute(GatewayAttributes.USER_ID)).isEqualTo(USER_ID.toString());
     }
 
     @Test
@@ -99,6 +100,7 @@ class AuthenticationFilterTest {
 
         assertThat(chain.wasCalled()).isTrue();
         assertThat(chain.passed().getRequest().getHeaders().getFirst("X-User-Id")).isNull();
+        assertThat(exchange.getAttributes()).doesNotContainKey(GatewayAttributes.USER_ID);
     }
 
     @Test
