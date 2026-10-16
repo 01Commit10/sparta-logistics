@@ -1,16 +1,16 @@
-package com.hub.hub.presentation.dto;
+package com.hub.hub.application.dto;
 
 import com.hub.hub.domain.entity.Hub;
 
 import java.util.UUID;
 
-public record HubResponse(
+public record HubResult(
         UUID id,
         String name,
         String address
 ) {
-    public static HubResponse fromEntity(Hub hub) {
-        return new HubResponse(
+    public static HubResult fromEntity(Hub hub) {
+        return new HubResult(
                 hub.getId(),
                 hub.getName(),
                 hub.getAddress()

@@ -2,7 +2,7 @@ package com.hub.hub.presentation.controller;
 
 import com.common.auth.AuthContract;
 import com.hub.hub.application.service.HubService;
-import com.hub.hub.presentation.dto.HubResponse;
+import com.hub.hub.presentation.dto.HubResponseDto;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,23 +18,23 @@ public class HubController {
     }
     //전체 허브 조회
     @GetMapping
-    public List<HubResponse> getHubs(
+    public List<HubResponseDto> getHubs(
             @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId
     ) {
         return hubService.getHubs()
                 .stream()
-                .map(HubResponse::fromEntity)
+                .map(HubResponseDto::from)
                 .toList();
     }
 
 
     //단일 허브 조회
     @GetMapping("/{hubId}")
-    public HubResponse getHub(
+    public HubResponseDto getHub(
             @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId,
             @PathVariable UUID hubId
     ){
-        return HubResponse.fromEntity(hubService.getHub(hubId));
+        return HubResponseDto.from(hubService.getHub(hubId));
     }
 }
 
