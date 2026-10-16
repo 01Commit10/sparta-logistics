@@ -1,5 +1,6 @@
 package com.gateway.presentation.filter;
 
+import com.common.auth.AuthContract;
 import com.gateway.application.auth.AuthenticationService;
 import com.gateway.application.auth.dto.AuthRequest;
 import com.gateway.application.auth.dto.AuthResult;
@@ -50,6 +51,8 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
         if (result.headers().isEmpty()) {
             return chain.filter(exchange);
         }
+        // 접근 로그(RequestIdFilter)에 사용자를 남긴다
+        exchange.getAttributes().put(GatewayAttributes.USER_ID, result.headers().get(AuthContract.HEADER_USER_ID));
         ServerHttpRequest withUserHeaders = exchange.getRequest().mutate()
                 .headers(headers -> result.headers().forEach(headers::set))
                 .build();
