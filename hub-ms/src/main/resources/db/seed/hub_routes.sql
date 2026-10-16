@@ -2,8 +2,22 @@
 -- IMPORTANT: Verify map-provider storage/reuse license before committing/deploying.
 -- Assumes hub.p_hub_routes (id, from_hub_id, to_hub_id, distance_km, duration_min)
 -- Assumes FK hub IDs match hub.p_hubs seeded UUIDs and required audit columns have defaults.
-INSERT INTO hub.p_hub_routes (id, from_hub_id, to_hub_id, distance_km, duration_min)
-VALUES
+INSERT INTO hub.p_hub_routes (
+    id,
+    from_hub_id,
+    to_hub_id,
+    distance_km,
+    duration_min,
+    created_at
+)
+SELECT
+    seed.id,
+    seed.from_hub_id,
+    seed.to_hub_id,
+    seed.distance_km,
+    seed.duration_min,
+    CURRENT_TIMESTAMP
+FROM (VALUES
     ('e43b2eeb-da7e-5043-882b-dcd29a017942'::uuid, '10000000-0000-4000-8000-000000000001'::uuid, '10000000-0000-4000-8000-000000000002'::uuid, 43.04, 49),
     ('db7f1104-733e-5b06-aea8-337bdc1dced3'::uuid, '10000000-0000-4000-8000-000000000001'::uuid, '10000000-0000-4000-8000-000000000003'::uuid, 50.98, 46),
     ('35b48bc7-65ce-5e0b-9feb-be6ebb16fbfc'::uuid, '10000000-0000-4000-8000-000000000001'::uuid, '10000000-0000-4000-8000-000000000004'::uuid, 379.88, 240),
@@ -276,4 +290,12 @@ VALUES
     ('b805f350-c456-58b5-8e03-451b5a97635d'::uuid, '10000000-0000-4000-8000-000000000017'::uuid, '10000000-0000-4000-8000-000000000014'::uuid, 221.50, 148),
     ('e33b7074-42b8-5b3d-800a-4009dbe6dc15'::uuid, '10000000-0000-4000-8000-000000000017'::uuid, '10000000-0000-4000-8000-000000000015'::uuid, 269.75, 170),
     ('f66fa2ea-0d84-5763-aa85-387bd0e5baf1'::uuid, '10000000-0000-4000-8000-000000000017'::uuid, '10000000-0000-4000-8000-000000000016'::uuid, 203.77, 132)
-ON CONFLICT (from_hub_id, to_hub_id) DO NOTHING;
+     ) AS seed (
+                id,
+                from_hub_id,
+                to_hub_id,
+                distance_km,
+                duration_min
+    )
+WHERE true
+    ON CONFLICT (from_hub_id, to_hub_id) DO NOTHING;
