@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -147,7 +146,7 @@ class SignupTest {
     private static User withdrawnUser(String username, String slackId) {
         UUID id = UUID.randomUUID();
         User user = User.signup(id, Username.of(username), "탈퇴자", "hashed", slackId, OrganizationType.HUB, "허브");
-        user.withdraw(id, LocalDateTime.now());
+        user.withdraw(id);
         return user;
     }
 }

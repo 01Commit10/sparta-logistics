@@ -17,7 +17,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 /**
  * 4계층 의존 규칙 (docs/plan/01 구현 원칙 2장).
  * presentation → application → domain ← infrastructure
- * domain 예외 허용: JPA 어노테이션(jakarta.persistence), common 예외(공유 커널)
+ * domain 예외 허용: JPA 어노테이션(jakarta.persistence), common 예외·BaseEntity(공유 커널. Spring Data Auditing 어노테이션은 BaseEntity 안에만 있음)
  */
 @AnalyzeClasses(packages = "com.user", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {

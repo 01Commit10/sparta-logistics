@@ -21,7 +21,6 @@ class UserTest {
 
     static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     static final UUID MASTER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
-    static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 15, 9, 0);
 
     static User signupUser() {
         return User.signup(USER_ID, Username.of("user01"), "홍길동", "hashed", "U001",
@@ -104,9 +103,10 @@ class UserTest {
         void withdraw() {
             User user = signupUser();
 
-            user.withdraw(USER_ID, NOW);
+            LocalDateTime before = LocalDateTime.now();
+            user.withdraw(USER_ID);
 
-            assertThat(user.getDeletedAt()).isEqualTo(NOW);
+            assertThat(user.getDeletedAt()).isBetween(before, LocalDateTime.now());
             assertThat(user.getDeletedBy()).isEqualTo(USER_ID);
             assertThat(user.isActive()).isFalse();
         }
@@ -115,16 +115,16 @@ class UserTest {
         @DisplayName("이미 삭제된 사용자는 다시 삭제할 수 없다")
         void withdraw_alreadyDeleted() {
             User user = signupUser();
-            user.withdraw(USER_ID, NOW);
+            user.withdraw(USER_ID);
 
-            assertError(() -> user.withdraw(MASTER_ID, NOW), UserErrorCode.USER_ALREADY_DELETED);
+            assertError(() -> user.withdraw(MASTER_ID), UserErrorCode.USER_ALREADY_DELETED);
         }
 
         @Test
         @DisplayName("재활성화하면 삭제 기록이 지워진다")
         void restore() {
             User user = signupUser();
-            user.withdraw(USER_ID, NOW);
+            user.withdraw(USER_ID);
 
             user.restore();
 
