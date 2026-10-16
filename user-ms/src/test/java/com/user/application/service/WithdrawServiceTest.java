@@ -7,6 +7,7 @@ import com.user.domain.entity.User;
 import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,7 @@ class WithdrawServiceTest {
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
     private final FakePasswordHasher passwordHasher = new FakePasswordHasher();
-    private final UserCommandService service = new UserCommandService(userRepository, passwordHasher);
+    private final UserCommandService service = new UserCommandService(userRepository, passwordHasher, new FakeTemporaryPasswordGenerator());
 
     private User user(String username, String slackId) {
         return userRepository.save(User.signup(UUID.randomUUID(), Username.of(username), "홍길동",

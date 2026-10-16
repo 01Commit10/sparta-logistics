@@ -33,6 +33,8 @@ public enum UserErrorCode implements ErrorCode {
     DELIVERY_MANAGER_REQUIRES_HUB(HttpStatus.CONFLICT, "허브 소속 사용자만 배송담당자로 지정할 수 있습니다."),
     // 관리자 비활성화는 비밀번호를 다시 확인하지 않으므로 본인 계정은 탈퇴(비밀번호 확인)로만 없앤다 (U17)
     CANNOT_DEACTIVATE_SELF(HttpStatus.CONFLICT, "본인 계정은 탈퇴 기능을 이용해 주세요."),
+    // 관리자 초기화는 현재 비밀번호를 확인하지 않으므로 본인 비밀번호는 비밀번호 변경(현재 비밀번호 확인)으로만 바꾼다 (U18)
+    CANNOT_RESET_OWN_PASSWORD(HttpStatus.CONFLICT, "본인 비밀번호는 비밀번호 변경 기능을 이용해 주세요."),
     ;
 
     private final HttpStatus httpStatus;

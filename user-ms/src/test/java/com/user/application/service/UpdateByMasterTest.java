@@ -11,6 +11,7 @@ import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.UserRole;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class UpdateByMasterTest {
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher());
+    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher(), new FakeTemporaryPasswordGenerator());
 
     private User saved(String username, OrganizationType type, String organizationName) {
         return userRepository.save(User.signup(UUID.randomUUID(), Username.of(username), "홍길동", "hashed",
@@ -58,7 +59,7 @@ class UpdateByMasterTest {
     void organizationNameOnly() {
         User user = saved("user01", OrganizationType.COMPANY, "스파르타상사");
         UUID companyId = UUID.randomUUID();
-        user.linkOrganization(OrganizationType.COMPANY, companyId);
+        user.linkOrganization(OrganizationType.COMPANY, companyId, "스파르타상사");
 
         UserResult result = service.updateByMaster(new UpdateUserCommand(user.getId(), null, null, null, "스파르타물산"));
 
@@ -85,7 +86,7 @@ class UpdateByMasterTest {
     @DisplayName("3. 소속 유형을 바꾸면 소속명도 바뀌고 연결된 조직 ID는 지워진다")
     void organizationTypeChange() {
         User user = saved("user01", OrganizationType.COMPANY, "스파르타상사");
-        user.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID());
+        user.linkOrganization(OrganizationType.COMPANY, UUID.randomUUID(), "스파르타상사");
 
         UserResult result = service.updateByMaster(new UpdateUserCommand(user.getId(), null, null, "HUB", "서울센터"));
 

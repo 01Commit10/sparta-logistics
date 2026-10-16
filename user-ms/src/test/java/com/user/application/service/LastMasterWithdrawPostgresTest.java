@@ -8,6 +8,7 @@ import com.user.domain.entity.User;
 import com.user.domain.repository.UserRepository;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.infrastructure.persistence.UserRepositoryImpl;
 import com.user.infrastructure.persistence.UserSchemaInitializer;
 import org.junit.jupiter.api.AfterEach;
@@ -43,7 +44,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 @DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=create")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({UserRepositoryImpl.class, UserSchemaInitializer.class, UserCommandService.class, FakePasswordHasher.class})
+@Import({UserRepositoryImpl.class, UserSchemaInitializer.class, UserCommandService.class, FakePasswordHasher.class,
+        FakeTemporaryPasswordGenerator.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class LastMasterWithdrawPostgresTest {
 
