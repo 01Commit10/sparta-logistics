@@ -7,6 +7,8 @@ import com.delivery.domain.repository.DeliveryRepository;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -33,6 +35,16 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
     @Override
     public Optional<Delivery> findById(UUID id) {
         return jpaRepository.findByIdAndDeletedAtIsNull(id);
+    }
+
+    @Override
+    public Page<Delivery> findAll(Pageable pageable) {
+        return jpaRepository.findAllByDeletedAtIsNull(pageable);
+    }
+
+    @Override
+    public Page<Delivery> findAllByDeliveryManagerId(UUID deliveryManagerId, Pageable pageable) {
+        return jpaRepository.findAllByDeliveryManagerIdAndDeletedAtIsNull(deliveryManagerId, pageable);
     }
 
 

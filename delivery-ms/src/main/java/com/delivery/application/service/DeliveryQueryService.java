@@ -7,6 +7,8 @@ import com.delivery.application.dto.result.DeliveryResult;
 import com.delivery.domain.entity.Delivery;
 import com.delivery.domain.repository.DeliveryRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,5 +32,13 @@ public class DeliveryQueryService {
         }
 
         return DeliveryResult.from(delivery);
+    }
+
+    public Page<DeliveryResult> getDeliveries(UUID userId, Pageable pageable) {
+        Page<Delivery> deliveries = userClient.isDeliveryManager(userId)
+                ? deliveryRepository.findAllByDeliveryManagerId(userId, pageable)
+                : deliveryRepository.findAll(pageable);
+
+        return deliveries.map(DeliveryResult::from);
     }
 }

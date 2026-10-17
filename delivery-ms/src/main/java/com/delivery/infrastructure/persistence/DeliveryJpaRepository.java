@@ -1,6 +1,8 @@
 package com.delivery.infrastructure.persistence;
 
 import com.delivery.domain.entity.Delivery;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -10,4 +12,7 @@ public interface DeliveryJpaRepository extends JpaRepository<Delivery, UUID> {
 
     Optional<Delivery> findByIdAndDeletedAtIsNull(UUID id);
 
+    Page<Delivery> findAllByDeletedAtIsNull(Pageable pageable);
+
+    Page<Delivery> findAllByDeliveryManagerIdAndDeletedAtIsNull(UUID deliveryManagerId, Pageable pageable);
 }
