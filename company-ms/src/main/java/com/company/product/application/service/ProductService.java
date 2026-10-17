@@ -10,6 +10,7 @@ import com.company.company.domain.entity.Company;
 import com.company.company.domain.repository.CompanyRepository;
 import com.company.product.application.dto.CreateProductCommand;
 import com.company.product.application.dto.ProductResult;
+import com.company.product.application.dto.UpdateProductCommand;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,7 @@ public class ProductService {
     @Transactional
     public ProductResult createProduct(CreateProductCommand command) {
         Company company = findActiveCompany(command.companyId());
-        validateCanManage(company, command);
+        validateCanManage(company, command.actorId(), command.actorIsMaster());
 
         Product product = Product.create(
                 company,
@@ -54,9 +55,20 @@ public class ProductService {
         return productRepository.findActiveByCompanyId(companyId, query).map(ProductResult::from);
     }
 
+    // 상품·소속 업체 존재 확인 → 권한 확인 순서. 변경은 dirty checking으로 반영
+    @Transactional
+    public ProductResult updateProduct(UpdateProductCommand command) {
+        Product product = findActiveProduct(command.productId());
+        Company company = findActiveCompany(product.getCompany().getId());
+        validateCanManage(company, command.actorId(), command.actorIsMaster());
+
+        product.update(command.name(), command.description(), command.unitPrice());
+        return ProductResult.from(product);
+    }
+
     // MASTER 또는 해당 업체의 관리자 본인만 (07 서비스 정책 4장 권한)
-    private void validateCanManage(Company company, CreateProductCommand command) {
-        if (!command.actorIsMaster() && !company.isManagedBy(command.actorId())) {
+    private void validateCanManage(Company company, UUID actorId, boolean actorIsMaster) {
+        if (!actorIsMaster && !company.isManagedBy(actorId)) {
             throw new BusinessException(CommonErrorCode.ACCESS_DENIED);
         }
     }

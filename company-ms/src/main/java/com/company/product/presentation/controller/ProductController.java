@@ -8,6 +8,7 @@ import com.common.page.PageResponse;
 import com.company.product.application.service.ProductService;
 import com.company.product.presentation.dto.CreateProductRequest;
 import com.company.product.presentation.dto.ProductResponse;
+import com.company.product.presentation.dto.UpdateProductRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +38,15 @@ public class ProductController {
     @GetMapping("/products/{productId}")
     public ProductResponse getProduct(@PathVariable UUID productId) {
         return ProductResponse.from(productService.getProduct(productId));
+    }
+
+    // MASTER·업체 관리자 본인. 보낸 필드만 수정 (PATCH)
+    @PatchMapping("/products/{productId}")
+    public ProductResponse updateProduct(@CurrentUser AuthUser authUser,
+                                         @PathVariable UUID productId,
+                                         @Valid @RequestBody UpdateProductRequest request) {
+        return ProductResponse.from(productService.updateProduct(
+                request.toCommand(productId, authUser.id(), authUser.isMaster())));
     }
 
     @GetMapping("/companies/{companyId}/products")
