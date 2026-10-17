@@ -9,6 +9,9 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+import java.util.UUID;
+
 @Repository
 @RequiredArgsConstructor
 public class DeliveryRepositoryImpl implements DeliveryRepository {
@@ -25,6 +28,11 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
         } catch (DataIntegrityViolationException e) {
             throw translate(e);
         }
+    }
+
+    @Override
+    public Optional<Delivery> findById(UUID id) {
+        return jpaRepository.findByIdAndDeletedAtIsNull(id);
     }
 
 

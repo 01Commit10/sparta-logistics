@@ -17,13 +17,14 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Delivery extends BaseEntity {
 
-    @Id
+    @Id @GeneratedValue
     private UUID id;
 
     @Column(name = "order_id", nullable = false)
     private UUID orderId;
 
     @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
     private DeliveryStatus status;
 
     @Column(name = "departure_hub_id", nullable = false)
