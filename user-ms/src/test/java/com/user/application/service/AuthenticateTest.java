@@ -1,8 +1,7 @@
 package com.user.application.service;
 
-import com.common.exception.BusinessException;
-import com.common.exception.UserErrorCode;
 import com.user.application.dto.AuthenticatedUser;
+import com.user.application.dto.UserCredential;
 import com.user.domain.entity.User;
 import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.Username;
@@ -14,88 +13,69 @@ import org.junit.jupiter.api.Test;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * USR-02 로그인의 ID·비밀번호 확인 (U05 테스트 1~2).
+ * USR-02 로그인의 조회 단계 (U05 테스트 1~2). 비밀번호 비교와 INVALID_CREDENTIALS는 AuthFacadeLoginTest.
+ * 조회는 읽기 트랜잭션에서, BCrypt 비교는 트랜잭션 밖에서 하도록 둘을 나눴다 (리뷰: readOnly 트랜잭션 안의 BCrypt).
  */
 class AuthenticateTest {
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
     private final FakePasswordHasher passwordHasher = new FakePasswordHasher();
-    private final UserQueryService service = new UserQueryService(userRepository, passwordHasher);
+    private final UserQueryService service = new UserQueryService(userRepository);
 
     private User saved(String username, String rawPassword) {
         return userRepository.save(User.signup(UUID.randomUUID(), Username.of(username), "홍길동",
                 passwordHasher.hash(rawPassword), "U-" + username, OrganizationType.COMPANY, "스파르타상사"));
     }
 
-    private void assertInvalidCredentials(String username, String rawPassword) {
-        assertThatThrownBy(() -> service.authenticate(username, rawPassword))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(UserErrorCode.INVALID_CREDENTIALS));
-    }
-
     @Test
-    @DisplayName("ID·비밀번호가 맞으면 사용자 ID, 역할, 비밀번호 변경 필요 여부를 돌려준다")
-    void success() {
+    @DisplayName("활성 사용자의 username으로 ID를 찾는다")
+    void findsActiveId() {
         User user = saved("user01", "Abcd123!");
 
-        AuthenticatedUser result = service.authenticate("user01", "Abcd123!");
-
-        assertThat(result).isEqualTo(new AuthenticatedUser(user.getId(), "USER", false));
+        assertThat(service.findActiveIdByUsername("user01")).contains(user.getId());
     }
 
     @Test
-    @DisplayName("MASTER는 역할이 MASTER로 나온다")
-    void master() {
-        User master = userRepository.save(User.initialMaster(UUID.randomUUID(), Username.of("master01"), "관리자",
-                passwordHasher.hash("Master!2345"), "M001"));
+    @DisplayName("없는 ID·탈퇴(비활성화) 계정·가입 규칙에 맞지 않는 ID는 empty (형식 오류를 내지 않음)")
+    void unknownOrWithdrawn() {
+        User user = saved("user01", "Abcd123!");
+        saved("user02", "Abcd123!").withdraw(user.getId());
 
-        assertThat(service.authenticate("master01", "Master!2345"))
-                .isEqualTo(new AuthenticatedUser(master.getId(), "MASTER", false));
+        assertThat(service.findActiveIdByUsername("user03")).isEmpty();
+        assertThat(service.findActiveIdByUsername("user02")).isEmpty();
+        assertThat(service.findActiveIdByUsername("USER01")).isEmpty();
+        assertThat(service.findActiveIdByUsername("u")).isEmpty();
     }
 
     @Test
-    @DisplayName("관리자가 비밀번호를 초기화한 사용자는 변경 필요(true)로 나온다")
-    void passwordChangeRequired() {
+    @DisplayName("자격 조회: 저장된 해시와 토큰에 넣을 ID·역할·비밀번호 변경 필요 여부")
+    void credential() {
         User user = saved("user01", "Abcd123!");
         user.requirePasswordChange(passwordHasher.hash("Temp123!"));
 
-        assertThat(service.authenticate("user01", "Temp123!").passwordChangeRequired()).isTrue();
+        UserCredential credential = service.findActiveCredential(user.getId()).orElseThrow();
+
+        assertThat(credential.user()).isEqualTo(new AuthenticatedUser(user.getId(), "USER", true));
+        assertThat(credential.passwordHash()).isEqualTo("hashed:Temp123!");
     }
 
     @Test
-    @DisplayName("없는 ID는 INVALID_CREDENTIALS")
-    void unknownUsername() {
-        saved("user01", "Abcd123!");
-
-        assertInvalidCredentials("user02", "Abcd123!");
-    }
-
-    @Test
-    @DisplayName("틀린 비밀번호는 INVALID_CREDENTIALS")
-    void wrongPassword() {
-        saved("user01", "Abcd123!");
-
-        assertInvalidCredentials("user01", "Abcd123?");
-    }
-
-    @Test
-    @DisplayName("탈퇴·비활성화된 계정은 비밀번호가 맞아도 INVALID_CREDENTIALS")
-    void withdrawn() {
+    @DisplayName("자격 조회: 탈퇴(비활성화)한 사용자는 empty")
+    void credentialOfWithdrawn() {
         User user = saved("user01", "Abcd123!");
         user.withdraw(user.getId());
 
-        assertInvalidCredentials("user01", "Abcd123!");
+        assertThat(service.findActiveCredential(user.getId())).isEmpty();
     }
 
     @Test
-    @DisplayName("가입 규칙에 맞지 않는 ID도 형식 오류가 아니라 INVALID_CREDENTIALS (로그인에서 가입 규칙을 드러내지 않음)")
-    void malformedUsername() {
-        saved("user01", "Abcd123!");
+    @DisplayName("자격 조회 결과의 toString에 해시가 나오지 않는다 (로그 실수 방지)")
+    void credentialToStringMasksHash() {
+        User user = saved("user01", "Abcd123!");
 
-        assertInvalidCredentials("USER01", "Abcd123!");
-        assertInvalidCredentials("u", "Abcd123!");
+        assertThat(service.findActiveCredential(user.getId()).orElseThrow().toString())
+                .doesNotContain("hashed:").contains("***");
     }
 }

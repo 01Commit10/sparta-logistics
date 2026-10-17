@@ -35,7 +35,8 @@
 | GW-09 Gateway 타임아웃 (연결 2초, 응답 5초, 주문 15초) | ✅ (PR #24) | 응답 초과 504, 연결 실패 503 |
 | GW-10 서비스별 Circuit Breaker | ✅ (PR #24) | 연결 실패·타임아웃만 실패로 셈, OPEN이면 503. 별도 fallbackUri 없음 |
 | 경로 정규화 (인코딩·`..` 우회 차단) | ✅ (PR #26) | `;`·`%2f`·`..` 등 해석이 갈리는 경로는 400 `INVALID_INPUT` |
-| GW-11 actuator 노출 범위·헬스 그룹 | ⏳ 예정 (10/17) | |
+| GW-11 운영 확인 (관리 포트·헬스 그룹) | ✅ (PR #31) | 서비스 포트엔 `/livez`·`/readyz`만, 상세·라우트·회로 상태는 관리 포트 **19190** (10/17: company-ms 19091과 겹쳐 변경) |
+| GW-12 계약 테스트 | ✅ (PR #31) | 토큰 claim·오류 형식을 Gateway·user-ms가 각각 문자열로 확인 |
 | GW-01 Gateway 컨테이너·서비스 포트 비공개 | ⏳ 예정 (10/20) | 지금은 IDE·`bootRun` 실행 |
 
 ## 2. 요청 흐름
@@ -438,7 +439,8 @@ mockMvc.perform(patch("/api/v1/hubs/{id}", hubId)
 | 504 `SERVICE_TIMEOUT` | 서비스가 5초(주문 15초) 안에 응답 안 함 | 느린 쿼리·Feign 호출 확인. 늘려야 하면 대진에게 (`GW_RESPONSE_TIMEOUT`, `GW_ORDER_RESPONSE_TIMEOUT_MS`) |
 | 서비스는 떠 있는데 계속 503 | 연결 실패·타임아웃이 쌓여 그 서비스의 Gateway CB가 OPEN | 10초(`GW_CB_OPEN_WAIT`) 뒤 자동 회복. 원인 서비스부터 확인 |
 | 400 `INVALID_INPUT` (Gateway) | 경로에 `;`·`%2f`·`..` 등 | 정상 경로로 호출 |
-| Gateway `/actuator/health`가 `DOWN` | Redis 상태가 헬스에 포함됨 | 기능 영향은 위 503뿐. 헬스 그룹 분리는 GW-11 |
+| Gateway `19190/actuator/health`가 `DOWN` | Redis 상태가 헬스에 포함됨 | 기능 영향은 위 503뿐. 컨테이너 헬스체크는 Redis와 무관한 `/livez`를 씀 |
+| `19090/actuator/**`가 404 | 정상. actuator는 관리 포트 19190에만 있음 | `localhost:19190/actuator/...` |
 
 ## 12. 참고 문서
 

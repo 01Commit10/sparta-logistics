@@ -1,6 +1,6 @@
 # 02. 장애 대응(Feign) 가이드
 
-> 작성자: 대진 · 기준: dev `d6af869` (GW-09·10, NTF 머지) · 최종 수정: 2026-10-16
+> 작성자: 대진 · 기준: dev `46ad946` (C02 리뷰 반영: PR #34 재시도, PR #35 504·변환 실패 분류) · 최종 수정: 2026-10-17
 > 대상: 다울(order-ms, Saga), 이찬(hub-ms), 영은(delivery-ms), 권우(company-ms)
 > 원칙: **코드가 기준**입니다. 설계 문서([[SYS-13 장애 대응 설계]])와 다르면 이 문서와 코드를 따라 주세요.
 
@@ -12,7 +12,7 @@
    - **쉽게 말해:** 
      - `RemoteBusinessException`: 상대가 "안 돼요"라고 분명히 답했습니다(예: 재고 부족). 처리가 안 된 게 확실합니다.
      - `RemoteServiceException`: 상대가 전화를 아예 못 받았습니다(서버 다운, 차단 중). 이것도 처리가 안 된 게 확실합니다.
-     - `RemoteTimeoutException`: 응답을 기다리다 끊었습니다. 상대가 **처리했는지 모릅니다.** 재고가 이미 차감됐을 수도 있으니 되돌리기(보상)나 재확인이 필요한, 가장 조심해야 하는 경우입니다.
+     - `RemoteTimeoutException`: 응답을 기다리다 끊었거나, 상대가 "나도 다음 곳 답을 못 받았다"(504)고 했거나, 답은 왔는데 알아들을 수 없었습니다(응답 변환 실패). 상대가 **처리했는지 모릅니다.** 재고가 이미 차감됐을 수도 있으니 되돌리기(보상)나 재확인이 필요한, 가장 조심해야 하는 경우입니다.
 3. 타임아웃은 연결 1초·응답 2초, CB는 **Feign 메서드 단위**, 4xx는 CB 실패로 세지 않습니다. 값은 `application-common.yaml` 한 곳에 있습니다.
    - **쉽게 말해:** Circuit Breaker(CB)는 누전 차단기입니다. 같은 호출이 계속 실패하면 잠시 호출 자체를 막아 장애가 우리 서비스까지 번지지 않게 합니다. 메서드 단위라서 "재고 차감"이 고장 나도 "허브 조회"는 계속 됩니다. 4xx는 상대 서버가 멀쩡히 "안 된다"고 답한 것이라 고장으로 세지 않습니다.
 4. **자동 재시도는 없습니다.** 멱등성 키가 있는 호출만 `executeWithRetryOnce`로 직접 1회 재시도합니다.
@@ -145,13 +145,16 @@ public class HubInventoryAdapter implements InventoryPort {
 | 예외 | 언제 | 잡지 않으면 | CB 실패로 셈? | 호출한 쪽이 할 일 |
 |---|---|---|---|---|
 | `RemoteBusinessException` | 원격 4xx (401 제외) | 원래 상태·code·메시지 (예: 409 `INSUFFICIENT_STOCK`) | ❌ (`ignore-exceptions`) | **확실히 실패.** 업무 실패 처리 |
-| `RemoteServiceException` | 원격 5xx, **원격 401**, CB OPEN, **연결 실패**(거부·연결 타임아웃), 인스턴스 없음 | 503 `SERVICE_UNAVAILABLE` | ✅ (CB OPEN 자체는 호출 안 함) | **처리 안 됨**으로 보고 실패 처리 |
-| `RemoteTimeoutException` | 요청을 보낸 뒤 응답을 못 받음 (read 타임아웃, 응답 중 연결 끊김) | 504 `SERVICE_TIMEOUT` | ✅ | **결과 모름.** 같은 키로 재시도 또는 보상/조회 |
+| `RemoteServiceException` | 원격 5xx(**504 제외**), **원격 401**, CB OPEN, **연결 실패**(거부·연결 타임아웃), 인스턴스 없음 | 503 `SERVICE_UNAVAILABLE` | ✅ (CB OPEN 자체는 호출 안 함) | **처리 안 됨**으로 보고 실패 처리 |
+| `RemoteTimeoutException` | 요청을 보낸 뒤 응답을 못 받음 (read 타임아웃, 응답 중 연결 끊김), **원격 504**, **2xx 응답을 DTO로 못 바꿈**(깨진 JSON·타입 불일치·HTML) | 504 `SERVICE_TIMEOUT` | ✅ | **결과 모름.** 같은 키로 재시도 또는 보상/조회 |
 
 - 원격 401은 "호출 쪽이 사용자 헤더를 안 넣은 내부 버그"로 보고 `RemoteServiceException`입니다 (C02 E3). 클라이언트에 재로그인을 안내하지 않습니다.
 - 대상 서비스 이름은 클라이언트 메시지에 넣지 않습니다. `getTarget()`·`toString()`(로그)에만 있습니다 (E6).
 - `RemoteBusinessException.getErrorCode()`는 원격 code를 복원한 값입니다. `ErrorCodeRegistry`에 등록된 enum이면 `==` 비교, 아니면 `RemoteErrorCode`이므로 `getErrorCode().getCode()` 문자열로 비교합니다. 지금 등록된 enum은 `CommonErrorCode`·`AuthErrorCode`·`UserErrorCode`뿐이라, hub의 `INSUFFICIENT_STOCK` 등은 **문자열 비교**를 쓰세요(새 enum을 만들면 `ErrorCodeRegistry.ALL`에 추가).
 - `RemoteServiceException.getStatus()`는 원격 HTTP 상태(`Integer`), 응답이 없으면(CB OPEN·연결 실패) `null`입니다.
+- `RemoteTimeoutException.getStatus()`는 원격이 504를 줬으면 `504`, 그 밖(응답 없음·변환 실패)은 `null`입니다 (2026-10-17 추가).
+- **원격 504가 결과 모름인 이유**: 원격이 자기 다음 호출(예: hub → 다른 서비스)을 기다리다 끊은 것이라, 그 호출은 처리됐을 수 있습니다. "처리 안 됨"으로 알리면 보상을 건너뜁니다.
+- **변환 실패가 결과 모름인 이유**: 2xx는 원격이 이미 처리했다는 뜻입니다. 응답을 못 읽었다고 "처리 안 됨"으로 보면 안 됩니다. 변환 실패도 CB 실패로 셉니다 (DTO가 응답과 안 맞으면 그 메서드 회로가 열림 → DTO를 고치세요).
 
 > ※ SYS-13 5장·C02 2장 표의 "연결 실패 → `RemoteTimeoutException`"은 **변경됐습니다** (E5). 연결 실패는 요청이 닿지 않은 것이 확실하므로 `RemoteServiceException`입니다. "결과 모름"은 read 타임아웃뿐입니다.
 
@@ -181,9 +184,10 @@ try {
 |---|---|
 | 자동 재시도 | **없음.** Feign `Retryer` 기본값(재시도 안 함), common은 Retryer 빈을 등록하지 않습니다 |
 | 직접 재시도 | `executeWithRetryOnce`만 사용. **즉시 1회**(대기 없음), 최대 2번 호출 |
-| 재시도하는 경우 | `RemoteTimeoutException`, `RemoteServiceException`(5xx·401·연결 실패) |
-| 재시도하지 않는 경우 | `RemoteBusinessException`(4xx), **CB OPEN**(원인이 `CallNotPermittedException`) |
-| 두 번 모두 실패 | 두 번째 실패를 그대로 던집니다 |
+| 재시도하는 경우 | `RemoteTimeoutException`(read 타임아웃·원격 504), `RemoteServiceException`(5xx·401·연결 실패) |
+| 재시도하지 않는 경우 | `RemoteBusinessException`(4xx), **CB OPEN**(원인이 `CallNotPermittedException`), **응답 변환 실패**(다시 보내도 같은 응답이 옴) |
+| 두 번 모두 실패 | 두 번째 실패를 던집니다. **단, 첫 시도가 `RemoteTimeoutException`이고 재시도가 `RemoteServiceException`(5xx·연결 실패·OPEN)이면 첫 `RemoteTimeoutException`을 던집니다** (첫 요청이 처리됐을 수 있으므로 결과 모름 유지. 재시도 실패는 `getSuppressed()`에) |
+| 재시도가 4xx·성공 | 그 결과를 그대로 씁니다 (멱등 키가 있으면 처음 결과가 돌아옴) |
 
 **전제 (지키지 않으면 쓰지 마세요)**
 

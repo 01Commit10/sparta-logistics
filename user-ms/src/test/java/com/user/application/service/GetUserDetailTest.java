@@ -24,7 +24,7 @@ class GetUserDetailTest {
     private static final UUID MASTER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserQueryService service = new UserQueryService(userRepository, new FakePasswordHasher());
+    private final UserQueryService service = new UserQueryService(userRepository);
 
     private User saved(String username) {
         return userRepository.save(User.signup(UUID.randomUUID(), Username.of(username), "홍길동", "hashed",

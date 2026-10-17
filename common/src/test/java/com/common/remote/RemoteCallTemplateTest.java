@@ -4,19 +4,24 @@ import com.common.exception.CommonErrorCode;
 import com.common.exception.UserErrorCode;
 import feign.Request;
 import feign.RetryableException;
+import feign.codec.DecodeException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.cloud.client.circuitbreaker.NoFallbackAvailableException;
 
+import java.io.IOException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,6 +45,17 @@ class RemoteCallTemplateTest {
     /** fallback이 없는 Feign Circuit Breaker는 실패를 NoFallbackAvailableException으로 감싼다 */
     private static NoFallbackAvailableException noFallback(Throwable cause) {
         return new NoFallbackAvailableException("No fallback available.", cause);
+    }
+
+    /** 2xx를 받았지만 본문을 DTO로 못 바꿈. Feign은 디코더 예외를 DecodeException으로 감싼다 */
+    private static DecodeException decodeFailure(Throwable cause) {
+        return new DecodeException(200, "decode failed", REQUEST, cause);
+    }
+
+    /** 실제 Spring 디코더 원인: 깨진 JSON·타입 불일치는 Jackson 예외(IOException), HTML 등은 RestClientException(IOException 아님) */
+    static Stream<Throwable> decodeCauses() {
+        return Stream.of(new IOException("Unexpected end-of-input"),
+                new org.springframework.web.client.RestClientException("no suitable HttpMessageConverter for text/html"));
     }
 
     private static CallNotPermittedException circuitOpen() {
@@ -111,10 +127,23 @@ class RemoteCallTemplateTest {
         assertThatThrownBy(() -> template.execute(HUB, failing(service))).isSameAs(service);
     }
 
+    @ParameterizedTest(name = "원인 {0}")
+    @MethodSource("decodeCauses")
+    @DisplayName("리뷰: 2xx 응답 본문 변환 실패(DecodeException) → 원인과 상관없이 RemoteTimeoutException (원격은 처리했으니 '처리 안 됨'이 아님)")
+    void decodeFailureIsUnknown(Throwable cause) {
+        DecodeException decode = decodeFailure(cause);
+
+        assertThatThrownBy(() -> template.execute(HUB, failing(noFallback(decode))))
+                .isInstanceOfSatisfying(RemoteTimeoutException.class, e -> {
+                    assertThat(e.getTarget()).isEqualTo(HUB);
+                    assertThat(e).hasCause(decode);
+                });
+    }
+
     @Test
-    @DisplayName("그 밖의 예외(응답 변환 실패 등) → RemoteServiceException")
+    @DisplayName("그 밖의 예외(I/O·변환 실패가 아닌 것) → RemoteServiceException")
     void unknownFailure() {
-        IllegalStateException cause = new IllegalStateException("decode failed");
+        IllegalStateException cause = new IllegalStateException("unexpected");
 
         assertThatThrownBy(() -> template.execute(HUB, failing(cause)))
                 .isInstanceOfSatisfying(RemoteServiceException.class, e -> assertThat(e).hasCause(cause));
@@ -175,6 +204,113 @@ class RemoteCallTemplateTest {
             assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
                 calls.incrementAndGet();
                 throw feignIo(new SocketTimeoutException("Read timed out"));
+            })).isInstanceOf(RemoteTimeoutException.class);
+            assertThat(calls).hasValue(2);
+        }
+
+        @Test
+        @DisplayName("리뷰: 타임아웃 뒤 재시도가 5xx·연결 실패로 끝나도 결과 모름(Timeout)이다 (첫 요청이 처리됐을 수 있음, 재시도 실패는 suppressed)")
+        void timeoutThenServiceErrorStaysUnknown() {
+            AtomicInteger calls = new AtomicInteger();
+            RemoteServiceException retryFailure = new RemoteServiceException(HUB, 503);
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw feignIo(new SocketTimeoutException("Read timed out"));
+                }
+                throw retryFailure;
+            })).isInstanceOfSatisfying(RemoteTimeoutException.class, e -> {
+                assertThat(e.getTarget()).isEqualTo(HUB);
+                assertThat(e.getSuppressed()).containsExactly(retryFailure);
+            });
+            assertThat(calls).hasValue(2);
+        }
+
+        @Test
+        @DisplayName("리뷰: 타임아웃 뒤 재시도가 Circuit Breaker OPEN에 막혀도 결과 모름(Timeout)이다")
+        void timeoutThenCircuitOpenStaysUnknown() {
+            AtomicInteger calls = new AtomicInteger();
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw feignIo(new SocketTimeoutException("Read timed out"));
+                }
+                throw noFallback(circuitOpen());
+            })).isInstanceOf(RemoteTimeoutException.class);
+            assertThat(calls).hasValue(2);
+        }
+
+        @Test
+        @DisplayName("리뷰: 타임아웃 뒤 재시도가 업무 거절(4xx)이면 그 응답을 쓴다 (멱등성 키로 받은 확정 응답)")
+        void timeoutThenBusinessUsesAnswer() {
+            AtomicInteger calls = new AtomicInteger();
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw feignIo(new SocketTimeoutException("Read timed out"));
+                }
+                throw new RemoteBusinessException(HUB, 409, UserErrorCode.DUPLICATE_USERNAME, "중복");
+            })).isInstanceOf(RemoteBusinessException.class);
+        }
+
+        @Test
+        @DisplayName("5xx 뒤 재시도도 5xx면 처리 안 됨(Service)이다 (두 번 다 처리되지 않음)")
+        void serviceErrorTwiceStaysService() {
+            AtomicInteger calls = new AtomicInteger();
+            RemoteServiceException second = new RemoteServiceException(HUB, 502);
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw new RemoteServiceException(HUB, 503);
+                }
+                throw second;
+            })).isSameAs(second);
+        }
+
+        @Test
+        @DisplayName("5xx 뒤 재시도가 타임아웃이면 결과 모름(Timeout)이다")
+        void serviceErrorThenTimeoutIsUnknown() {
+            AtomicInteger calls = new AtomicInteger();
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw new RemoteServiceException(HUB, 503);
+                }
+                throw feignIo(new SocketTimeoutException("Read timed out"));
+            })).isInstanceOf(RemoteTimeoutException.class);
+        }
+
+        @Test
+        @DisplayName("리뷰: 2xx 본문 변환 실패는 다시 보내도 같은 응답이라 재시도하지 않는다 (결과 모름 그대로)")
+        void noRetryOnDecodeFailure() {
+            AtomicInteger calls = new AtomicInteger();
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, failThenSucceed(
+                    noFallback(decodeFailure(new IOException("Unexpected end-of-input"))), calls)))
+                    .isInstanceOf(RemoteTimeoutException.class);
+            assertThat(calls).hasValue(1);
+        }
+
+        @Test
+        @DisplayName("리뷰: 원격 504(결과 모름)는 다른 타임아웃처럼 한 번 재시도한다")
+        void retriesRemoteGatewayTimeout() {
+            AtomicInteger calls = new AtomicInteger();
+
+            assertThat(template.executeWithRetryOnce(HUB, failThenSucceed(noFallback(new RemoteTimeoutException(HUB, 504)), calls)))
+                    .isEqualTo("ok");
+            assertThat(calls).hasValue(2);
+        }
+
+        @Test
+        @DisplayName("5xx 뒤 재시도가 본문 변환 실패면 결과 모름(Timeout)이다")
+        void serviceErrorThenDecodeFailureIsUnknown() {
+            AtomicInteger calls = new AtomicInteger();
+
+            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw new RemoteServiceException(HUB, 503);
+                }
+                throw decodeFailure(new IOException("Unexpected end-of-input"));
             })).isInstanceOf(RemoteTimeoutException.class);
             assertThat(calls).hasValue(2);
         }

@@ -200,7 +200,9 @@ sequenceDiagram
 | 서비스 간 통신 | Docker 내부 네트워크 + Eureka로만 호출 |
 | 로컬 개발 | 서비스 포트로 직접 호출하며 헤더를 수동으로 넣는 테스트는 허용 (개발 환경 한정) |
 | 내부 API | Gateway 라우팅에 `/internal/**`이 없으므로 외부에서 도달 불가. 호출 서비스 검증 방식은 [[07 서비스 정책]] 9장 16번 |
-| Feign 호출 시 사용자 정보 | 사용자 요청에서 시작된 내부 호출은 `X-User-Id`를 그대로 전달해 감사 기록에 사용 |
+| Feign 호출 시 사용자 정보 | 사용자 요청에서 시작된 내부 호출은 `X-User-Id`·`X-User-Role`·`X-Request-Id`를 그대로 전달 (감사 기록, 받는 서비스의 역할 확인, 요청 추적). `Authorization`·`X-Token-*`는 전달하지 않음. 요청 밖(스케줄러) 호출엔 붙이지 않음 |
+| Feign 사용 범위 | **Feign은 우리 서비스끼리만** 사용. 외부 API(Slack Webhook 등)는 `RestClient`로 호출. 사용자 헤더가 외부로 나가지 않게, `url`로 외부 주소를 지정한 `@FeignClient`가 있으면 **기동 실패** |
+| 헤더 형식 검사 | 서비스는 `X-User-Id`(UUID)·`X-User-Role`(MASTER·USER)이 **둘 다 있고 형식이 맞을 때만** 사용자로 인정. 하나만 있거나 형식이 틀리면 모든 API에서 401 `UNAUTHENTICATED` (Gateway를 거치지 않은 요청으로 봄) |
 
 ---
 
@@ -221,9 +223,19 @@ sequenceDiagram
 | 409 | `DUPLICATE_USERNAME` | 이미 사용 중인 ID (탈퇴한 ID 포함) | Auth |
 | 409 | `DUPLICATE_SLACK_ID` | 활성 사용자가 이미 사용 중인 Slack ID | Auth |
 | 409 | `LAST_MASTER` | 마지막 MASTER의 탈퇴·강등·비활성화 | Auth |
+| 404 | `RESOURCE_NOT_FOUND` | 외부에서 `/internal/**` 호출, 라우트가 없는 경로 | Gateway |
 | 503 | `AUTH_UNAVAILABLE` | Redis 연결 실패 | Gateway, Auth |
 
 - **Redis 장애 시 요청을 거부합니다(fail-closed).** 통과시키면 로그아웃한 토큰이 다시 쓰일 수 있기 때문입니다.
+- **외부에서 내부 API(`/internal/**`, `/api/v1/internal/**`)를 부르면 403이 아니라 404입니다.** 내부 API가 있다는 사실 자체를 외부에 알리지 않기 위해서입니다.
+
+  | 응답 | 외부에서 보면 | 판단 |
+  |---|---|---|
+  | 401 | "토큰을 넣으면 들어갈 수 있다" | 틀린 안내. 토큰이 있어도 외부에서는 접근할 수 없음 |
+  | 403 | "여기에 무언가 있고, 권한만 없다" | 주소를 바꿔 가며 403이 나오는 곳을 찾으면 내부 API 목록이 드러남 |
+  | **404** | "없는 주소" | 진짜 없는 경로(`/api/v1/unknown`)와 응답이 같아 구분할 수 없음 → **채택** |
+
+  서비스끼리의 호출(Feign → Eureka → 서비스 직접)은 Gateway를 거치지 않으므로 영향이 없습니다. 이 404는 보호의 한 겹일 뿐이며, 서비스 포트 비공개(GW-01)와 내부 호출자 인증(정책 #16)이 함께 필요합니다.
 
 ---
 

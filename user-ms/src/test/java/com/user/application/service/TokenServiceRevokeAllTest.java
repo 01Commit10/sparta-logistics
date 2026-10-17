@@ -1,11 +1,15 @@
 package com.user.application.service;
 
+import com.common.exception.AuthErrorCode;
+import com.common.exception.BusinessException;
 import com.user.application.dto.AuthenticatedUser;
 import com.user.fake.FakeRefreshTokenParser;
 import com.user.fake.FakeTokenIssuer;
 import com.user.fake.FakeTokenStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -14,6 +18,7 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * 사용자의 모든 토큰 무효화 (U10 테스트 4). U11·U15·U17·U18이 같이 쓴다.
@@ -45,7 +50,7 @@ class TokenServiceRevokeAllTest {
     void loginAfterRevokeUsesRevokedAt() {
         service.revokeAll(USER_ID);
 
-        service.issue(new AuthenticatedUser(USER_ID, "USER", false));
+        service.issue(new AuthenticatedUser(USER_ID, "USER", false), service.revocationSnapshot(USER_ID));
 
         assertThat(tokenIssuer.accessRevokedAts()).containsExactly(Instant.parse("2026-10-16T10:00:00Z"));
     }
@@ -71,5 +76,67 @@ class TokenServiceRevokeAllTest {
 
         assertThat(tokenStore.revokedOf(USER_ID)).contains(
                 new FakeTokenStore.Revoked(Instant.parse("2026-10-16T10:00:00Z"), FakeTokenIssuer.ACCESS_TTL));
+    }
+
+    @Test
+    @DisplayName("리뷰: revoked-at을 먼저 쓰고 Refresh를 지운다 (그 사이 저장된 Refresh는 발급 쪽이 revoked-at을 다시 읽어 알아챈다)")
+    void writesRevokedAtBeforeDeletingRefresh() {
+        service.revokeAll(USER_ID);
+
+        assertThat(tokenStore.operations()).containsExactly("revokeAllIssuedBefore", "deleteRefresh");
+    }
+
+    @Test
+    @DisplayName("리뷰: 트랜잭션 안이면 커밋 뒤에 한 번 더 무효화한다 (커밋 전 틈에 옛 비밀번호로 받은 세션을 지움)")
+    void revokesAgainAfterCommit() {
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.revokeAll(USER_ID);
+            tokenStore.saveRefresh(USER_ID, "window-jti", Duration.ofDays(7));
+
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+
+            assertThat(tokenStore.refreshOf(USER_ID)).isEmpty();
+            assertThat(tokenStore.revokedOf(USER_ID)).contains(new FakeTokenStore.Revoked(
+                    Instant.parse("2026-10-16T10:00:01Z"), FakeTokenIssuer.ACCESS_TTL.plusSeconds(1)));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("리뷰: 커밋 뒤 무효화가 실패해도 예외를 던지지 않는다 (DB는 이미 커밋됨, 커밋 전 무효화는 끝났음)")
+    void afterCommitFailureIsSwallowed() {
+        FakeTokenStore failingSecond = new FakeTokenStore() {
+            private int writes;
+
+            @Override
+            public void revokeAllIssuedBefore(UUID userId, Instant revokedAt, Duration ttl) {
+                if (++writes > 1) {
+                    throw new BusinessException(AuthErrorCode.AUTH_UNAVAILABLE);
+                }
+                super.revokeAllIssuedBefore(userId, revokedAt, ttl);
+            }
+        };
+        TokenService failing = new TokenService(tokenIssuer, new FakeRefreshTokenParser(), failingSecond,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            failing.revokeAll(USER_ID);
+
+            assertThatCode(() -> TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit)).doesNotThrowAnyException();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("트랜잭션 밖이면 한 번만 무효화한다 (등록할 커밋이 없음)")
+    void outsideTransactionOnce() {
+        service.revokeAll(USER_ID);
+
+        assertThat(TransactionSynchronizationManager.isSynchronizationActive()).isFalse();
+        assertThat(tokenStore.operations()).hasSize(2);
     }
 }
