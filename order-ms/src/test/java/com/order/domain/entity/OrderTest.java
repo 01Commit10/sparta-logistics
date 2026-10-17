@@ -6,6 +6,7 @@ import com.order.domain.vo.OrderStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
@@ -31,9 +32,10 @@ public class OrderTest {
         );
     }
 
+    // 초기 상태만 확인하는 테스트
     @Test
-    @DisplayName("주문을 생성하면 총액은 단가 × 수량이고, 상태는 PROCESSING 이다")
-    void create_order() {
+    @DisplayName("주문을 생성하면 총액은 단가 × 수량이고, 상태는 PROCESSING 이다.")
+    void createOrderSuccess() {
         Order order = createOrder(3, UNIT_PRICE);
 
         assertThat(order.getTotalAmount()).isEqualByComparingTo("3000.00");
@@ -41,43 +43,39 @@ public class OrderTest {
         assertThat(order.getQuantity()).isEqualTo(3);
     }
 
-    @ParameterizedTest(name = "주문 수량이 {0}이면 예외가 발생한다")
+    // 총액 계산 규칙 (경계값 포함 4케이스)
+    @ParameterizedTest(name = "수량 {0}, 단가 {1} -> 총액 {2}")
+    @CsvSource({
+            "1, 1000.00, 1000.00",   // 수량 경계값
+            "3, 1000.00, 3000.00",
+            "3, 1500.50, 4501.50",   // 소수점 단가
+            "3, 0,       0"          // 단가 경계값 (0원 허용)
+    })
+    @DisplayName("주문을 생성하면 총액은 단가 x 수량이다.")
+    void createOrderTotalSuccess(int quantity, BigDecimal unitPrice, BigDecimal expectedTotal) {
+        Order order = createOrder(quantity, unitPrice);
+
+        assertThat(order.getTotalAmount()).isEqualByComparingTo(expectedTotal);
+    }
+
+
+    @ParameterizedTest(name = "주문 수량이 {0}이면 예외가 발생한다.")
     @ValueSource(ints = {0, -1})
     @DisplayName("주문 수량이 0 이하면 주문을 생성하지 않는다")
-    void create_order_fail_when_quantity_is_not_positive(int quantity) {
+    void createOrderFailInvalidQuantity(int quantity) {
         assertThatThrownBy(() -> createOrder(quantity, UNIT_PRICE))
                 .asInstanceOf(type(BusinessException.class))
                 .extracting(BusinessException::getErrorCode)
                 .isEqualTo(OrderErrorCode.INVALID_QUANTITY);
     }
 
-    @Test
-    @DisplayName("주문 수량이 1이면 주문을 생성할 수 있다 (경계값)")
-    void create_order_with_minimum_quantity() {
-        Order order = createOrder(1, UNIT_PRICE);
-
-        assertThat(order.getQuantity()).isEqualTo(1);
-        assertThat(order.getTotalAmount()).isEqualByComparingTo("1000.00");
-    }
-
     @ParameterizedTest(name = "주문 단가가 {0}이면 예외가 발생한다.")
     @ValueSource(strings = {"-1", "-0.01"})
     @DisplayName("주문 단가가 0원 미만이면 주문을 생성할 수 없다.")
-    void create_order_fail_when_unit_price_is_negative(BigDecimal unitPrice) {
+    void createOrderFailNegativeUnitPrice(BigDecimal unitPrice) {
         assertThatThrownBy(() -> createOrder(1, unitPrice))
                 .asInstanceOf(type(BusinessException.class))
                 .extracting(BusinessException::getErrorCode)
                 .isEqualTo(OrderErrorCode.INVALID_UNIT_PRICE);
     }
-
-    @Test
-    @DisplayName("단가가 0원이면 주문을 생성할 수 있고 총액은 0원이다 (경계값)")
-    void create_order_with_zero_unit_price() {
-        Order order = createOrder(3, BigDecimal.ZERO);
-
-        assertThat(order.getUnitPriceSnapshot()).isEqualByComparingTo("0");
-        assertThat(order.getTotalAmount()).isEqualByComparingTo("0");
-    }
-
-
 }
