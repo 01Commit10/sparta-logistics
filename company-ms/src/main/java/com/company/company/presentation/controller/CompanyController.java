@@ -9,6 +9,7 @@ import com.company.company.application.service.CompanyService;
 import com.company.company.presentation.dto.CompanyResponse;
 import com.company.company.presentation.dto.CompanySearchRequest;
 import com.company.company.presentation.dto.CreateCompanyRequest;
+import com.company.company.presentation.dto.UpdateCompanyRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -48,5 +49,14 @@ public class CompanyController {
     @GetMapping("/{companyId}")
     public CompanyResponse getCompany(@CurrentUser AuthUser authUser, @PathVariable UUID companyId) {
         return CompanyResponse.from(companyService.getCompany(companyId));
+    }
+
+    // MASTER·업체 관리자 본인. 보낸 필드만 수정 (PATCH). hubId·managerUserId 변경은 MASTER만 (CompanyService가 판단)
+    @PatchMapping("/{companyId}")
+    public CompanyResponse updateCompany(@CurrentUser AuthUser authUser,
+                                         @PathVariable UUID companyId,
+                                         @Valid @RequestBody UpdateCompanyRequest request) {
+        return CompanyResponse.from(companyService.updateCompany(
+                request.toCommand(companyId, authUser.id(), authUser.isMaster())));
     }
 }

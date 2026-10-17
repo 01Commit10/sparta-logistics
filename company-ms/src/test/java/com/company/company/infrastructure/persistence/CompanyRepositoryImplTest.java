@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,5 +49,19 @@ class CompanyRepositoryImplTest {
     @DisplayName("없는 ID는 empty")
     void notFound() {
         assertThat(companyRepository.findById(UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("수정 후 저장하면 바로 flush되어 돌려받은 업체의 수정 일시가 갱신된다")
+    void saveUpdatedFlushesAuditing() {
+        Company saved = companyRepository.save(Company.create("스파르타상사", "서울시 강남구 테헤란로 1", HUB_ID, MANAGER_ID));
+        LocalDateTime createdUpdatedAt = saved.getUpdatedAt();
+
+        saved.update("스파르타물산", null, null, null);
+        Company updated = companyRepository.save(saved);
+
+        assertThat(updated.getUpdatedAt()).isAfterOrEqualTo(createdUpdatedAt);
+        em.clear();
+        assertThat(companyRepository.findById(saved.getId()).orElseThrow().getName()).isEqualTo("스파르타물산");
     }
 }
