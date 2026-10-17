@@ -13,7 +13,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** 생성된 테이블(H2, PostgreSQL 모드)의 컬럼 길이 확인 (06 테이블 명세서 p_companies) */
+/**
+ * 생성된 테이블(H2, PostgreSQL 모드)의 컬럼 길이·인덱스 확인 (06 테이블 명세서 p_companies)
+ */
 @DataJpaTest
 class CompanySchemaTest {
 

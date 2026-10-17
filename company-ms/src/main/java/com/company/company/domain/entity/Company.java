@@ -10,7 +10,11 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "p_companies", indexes = @Index(name = "idx_companies_hub_id", columnList = "hub_id"))
+@Table(name = "p_companies", indexes = {
+        @Index(name = "idx_companies_hub_id_created_at", columnList = "hub_id, created_at desc, id"),
+        @Index(name = "idx_companies_created_at", columnList = "created_at desc, id"),
+        @Index(name = "idx_companies_name", columnList = "name, id")
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Company extends BaseEntity {
     @Id
@@ -54,6 +58,12 @@ public class Company extends BaseEntity {
         if (managerUserId != null) {
             this.managerUserId = managerUserId;
         }
+    }
+
+    // 논리 삭제 (07 서비스 정책 1.3). 이미 삭제된 업체는 서비스에서 404로 걸러진다.
+    // 소속 상품은 따로 지우지 않는다: 상품 조회·검색·내부 API가 삭제된 업체의 상품을 함께 제외한다
+    public void delete(UUID actorId) {
+        softDelete(actorId);
     }
 
     // 업체 관리자 본인 여부 (07 서비스 정책 "본인 데이터" 판별: manager_user_id == 로그인 사용자)

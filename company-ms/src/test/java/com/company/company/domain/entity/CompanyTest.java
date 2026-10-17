@@ -48,4 +48,17 @@ class CompanyTest {
         assertThat(company.getHubId()).isEqualTo(newHub);
         assertThat(company.getManagerUserId()).isEqualTo(MANAGER_ID);
     }
+
+    @Test
+    @DisplayName("삭제: 삭제 시각·삭제자를 기록한다")
+    void delete() {
+        Company company = Company.create("스파르타상사", "서울시 강남구 테헤란로 1", HUB_ID, MANAGER_ID);
+        UUID actorId = UUID.randomUUID();
+
+        company.delete(actorId);
+
+        assertThat(company.isDeleted()).isTrue();
+        assertThat(company.getDeletedAt()).isNotNull();
+        assertThat(company.getDeletedBy()).isEqualTo(actorId);
+    }
 }
