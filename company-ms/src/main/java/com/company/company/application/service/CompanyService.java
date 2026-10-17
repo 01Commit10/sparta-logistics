@@ -8,6 +8,7 @@ import com.common.page.PageQuery;
 import com.company.company.application.dto.CompanyResult;
 import com.company.company.application.dto.CompanySearchQuery;
 import com.company.company.application.dto.CreateCompanyCommand;
+import com.company.company.application.dto.DeleteCompanyCommand;
 import com.company.company.application.dto.UpdateCompanyCommand;
 import com.company.company.domain.client.HubClient;
 import com.company.company.domain.client.UserClient;
@@ -79,6 +80,14 @@ public class CompanyService {
             target.update(command.name(), command.address(), command.hubId(), command.managerUserId());
             return CompanyResult.from(companyRepository.save(target));
         });
+    }
+
+    // MASTER만 (04 API 명세서 Company, 권한은 Controller에서 확인). 원격 호출이 없어 조회·삭제를 한 트랜잭션으로 묶는다.
+    // 삭제 시각·삭제자는 dirty checking으로 반영
+    @Transactional
+    public void deleteCompany(DeleteCompanyCommand command) {
+        Company company = findActiveCompany(command.companyId());
+        company.delete(command.actorId());
     }
 
     // MASTER 또는 업체 관리자 본인만 (07 서비스 정책 4장 권한).

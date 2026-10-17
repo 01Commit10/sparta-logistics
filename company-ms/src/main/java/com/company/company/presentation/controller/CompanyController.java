@@ -5,6 +5,7 @@ import com.common.auth.web.CurrentUser;
 import com.common.page.PagePolicy;
 import com.common.page.PageQuery;
 import com.common.page.PageResponse;
+import com.company.company.application.dto.DeleteCompanyCommand;
 import com.company.company.application.service.CompanyService;
 import com.company.company.presentation.dto.CompanyResponse;
 import com.company.company.presentation.dto.CompanySearchRequest;
@@ -58,5 +59,13 @@ public class CompanyController {
                                          @Valid @RequestBody UpdateCompanyRequest request) {
         return CompanyResponse.from(companyService.updateCompany(
                 request.toCommand(companyId, authUser.id(), authUser.isMaster())));
+    }
+
+    // MASTER만. 논리 삭제
+    @DeleteMapping("/{companyId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteCompany(@CurrentUser AuthUser authUser, @PathVariable UUID companyId) {
+        authUser.requireMaster();
+        companyService.deleteCompany(new DeleteCompanyCommand(companyId, authUser.id()));
     }
 }
