@@ -114,6 +114,22 @@ class RedisTokenStoreTest {
     }
 
     @Test
+    @DisplayName("리뷰: 저장된 jti가 같을 때만 지운다 (다르면 남기고 TTL도 그대로, 없을 때 지워도 오류 없음)")
+    void deletesRefreshIfMatches() {
+        tokenStore.saveRefresh(USER_ID, "jti-2", Duration.ofDays(7));
+
+        tokenStore.deleteRefreshIfMatches(USER_ID, "jti-1");
+
+        assertThat(redis.opsForValue().get(KEY)).isEqualTo("jti-2");
+        assertThat(redis.getExpire(KEY)).isGreaterThan(Duration.ofDays(7).toSeconds() - 5);
+
+        tokenStore.deleteRefreshIfMatches(USER_ID, "jti-2");
+        tokenStore.deleteRefreshIfMatches(USER_ID, "jti-2");
+
+        assertThat(redis.hasKey(KEY)).isFalse();
+    }
+
+    @Test
     @DisplayName("U08: auth:blacklist:{jti} = logout, TTL = 남은 유효 시간 (Gateway가 읽는 계약)")
     void blacklists() {
         tokenStore.blacklist("jti-access", Duration.ofMinutes(12));

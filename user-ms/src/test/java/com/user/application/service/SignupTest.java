@@ -8,6 +8,7 @@ import com.user.domain.entity.User;
 import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.Username;
 import com.user.fake.FakePasswordHasher;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class SignupTest {
 
     private final FakeUserRepository userRepository = new FakeUserRepository();
-    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher());
+    private final UserCommandService service = new UserCommandService(userRepository, new FakePasswordHasher(), new FakeTemporaryPasswordGenerator());
 
     private static SignupCommand command(String username, String password, String slackId, String organizationType) {
         return new SignupCommand(username, password, "홍길동", slackId, organizationType, "부산수산");
@@ -126,7 +127,7 @@ class SignupTest {
     @Test
     @DisplayName("ID 중복 확인: 없으면 사용 가능, 활성·탈퇴 사용자가 쓰면 사용 불가")
     void usernameAvailability() {
-        UserQueryService query = new UserQueryService(userRepository, new FakePasswordHasher());
+        UserQueryService query = new UserQueryService(userRepository);
         service.signup(valid());
         userRepository.save(withdrawnUser("gone01", "U009"));
 
@@ -138,7 +139,7 @@ class SignupTest {
     @Test
     @DisplayName("ID 중복 확인도 username 규칙을 검사한다 (INVALID_USERNAME)")
     void availabilityValidatesFormat() {
-        UserQueryService query = new UserQueryService(userRepository, new FakePasswordHasher());
+        UserQueryService query = new UserQueryService(userRepository);
 
         assertError(() -> query.isUsernameAvailable("A!"), UserErrorCode.INVALID_USERNAME);
     }

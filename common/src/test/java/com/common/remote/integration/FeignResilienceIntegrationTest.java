@@ -192,6 +192,42 @@ class FeignResilienceIntegrationTest {
     }
 
     @Test
+    @DisplayName("리뷰: 200인데 본문이 깨진 JSON·타입 불일치·HTML → RemoteTimeoutException (원격은 처리했으니 결과 모름)")
+    void decodeFailures() {
+        for (String[] body : new String[][]{{"application/json", "{\"id\":"},
+                {"application/json", "{\"id\":\"not-uuid\",\"quantity\":1}"}, {"text/html", "<html>ok</html>"}}) {
+            HUB.stubFor(get("/hub/item").willReturn(aResponse().withStatus(200)
+                    .withHeader("Content-Type", body[0]).withBody(body[1])));
+
+            assertThatThrownBy(() -> remote.execute("hub-ms", hubClient::item))
+                    .as(body[1]).isInstanceOf(RemoteTimeoutException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("리뷰: 본문 변환 실패는 executeWithRetryOnce에서도 다시 보내지 않는다 (요청 1번)")
+    void decodeFailureNotRetried() {
+        HUB.stubFor(get("/hub/item").willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json").withBody("{\"id\":")));
+
+        assertThatThrownBy(() -> remote.executeWithRetryOnce("hub-ms", hubClient::item))
+                .isInstanceOf(RemoteTimeoutException.class);
+        HUB.verify(1, getRequestedFor(urlEqualTo("/hub/item")));
+    }
+
+    @Test
+    @DisplayName("리뷰: 원격 504 → RemoteTimeoutException(status 504), executeWithRetryOnce는 한 번 다시 보낸다")
+    void remoteGatewayTimeout() {
+        stubUnstable(504, "{\"code\":\"SERVICE_TIMEOUT\",\"message\":\"응답 시간이 초과되었습니다.\"}");
+
+        assertThatThrownBy(() -> remote.execute("hub-ms", hubClient::unstable))
+                .isInstanceOfSatisfying(RemoteTimeoutException.class, e -> assertThat(e.getStatus()).isEqualTo(504));
+        assertThatThrownBy(() -> remote.executeWithRetryOnce("hub-ms", hubClient::unstable))
+                .isInstanceOf(RemoteTimeoutException.class);
+        HUB.verify(3, getRequestedFor(urlEqualTo("/hub/unstable")));
+    }
+
+    @Test
     @DisplayName("연결 거부(듣는 프로세스 없음) → RemoteServiceException (처리 안 됨이 확실, C02 E5)")
     void connectionRefused() {
         assertThatThrownBy(() -> remote.execute("company-ms", companyClient::ok))
@@ -230,7 +266,7 @@ class FeignResilienceIntegrationTest {
         }
 
         @Test
-        @DisplayName("19. 잡지 않은 원격 예외 → 공통 형식: 5xx는 503, 타임아웃은 504, 4xx는 원래 상태·code")
+        @DisplayName("19. 잡지 않은 원격 예외 → 공통 형식: 5xx는 503, 타임아웃·원격 504는 504, 4xx는 원래 상태·code")
         void uncaughtRemoteExceptions() throws Exception {
             var request = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/test/hub-unstable");
 
@@ -239,6 +275,10 @@ class FeignResilienceIntegrationTest {
                     .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
 
             HUB.stubFor(get("/hub/unstable").willReturn(aResponse().withStatus(200).withFixedDelay(1000)));
+            mockMvc.perform(request).andExpect(status().isGatewayTimeout())
+                    .andExpect(jsonPath("$.code").value("SERVICE_TIMEOUT"));
+
+            stubUnstable(504, "{\"code\":\"SERVICE_TIMEOUT\",\"message\":\"x\"}");
             mockMvc.perform(request).andExpect(status().isGatewayTimeout())
                     .andExpect(jsonPath("$.code").value("SERVICE_TIMEOUT"));
 

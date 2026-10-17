@@ -18,6 +18,9 @@ public interface TokenStore {
 
     void deleteRefresh(UUID userId);
 
+    /** 저장된 jti가 이 값일 때만 지운다 (읽고 지우는 사이에 다른 로그인이 저장한 Refresh는 남긴다) */
+    void deleteRefreshIfMatches(UUID userId, String jti);
+
     /** 이 시각(초) 이전에 발급된 Access를 모두 무효로 한다 (auth:revoked-at:{userId} = epoch 초). ttl은 Access 유효 시간 */
     void revokeAllIssuedBefore(UUID userId, Instant revokedAt, Duration ttl);
 
