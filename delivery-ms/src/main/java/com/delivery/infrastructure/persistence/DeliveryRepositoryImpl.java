@@ -28,7 +28,11 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
         try {
             return jpaRepository.saveAndFlush(delivery);
         } catch (DataIntegrityViolationException e) {
-            throw translate(e);
+            if(e.getCause() instanceof ConstraintViolationException cve
+                    && ORDER_ID_UNIQUE.equalsIgnoreCase(cve.getConstraintName())) {
+                throw new BusinessException(DeliveryErrorCode.DELIVERY_ALREADY_EXISTS);
+            }
+            throw e;
         }
     }
 
@@ -54,12 +58,4 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
     }
 
 
-
-    private RuntimeException translate(DataIntegrityViolationException e) {
-        if(e.getCause() instanceof ConstraintViolationException cve
-            && ORDER_ID_UNIQUE.equalsIgnoreCase(cve.getConstraintName())) {
-            return new BusinessException(DeliveryErrorCode.DELIVERY_ALREADY_EXISTS);
-        }
-        return e;
-    }
 }

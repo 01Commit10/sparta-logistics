@@ -9,10 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/internal/v1")
@@ -23,7 +20,8 @@ public class InternalDeliveryController {
 
 
     @PostMapping("/deliveries")
-    public ResponseEntity<DeliveryCreateResponse> createDelivery(@RequestBody @Valid DeliveryCreateRequest request) {
+    public ResponseEntity<DeliveryCreateResponse> createDelivery(@RequestBody @Valid DeliveryCreateRequest request,
+                                                                 @RequestHeader("Idempotency-Key") String idempotencyKey) {
         DeliveryCreateCommand command = request.toCommand();
         DeliveryCreateResult result = deliveryCommandService.createDelivery(command);
         DeliveryCreateResponse response = DeliveryCreateResponse.from(result);

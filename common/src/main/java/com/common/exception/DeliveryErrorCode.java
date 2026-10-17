@@ -12,6 +12,9 @@ public enum DeliveryErrorCode implements ErrorCode{
     DELIVERY_NOT_FOUND(HttpStatus.NOT_FOUND, "배송을 찾을 수 없습니다."),
     DELIVERY_ACCESS_DENIED(HttpStatus.FORBIDDEN, "해당 배송에 접근할 권한이 없습니다."),
 
+    // DB 저장 충돌
+    DUPLICATE_IDEMPOTENT_REQUEST(HttpStatus.CONFLICT, "같은 작업에 같은 멱등성 키로 처리된 요청이 이미 있습니다."),
+
     //user-ms 호출 관련
     DELIVERY_REQUESTER_NOT_FOUND(HttpStatus.UNAUTHORIZED, "요청한 사용자 정보를 찾을 수 없습니다.");
 
