@@ -2,6 +2,7 @@ package com.company.company.application.dto;
 
 import com.company.company.domain.entity.Company;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record CompanyResult(
@@ -9,7 +10,9 @@ public record CompanyResult(
         String name,
         String address,
         UUID hubId,
-        UUID managerUserId
+        UUID managerUserId,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
     public static CompanyResult from(Company company) {
         return new CompanyResult(
@@ -17,7 +20,9 @@ public record CompanyResult(
                 company.getName(),
                 company.getAddress(),
                 company.getHubId(),
-                company.getManagerUserId()
+                company.getManagerUserId(),
+                company.getCreatedAt(),
+                company.getUpdatedAt()
         );
     }
 }

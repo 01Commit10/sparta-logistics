@@ -2,14 +2,19 @@ package com.company.company.application.service;
 
 import com.common.exception.BusinessException;
 import com.common.exception.CompanyErrorCode;
+import com.common.page.PageData;
+import com.common.page.PageQuery;
 import com.company.company.application.dto.CompanyResult;
+import com.company.company.application.dto.CompanySearchQuery;
 import com.company.company.application.dto.CreateCompanyCommand;
 import com.company.company.domain.client.HubClient;
 import com.company.company.domain.client.UserClient;
 import com.company.company.domain.entity.Company;
 import com.company.company.domain.repository.CompanyRepository;
+import com.company.company.domain.repository.CompanySearchCondition;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -34,6 +39,27 @@ public class CompanyService {
                 command.managerUserId()
         );
         return CompanyResult.from(companyRepository.save(company));
+    }
+
+    // 업체 단건 조회로 로그인 사용자 모두 접근 가능 (07 서비스 정책 4장 권한). 없거나 삭제된 업체는 404
+    @Transactional(readOnly = true)
+    public CompanyResult getCompany(UUID companyId) {
+        return CompanyResult.from(findActiveCompany(companyId));
+    }
+
+    // 업체 목록·검색으로 로그인 사용자 모두 접근 가능 (07 서비스 정책 4장 권한).
+    // hubId는 검색 조건이라 허브 존재를 hub-ms로 확인하지 않는다. 없는 허브면 빈 목록이다
+    @Transactional(readOnly = true)
+    public PageData<CompanyResult> searchCompanies(CompanySearchQuery searchQuery, PageQuery query) {
+        CompanySearchCondition condition = new CompanySearchCondition(searchQuery.hubId(), searchQuery.name());
+        return companyRepository.search(condition, query).map(CompanyResult::from);
+    }
+
+    // 삭제된 업체인지 검증하며 삭제된 업체일 시 404 반환
+    private Company findActiveCompany(UUID companyId) {
+        return companyRepository.findById(companyId)
+                .filter(company -> !company.isDeleted())
+                .orElseThrow(() -> new BusinessException(CompanyErrorCode.COMPANY_NOT_FOUND));
     }
 
     private void validateHub(UUID hubId) {

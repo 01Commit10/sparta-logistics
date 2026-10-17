@@ -10,17 +10,17 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "p_companies")
+@Table(name = "p_companies", indexes = @Index(name = "idx_companies_hub_id", columnList = "hub_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Company extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 150)
     private String name;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String address;
 
     @Column(name = "hub_id", nullable = false)

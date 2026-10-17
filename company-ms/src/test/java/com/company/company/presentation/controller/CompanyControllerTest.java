@@ -65,7 +65,7 @@ class CompanyControllerTest {
     @DisplayName("MASTER가 등록하면 201과 업체 정보를 돌려주고, 요청값을 그대로 Command로 넘긴다")
     void created() throws Exception {
         given(companyService.createCompany(any()))
-                .willReturn(new CompanyResult(COMPANY_ID, "스파르타상사", "서울시 강남구 테헤란로 1", HUB_ID, MANAGER_ID));
+                .willReturn(new CompanyResult(COMPANY_ID, "스파르타상사", "서울시 강남구 테헤란로 1", HUB_ID, MANAGER_ID, null, null));
 
         create("MASTER", VALID_BODY)
                 .andExpect(status().isCreated())
@@ -114,6 +114,44 @@ class CompanyControllerTest {
                 .andExpect(jsonPath("$.errors[0].field").exists());
 
         verifyNoInteractions(companyService);
+    }
+
+    @Test
+    @DisplayName("업체명 150자, 주소 255자까지는 등록할 수 있다")
+    void maxLength() throws Exception {
+        given(companyService.createCompany(any()))
+                .willReturn(new CompanyResult(COMPANY_ID, "가".repeat(150), "가".repeat(255), HUB_ID, MANAGER_ID, null, null));
+
+        create("MASTER", body("가".repeat(150), "가".repeat(255)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("업체명이 150자를 넘으면 400 INVALID_INPUT (field: name)")
+    void nameTooLong() throws Exception {
+        create("MASTER", body("가".repeat(151), "서울"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.errors[0].field").value("name"));
+
+        verifyNoInteractions(companyService);
+    }
+
+    @Test
+    @DisplayName("주소가 255자를 넘으면 400 INVALID_INPUT (field: address)")
+    void addressTooLong() throws Exception {
+        create("MASTER", body("스파르타상사", "가".repeat(256)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.errors[0].field").value("address"));
+
+        verifyNoInteractions(companyService);
+    }
+
+    private static String body(String name, String address) {
+        return """
+                {"name":"%s","address":"%s","hubId":"%s","managerUserId":"%s"}
+                """.formatted(name, address, HUB_ID, MANAGER_ID);
     }
 
     @Test
