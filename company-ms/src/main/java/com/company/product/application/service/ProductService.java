@@ -11,9 +11,11 @@ import com.company.company.domain.repository.CompanyRepository;
 import com.company.product.application.dto.CreateProductCommand;
 import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.application.dto.ProductResult;
+import com.company.product.application.dto.ProductSearchQuery;
 import com.company.product.application.dto.UpdateProductCommand;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
+import com.company.product.domain.repository.ProductSearchCondition;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +56,14 @@ public class ProductService {
     public PageData<ProductResult> getProductsByCompany(UUID companyId, PageQuery query) {
         findActiveCompany(companyId);
         return productRepository.findActiveByCompanyId(companyId, query).map(ProductResult::from);
+    }
+
+    // 상품 목록·검색으로 로그인 사용자 모두 접근 가능 (07 서비스 정책 4장 권한).
+    // companyId는 경로가 아니라 검색 조건이라, 없거나 삭제된 업체면 404가 아니라 빈 목록이다
+    @Transactional(readOnly = true)
+    public PageData<ProductResult> searchProducts(ProductSearchQuery searchQuery, PageQuery query) {
+        ProductSearchCondition condition = new ProductSearchCondition(searchQuery.companyId(), searchQuery.name());
+        return productRepository.search(condition, query).map(ProductResult::from);
     }
 
     // 상품·소속 업체 존재 확인 → 권한 확인 순서.

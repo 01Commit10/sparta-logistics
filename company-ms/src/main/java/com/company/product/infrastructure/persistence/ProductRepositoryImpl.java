@@ -5,6 +5,7 @@ import com.common.page.PageQuery;
 import com.common.page.SpringDataPages;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
+import com.company.product.domain.repository.ProductSearchCondition;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -32,6 +33,13 @@ public class ProductRepositoryImpl implements ProductRepository {
     public PageData<Product> findActiveByCompanyId(UUID companyId, PageQuery query) {
         return SpringDataPages.toPageData(
                 jpa.findActiveByCompanyId(companyId, SpringDataPages.toPageable(query))
+        );
+    }
+
+    @Override
+    public PageData<Product> search(ProductSearchCondition condition, PageQuery query) {
+        return SpringDataPages.toPageData(
+                jpa.findAll(ProductSpecifications.of(condition), SpringDataPages.toPageable(query))
         );
     }
 }

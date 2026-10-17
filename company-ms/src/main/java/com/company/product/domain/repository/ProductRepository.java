@@ -11,4 +11,5 @@ public interface ProductRepository {
     Product save(Product product);
     Optional<Product> findById(UUID id);
     PageData<Product> findActiveByCompanyId(UUID companyId, PageQuery query);
+    PageData<Product> search(ProductSearchCondition condition, PageQuery query);
 }
