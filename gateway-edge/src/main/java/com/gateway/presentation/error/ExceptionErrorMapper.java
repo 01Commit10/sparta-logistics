@@ -2,7 +2,6 @@ package com.gateway.presentation.error;
 
 import com.common.exception.CommonErrorCode;
 import com.common.exception.ErrorCode;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -19,11 +18,8 @@ public class ExceptionErrorMapper {
 
     public ErrorCode map(Throwable error) {
         for (Throwable current = error; current != null; current = next(current)) {
-            if (current instanceof CallNotPermittedException
-                    || current instanceof org.springframework.cloud.gateway.support.ServiceUnavailableException
-                    || current instanceof ConnectException) {
-                // Circuit Breaker 열림 (SCG 필터는 fallbackUri가 없으면 ServiceUnavailableException으로 바꿔 던진다, GW-10), 연결 실패
-                return CommonErrorCode.SERVICE_UNAVAILABLE;
+            if (current instanceof ConnectException) {
+                return CommonErrorCode.SERVICE_UNAVAILABLE;          // 연결 실패
             }
             if (current instanceof TimeoutException
                     || current instanceof org.springframework.cloud.gateway.support.TimeoutException) {
