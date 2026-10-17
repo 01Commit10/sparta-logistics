@@ -88,4 +88,11 @@ public final class PagePolicy {
         orders.add(Sort.Order.asc(TIE_BREAKER));
         return Sort.by(orders);
     }
+
+    public PageQuery toQuery(Pageable pageable) {
+        Pageable normalized = apply(pageable);
+        return new PageQuery(normalized.getPageNumber(), normalized.getPageSize(), normalized.getSort().stream()
+                .map(order -> new PageQuery.PageOrder(order.getProperty(), order.isAscending()))
+                .toList());
+    }
 }

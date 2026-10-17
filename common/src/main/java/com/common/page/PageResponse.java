@@ -1,6 +1,7 @@
 package com.common.page;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.function.Function;
@@ -37,5 +38,21 @@ public record PageResponse<T>(
 
     public static <S, T> PageResponse<T> from(Page<S> page, Function<? super S, ? extends T> mapper) {
         return from(page.map(mapper));
+    }
+
+    public static <S, T> PageResponse<T> from(PageData<S> data, PageQuery query, Function<? super S, ? extends T> mapper) {
+        int totalPages = (int) Math.ceil((double) data.totalElements() / query.size());
+        return new PageResponse<>(
+                data.<T>map(mapper).content(),
+                query.page(),
+                query.size(),
+                data.totalElements(),
+                totalPages,
+                query.page() + 1 < totalPages,
+                query.orderList().stream().map(PageResponse::toSortOrder).toList());
+    }
+
+    private static SortOrder toSortOrder(PageQuery.PageOrder order) {
+        return new SortOrder(order.property(), order.ascending() ? Sort.Direction.ASC : Sort.Direction.DESC);
     }
 }
