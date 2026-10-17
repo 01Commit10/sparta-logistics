@@ -18,10 +18,10 @@ public class CompanyRepositoryImpl implements CompanyRepository {
 
     private final CompanyJpaRepository jpa;
 
-
+    // 바로 flush해서 Auditing(updatedAt·updatedBy)과 DB 제약 위반을 응답을 만들기 전에 반영한다
     @Override
     public Company save(Company company) {
-        return jpa.save(company);
+        return jpa.saveAndFlush(company);
     }
 
     @Override

@@ -9,6 +9,7 @@ import com.company.fake.FakeHubClient;
 import com.company.fake.FakeUserClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -27,7 +28,7 @@ class GetCompanyTest {
 
     private final FakeCompanyRepository companyRepository = new FakeCompanyRepository();
     private final CompanyService service =
-            new CompanyService(companyRepository, new FakeUserClient(), new FakeHubClient());
+            new CompanyService(companyRepository, new FakeUserClient(), new FakeHubClient(), TransactionOperations.withoutTransaction());
 
     private final Company company = companyRepository.save(
             Company.create("스파르타상사", "서울시 강남구 테헤란로 1", HUB_ID, MANAGER_ID));

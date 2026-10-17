@@ -40,6 +40,22 @@ public class Company extends BaseEntity {
         return new Company(name, address, hubId, managerUserId);
     }
 
+    // null인 값은 바꾸지 않는다. 허브·관리자 존재 확인은 원격 조회가 필요해 서비스에서 먼저 한다
+    public void update(String name, String address, UUID hubId, UUID managerUserId) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (address != null) {
+            this.address = address;
+        }
+        if (hubId != null) {
+            this.hubId = hubId;
+        }
+        if (managerUserId != null) {
+            this.managerUserId = managerUserId;
+        }
+    }
+
     // 업체 관리자 본인 여부 (07 서비스 정책 "본인 데이터" 판별: manager_user_id == 로그인 사용자)
     public boolean isManagedBy(UUID userId) {
         return managerUserId.equals(userId);
