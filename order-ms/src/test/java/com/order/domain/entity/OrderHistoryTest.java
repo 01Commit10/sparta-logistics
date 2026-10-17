@@ -46,13 +46,14 @@ public class OrderHistoryTest {
     }
 
     @Test
-    @DisplayName("실패 처리하면 상태는 SUCCEEDED 이고 응답 코드는 201을 내려준다.")
+    @DisplayName("실패 처리하면 상태는 FAILED이고 응답 코드와 에러 내용이 기록된다.")
     void failHistorySuccess() {
         OrderHistory history = createHistory();
-        history.succeed(201);
+        history.fail(409, "재고 부족");
 
-        assertThat(history.getOperationStatus()).isEqualTo(OrderOperationStatus.SUCCEEDED);
-        assertThat(history.getResponseCode()).isEqualTo(201);
+        assertThat(history.getOperationStatus()).isEqualTo(OrderOperationStatus.FAILED);
+        assertThat(history.getResponseCode()).isEqualTo(409);
+        assertThat(history.getLastError()).isEqualTo("재고 부족");
     }
 
     @Test
@@ -70,4 +71,6 @@ public class OrderHistoryTest {
                 .extracting(BusinessException::getErrorCode)
                 .isEqualTo(OrderErrorCode.HISTORY_ALREADY_COMPLETED);
     }
+
+
 }
