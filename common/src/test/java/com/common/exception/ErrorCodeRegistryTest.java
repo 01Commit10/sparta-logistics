@@ -36,6 +36,6 @@ class ErrorCodeRegistryTest {
         assertThat(ErrorCodeRegistry.all())
                 .contains(CommonErrorCode.INVALID_INPUT, AuthErrorCode.AUTH_UNAVAILABLE, UserErrorCode.LAST_MASTER)
                 .hasSize(CommonErrorCode.values().length + AuthErrorCode.values().length + UserErrorCode.values().length
-                        + CompanyErrorCode.values().length);
+                        + CompanyErrorCode.values().length + ProductErrorCode.values().length);
     }
 }

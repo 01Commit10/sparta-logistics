@@ -19,7 +19,8 @@ public final class ErrorCodeRegistry {
                     CommonErrorCode.values(),
                     AuthErrorCode.values(),
                     UserErrorCode.values(),
-                    CompanyErrorCode.values())
+                    CompanyErrorCode.values(),
+                    ProductErrorCode.values())
             .flatMap(Arrays::stream)
             .map(ErrorCode.class::cast)
             .toList();

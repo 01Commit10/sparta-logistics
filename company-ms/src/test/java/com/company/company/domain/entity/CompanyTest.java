@@ -24,4 +24,14 @@ class CompanyTest {
         assertThat(company.getId()).isNull();
         assertThat(company.isDeleted()).isFalse();
     }
+
+    @Test
+    @DisplayName("isManagedBy: 업체 관리자 본인만 true")
+    void isManagedBy() {
+        Company company = Company.create("스파르타상사", "서울시 강남구 테헤란로 1", HUB_ID, MANAGER_ID);
+
+        assertThat(company.isManagedBy(MANAGER_ID)).isTrue();
+        assertThat(company.isManagedBy(UUID.randomUUID())).isFalse();
+        assertThat(company.isManagedBy(null)).isFalse();
+    }
 }
