@@ -27,10 +27,7 @@ public class DeliveryQueryService {
         Delivery delivery = deliveryRepository.findById(deliveryId)
                 .orElseThrow(() -> new BusinessException(DeliveryErrorCode.DELIVERY_NOT_FOUND));
 
-        if(!userId.equals(delivery.getDeliveryManagerId()) && userClient.isDeliveryManager(userId)) {
-            throw new BusinessException(DeliveryErrorCode.DELIVERY_ACCESS_DENIED);
-        }
-
+        validateReadable(userId, delivery);
         return DeliveryResult.from(delivery);
     }
 
@@ -40,5 +37,21 @@ public class DeliveryQueryService {
                 : deliveryRepository.findAll(pageable);
 
         return deliveries.map(DeliveryResult::from);
+    }
+
+    public DeliveryResult getDeliveryByOrderId(UUID orderId, UUID userId) {
+        Delivery delivery = deliveryRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new BusinessException(DeliveryErrorCode.DELIVERY_NOT_FOUND));
+
+        validateReadable(userId, delivery);
+        return DeliveryResult.from(delivery);
+    }
+
+
+    // 배송 담당자는 본인이 담당한 배송만 조회 가능
+    private void validateReadable(UUID userId, Delivery delivery) {
+        if(!userId.equals(delivery.getDeliveryManagerId()) && userClient.isDeliveryManager(userId)) {
+            throw new BusinessException(DeliveryErrorCode.DELIVERY_ACCESS_DENIED);
+        }
     }
 }

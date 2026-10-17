@@ -44,4 +44,13 @@ public class DeliveryController {
         return ResponseEntity.ok(PageResponse.from(deliveries, DeliveryResponse::from));
     }
 
+    @GetMapping("/by-order/{orderId}")
+    public ResponseEntity<DeliveryResponse> getDeliveryByOrderId(@PathVariable UUID orderId,
+                                                                 @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId) {
+        DeliveryResult result = deliveryQueryService.getDeliveryByOrderId(orderId, userId);
+        DeliveryResponse deliveryResponse = DeliveryResponse.from(result);
+
+        return ResponseEntity.ok(deliveryResponse);
+    }
+
 }

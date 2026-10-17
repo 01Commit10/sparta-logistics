@@ -38,6 +38,12 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
     }
 
     @Override
+    public Optional<Delivery> findByOrderId(UUID orderId) {
+        return jpaRepository.findByOrderIdAndDeletedAtIsNull(orderId);
+    }
+
+
+    @Override
     public Page<Delivery> findAll(Pageable pageable) {
         return jpaRepository.findAllByDeletedAtIsNull(pageable);
     }
@@ -46,6 +52,7 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
     public Page<Delivery> findAllByDeliveryManagerId(UUID deliveryManagerId, Pageable pageable) {
         return jpaRepository.findAllByDeliveryManagerIdAndDeletedAtIsNull(deliveryManagerId, pageable);
     }
+
 
 
     private RuntimeException translate(DataIntegrityViolationException e) {
