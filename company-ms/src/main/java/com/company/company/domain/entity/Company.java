@@ -39,4 +39,9 @@ public class Company extends BaseEntity {
     public static Company create(String name, String address, UUID hubId, UUID managerUserId) {
         return new Company(name, address, hubId, managerUserId);
     }
+
+    // 업체 관리자 본인 여부 (07 서비스 정책 "본인 데이터" 판별: manager_user_id == 로그인 사용자)
+    public boolean isManagedBy(UUID userId) {
+        return managerUserId.equals(userId);
+    }
 }
