@@ -1,8 +1,6 @@
 package com.gateway.presentation.error;
 
 import com.common.exception.CommonErrorCode;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.support.NotFoundException;
@@ -60,23 +58,6 @@ class ExceptionErrorMapperTest {
                 .isEqualTo(CommonErrorCode.SERVICE_TIMEOUT);
         assertThat(mapper.map(new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT)))
                 .isEqualTo(CommonErrorCode.SERVICE_TIMEOUT);
-    }
-
-    @Test
-    @DisplayName("Circuit Breaker 열림 → SERVICE_UNAVAILABLE")
-    void circuitOpen() {
-        CircuitBreaker breaker = CircuitBreaker.ofDefaults("order-ms");
-        breaker.transitionToOpenState();
-
-        assertThat(mapper.map(CallNotPermittedException.createCallNotPermittedException(breaker)))
-                .isEqualTo(CommonErrorCode.SERVICE_UNAVAILABLE);
-    }
-
-    @Test
-    @DisplayName("SCG CircuitBreaker 필터가 열림을 바꿔 던진 ServiceUnavailableException → SERVICE_UNAVAILABLE (GW-10, fallbackUri 없음)")
-    void circuitOpen_wrappedByGateway() {
-        assertThat(mapper.map(new org.springframework.cloud.gateway.support.ServiceUnavailableException()))
-                .isEqualTo(CommonErrorCode.SERVICE_UNAVAILABLE);
     }
 
     @Test

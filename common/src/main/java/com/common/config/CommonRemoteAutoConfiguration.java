@@ -15,7 +15,7 @@ import org.springframework.core.env.Environment;
 
 /**
  * 서비스 간 Feign 호출 장애 대응 (C02). 헤더 전달은 별도(C01 CommonAuthFeignAutoConfiguration).
- * OpenFeign을 의존성에 추가한 서비스에서만 켜진다. 타임아웃·Circuit Breaker 값은 application-common.yaml에 있다.
+ * OpenFeign을 의존성에 추가한 서비스에서만 켜진다. 타임아웃 값은 application-common.yaml에 있다 (Circuit Breaker·재시도 없음, C03).
  * ErrorDecoder 빈은 모든 Feign 클라이언트에 적용된다.
  */
 @AutoConfiguration
