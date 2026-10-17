@@ -17,9 +17,10 @@ public class ProductRepositoryImpl implements ProductRepository {
 
     private final ProductJpaRepository jpa;
 
+    // 바로 flush해서 Auditing(updatedAt·updatedBy)과 DB 제약 위반을 응답을 만들기 전에 반영한다
     @Override
     public Product save(Product product) {
-        return jpa.save(product);
+        return jpa.saveAndFlush(product);
     }
 
     @Override

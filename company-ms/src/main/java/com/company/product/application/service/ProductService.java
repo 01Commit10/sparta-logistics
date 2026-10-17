@@ -56,7 +56,8 @@ public class ProductService {
         return productRepository.findActiveByCompanyId(companyId, query).map(ProductResult::from);
     }
 
-    // 상품·소속 업체 존재 확인 → 권한 확인 순서. 변경은 dirty checking으로 반영
+    // 상품·소속 업체 존재 확인 → 권한 확인 순서.
+    // dirty checking만으로는 커밋 때 flush돼 응답의 updatedAt이 수정 전 값이므로 save(flush)로 반영한 뒤 응답한다
     @Transactional
     public ProductResult updateProduct(UpdateProductCommand command) {
         Product product = findActiveProduct(command.productId());
@@ -64,7 +65,7 @@ public class ProductService {
         validateCanManage(company, command.actorId(), command.actorIsMaster());
 
         product.update(command.name(), command.description(), command.unitPrice());
-        return ProductResult.from(product);
+        return ProductResult.from(productRepository.save(product));
     }
 
     // 수정과 같은 순서로 확인. 삭제 시각·삭제자는 dirty checking으로 반영

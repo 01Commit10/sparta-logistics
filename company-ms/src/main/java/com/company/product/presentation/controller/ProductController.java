@@ -36,8 +36,9 @@ public class ProductController {
                 request.toCommand(companyId, authUser.id(), authUser.isMaster())));
     }
 
+    // 로그인 사용자 모두 (권한 확인 없이 X-User-* 헤더로 로그인 여부만 본다)
     @GetMapping("/products/{productId}")
-    public ProductResponse getProduct(@PathVariable UUID productId) {
+    public ProductResponse getProduct(@CurrentUser AuthUser authUser, @PathVariable UUID productId) {
         return ProductResponse.from(productService.getProduct(productId));
     }
 
