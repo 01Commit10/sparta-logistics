@@ -5,6 +5,7 @@ import com.common.auth.web.CurrentUser;
 import com.common.page.PagePolicy;
 import com.common.page.PageQuery;
 import com.common.page.PageResponse;
+import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.application.service.ProductService;
 import com.company.product.presentation.dto.CreateProductRequest;
 import com.company.product.presentation.dto.ProductResponse;
@@ -47,6 +48,13 @@ public class ProductController {
                                          @Valid @RequestBody UpdateProductRequest request) {
         return ProductResponse.from(productService.updateProduct(
                 request.toCommand(productId, authUser.id(), authUser.isMaster())));
+    }
+
+    // MASTER·업체 관리자 본인. 논리 삭제
+    @DeleteMapping("/products/{productId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteProduct(@CurrentUser AuthUser authUser, @PathVariable UUID productId) {
+        productService.deleteProduct(new DeleteProductCommand(productId, authUser.id(), authUser.isMaster()));
     }
 
     @GetMapping("/companies/{companyId}/products")

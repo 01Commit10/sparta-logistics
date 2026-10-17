@@ -9,6 +9,7 @@ import com.common.page.PageQuery;
 import com.company.company.domain.entity.Company;
 import com.company.company.domain.repository.CompanyRepository;
 import com.company.product.application.dto.CreateProductCommand;
+import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.application.dto.ProductResult;
 import com.company.product.application.dto.UpdateProductCommand;
 import com.company.product.domain.entity.Product;
@@ -64,6 +65,16 @@ public class ProductService {
 
         product.update(command.name(), command.description(), command.unitPrice());
         return ProductResult.from(product);
+    }
+
+    // 수정과 같은 순서로 확인. 삭제 시각·삭제자는 dirty checking으로 반영
+    @Transactional
+    public void deleteProduct(DeleteProductCommand command) {
+        Product product = findActiveProduct(command.productId());
+        Company company = findActiveCompany(product.getCompany().getId());
+        validateCanManage(company, command.actorId(), command.actorIsMaster());
+
+        product.delete(command.actorId());
     }
 
     // MASTER 또는 해당 업체의 관리자 본인만 (07 서비스 정책 4장 권한)
