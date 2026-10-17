@@ -29,28 +29,26 @@ public class OrderHistory extends BaseEntity {
     private Order order;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "operation_type", nullable = false, length = 32)
+    @Column(nullable = false, length = 32)
     private OrderOperationType operationType;
 
-    @Column(name = "idempotency_key", nullable = false, length = 120)
+    @Column(nullable = false, length = 120)
     private String idempotencyKey;
 
-    @Column(name = "request_hash", nullable = false, columnDefinition = "CHAR(64)")
+    @Column(nullable = false, columnDefinition = "CHAR(64)")
     private String requestHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "operation_status", nullable = false, length = 20)
+    @Column(nullable = false, length = 20)
     private OrderOperationStatus operationStatus;
 
-    @Column(name = "response_code")
     private Integer responseCode;
 
     @ColumnDefault("0")
-    @Column(name = "retry_count", nullable = false)
+    @Column(nullable = false)
     private int retryCount;
 
-    // last_error | TEXT | NULL
-    @Column(name = "last_error", columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String lastError;
 
 
@@ -64,15 +62,34 @@ public class OrderHistory extends BaseEntity {
         return history;
     }
 
+    /*public boolean isSameRequest(String requestHash) {
+        return this.requestHash.equals(requestHash);
+    }
+
+    public void linkOrder(Order order) {
+        this.order = order;
+    }*/
+
+    // 409 들어오면 실패
+    public void fail(int responseCode, String lastError) {
+        validateNotCompleted();
+        this.operationStatus = OrderOperationStatus.FAILED;
+        this.responseCode = responseCode;
+        this.lastError = lastError;
+    }
+
     // 201 들어오면 성공
     public void succeed(int responseCode) {
-        if (operationStatus.isCompleted()) {
-            throw new BusinessException(OrderErrorCode.HISTORY_ALREADY_COMPLETED);
-        }
+        validateNotCompleted();
         this.operationStatus = OrderOperationStatus.SUCCEEDED;
         this.responseCode = responseCode;
     }
 
+    private void validateNotCompleted() {
+        if (operationStatus.isCompleted()) {
+            throw new BusinessException(OrderErrorCode.HISTORY_ALREADY_COMPLETED);
+        }
+    }
 
 
 
