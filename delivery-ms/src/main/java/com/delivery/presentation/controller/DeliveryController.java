@@ -1,6 +1,8 @@
 package com.delivery.presentation.controller;
 
 import com.common.auth.AuthContract;
+import com.common.page.PagePolicy;
+import com.common.page.PageResponse;
 import com.delivery.application.dto.result.DeliveryResult;
 import com.delivery.application.service.DeliveryQueryService;
 import com.delivery.presentation.dto.response.DeliveryResponse;
@@ -18,6 +20,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DeliveryController {
 
+    // 정렬을 허용할 필드(현재는 status만)
+    private static final PagePolicy PAGE_POLICY = PagePolicy.of("status");
+
     private final DeliveryQueryService deliveryQueryService;
 
 
@@ -31,11 +36,12 @@ public class DeliveryController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<DeliveryResponse>> getDeliveries(@RequestHeader(AuthContract.HEADER_USER_ID) UUID userId,
+    public ResponseEntity<PageResponse<DeliveryResponse>> getDeliveries(@RequestHeader(AuthContract.HEADER_USER_ID) UUID userId,
                                                                 Pageable pageable) {
-        Page<DeliveryResult> deliveries = deliveryQueryService.getDeliveries(userId, pageable);
+        Pageable normalized = PAGE_POLICY.apply(pageable);
+        Page<DeliveryResult> deliveries = deliveryQueryService.getDeliveries(userId, normalized);
 
-        return ResponseEntity.ok(deliveries.map(DeliveryResponse::from));
+        return ResponseEntity.ok(PageResponse.from(deliveries, DeliveryResponse::from));
     }
 
 }
