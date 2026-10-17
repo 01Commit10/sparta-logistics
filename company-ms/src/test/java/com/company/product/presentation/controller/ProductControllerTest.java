@@ -69,7 +69,7 @@ class ProductControllerTest {
     @DisplayName("등록하면 201과 상품 정보를 돌려주고, 경로의 업체 ID·요청자 정보를 Command로 넘긴다")
     void created() throws Exception {
         given(productService.createProduct(any())).willReturn(
-                new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50")));
+                new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50"), null, null));
 
         create("USER", VALID_BODY)
                 .andExpect(status().isCreated())
@@ -87,7 +87,7 @@ class ProductControllerTest {
     @DisplayName("MASTER면 actorIsMaster=true로 넘긴다")
     void master() throws Exception {
         given(productService.createProduct(any())).willReturn(
-                new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50")));
+                new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50"), null, null));
 
         create("MASTER", VALID_BODY).andExpect(status().isCreated());
 

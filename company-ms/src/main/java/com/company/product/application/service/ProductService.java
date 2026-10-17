@@ -4,6 +4,8 @@ import com.common.exception.BusinessException;
 import com.common.exception.CommonErrorCode;
 import com.common.exception.CompanyErrorCode;
 import com.common.exception.ProductErrorCode;
+import com.common.page.PageData;
+import com.common.page.PageQuery;
 import com.company.company.domain.entity.Company;
 import com.company.company.domain.repository.CompanyRepository;
 import com.company.product.application.dto.CreateProductCommand;
@@ -44,6 +46,12 @@ public class ProductService {
         Product product = findActiveProduct(productId);
         findActiveCompany(product.getCompany().getId());
         return ProductResult.from(product);
+    }
+
+    @Transactional(readOnly = true)
+    public PageData<ProductResult> getProductsByCompany(UUID companyId, PageQuery query) {
+        findActiveCompany(companyId);
+        return productRepository.findActiveByCompanyId(companyId, query).map(ProductResult::from);
     }
 
     // MASTER 또는 해당 업체의 관리자 본인만 (07 서비스 정책 4장 권한)
