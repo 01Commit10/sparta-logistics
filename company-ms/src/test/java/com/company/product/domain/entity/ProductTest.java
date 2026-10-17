@@ -75,4 +75,17 @@ class ProductTest {
                             e -> assertThat(e.getErrorCode()).isEqualTo(ProductErrorCode.PRODUCT_INVALID_UNIT_PRICE));
         }
     }
+
+    @Test
+    @DisplayName("삭제: 삭제 시각·삭제자를 기록한다")
+    void delete() {
+        Product product = Product.create(COMPANY, "생수 2L", "6개입", new BigDecimal("12000.00"));
+        UUID actorId = UUID.randomUUID();
+
+        product.delete(actorId);
+
+        assertThat(product.isDeleted()).isTrue();
+        assertThat(product.getDeletedAt()).isNotNull();
+        assertThat(product.getDeletedBy()).isEqualTo(actorId);
+    }
 }

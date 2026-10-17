@@ -9,10 +9,13 @@ import com.common.page.PageQuery;
 import com.company.company.domain.entity.Company;
 import com.company.company.domain.repository.CompanyRepository;
 import com.company.product.application.dto.CreateProductCommand;
+import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.application.dto.ProductResult;
+import com.company.product.application.dto.ProductSearchQuery;
 import com.company.product.application.dto.UpdateProductCommand;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
+import com.company.product.domain.repository.ProductSearchCondition;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,7 +58,16 @@ public class ProductService {
         return productRepository.findActiveByCompanyId(companyId, query).map(ProductResult::from);
     }
 
-    // 상품·소속 업체 존재 확인 → 권한 확인 순서. 변경은 dirty checking으로 반영
+    // 상품 목록·검색으로 로그인 사용자 모두 접근 가능 (07 서비스 정책 4장 권한).
+    // companyId는 경로가 아니라 검색 조건이라, 없거나 삭제된 업체면 404가 아니라 빈 목록이다
+    @Transactional(readOnly = true)
+    public PageData<ProductResult> searchProducts(ProductSearchQuery searchQuery, PageQuery query) {
+        ProductSearchCondition condition = new ProductSearchCondition(searchQuery.companyId(), searchQuery.name());
+        return productRepository.search(condition, query).map(ProductResult::from);
+    }
+
+    // 상품·소속 업체 존재 확인 → 권한 확인 순서.
+    // dirty checking만으로는 커밋 때 flush돼 응답의 updatedAt이 수정 전 값이므로 save(flush)로 반영한 뒤 응답한다
     @Transactional
     public ProductResult updateProduct(UpdateProductCommand command) {
         Product product = findActiveProduct(command.productId());
@@ -63,7 +75,17 @@ public class ProductService {
         validateCanManage(company, command.actorId(), command.actorIsMaster());
 
         product.update(command.name(), command.description(), command.unitPrice());
-        return ProductResult.from(product);
+        return ProductResult.from(productRepository.save(product));
+    }
+
+    // 수정과 같은 순서로 확인. 삭제 시각·삭제자는 dirty checking으로 반영
+    @Transactional
+    public void deleteProduct(DeleteProductCommand command) {
+        Product product = findActiveProduct(command.productId());
+        Company company = findActiveCompany(product.getCompany().getId());
+        validateCanManage(company, command.actorId(), command.actorIsMaster());
+
+        product.delete(command.actorId());
     }
 
     // MASTER 또는 해당 업체의 관리자 본인만 (07 서비스 정책 4장 권한)

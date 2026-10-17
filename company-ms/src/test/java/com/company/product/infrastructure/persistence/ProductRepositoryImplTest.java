@@ -9,8 +9,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,6 +45,21 @@ class ProductRepositoryImplTest {
         assertThat(found.getUnitPrice()).isEqualByComparingTo("12000.50");
         assertThat(found.getCompany().getId()).isEqualTo(company.getId());
         assertThat(found.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("수정한 상품을 저장하면 바로 flush돼 반환한 엔티티의 updatedAt이 갱신된다")
+    void saveFlushesUpdate() {
+        Company company = Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), UUID.randomUUID());
+        em.persist(company);
+        Product saved = productRepository.save(Product.create(company, "생수 2L", "6개입", new BigDecimal("12000.50")));
+        LocalDateTime past = LocalDateTime.of(2000, 1, 1, 0, 0);
+        ReflectionTestUtils.setField(saved, "updatedAt", past);
+
+        saved.update(null, null, new BigDecimal("9000"));
+        Product updated = productRepository.save(saved);
+
+        assertThat(updated.getUpdatedAt()).isAfter(past);
     }
 
     @Test
