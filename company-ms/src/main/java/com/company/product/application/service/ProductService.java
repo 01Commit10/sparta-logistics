@@ -3,6 +3,7 @@ package com.company.product.application.service;
 import com.common.exception.BusinessException;
 import com.common.exception.CommonErrorCode;
 import com.common.exception.CompanyErrorCode;
+import com.common.exception.ProductErrorCode;
 import com.company.company.domain.entity.Company;
 import com.company.company.domain.repository.CompanyRepository;
 import com.company.product.application.dto.CreateProductCommand;
@@ -37,10 +38,12 @@ public class ProductService {
         return ProductResult.from(productRepository.save(product));
     }
 
-    private Company findActiveCompany(UUID companyId) {
-        return companyRepository.findById(companyId)
-                .filter(company -> !company.isDeleted())
-                .orElseThrow(() -> new BusinessException(CompanyErrorCode.COMPANY_NOT_FOUND));
+    // 상품 단건 조회로 로그인 사용자 모두 접근 가능 (07 서비스 정책 4장 권한)
+    @Transactional(readOnly = true)
+    public ProductResult getProduct(UUID productId) {
+        Product product = findActiveProduct(productId);
+        findActiveCompany(product.getCompany().getId());
+        return ProductResult.from(product);
     }
 
     // MASTER 또는 해당 업체의 관리자 본인만 (07 서비스 정책 4장 권한)
@@ -48,5 +51,19 @@ public class ProductService {
         if (!command.actorIsMaster() && !company.isManagedBy(command.actorId())) {
             throw new BusinessException(CommonErrorCode.ACCESS_DENIED);
         }
+    }
+
+    // 삭제된 업체인지 검증하며 삭제된 업체일 시 404 반환
+    private Company findActiveCompany(UUID companyId) {
+        return companyRepository.findById(companyId)
+                .filter(company -> !company.isDeleted())
+                .orElseThrow(() -> new BusinessException(CompanyErrorCode.COMPANY_NOT_FOUND));
+    }
+
+    // 삭제된 상품인지 검증하며 삭제된 상품일 시 404 반환
+    private Product findActiveProduct(UUID productId) {
+        return productRepository.findById(productId)
+                .filter(product -> !product.isDeleted())
+                .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
     }
 }
