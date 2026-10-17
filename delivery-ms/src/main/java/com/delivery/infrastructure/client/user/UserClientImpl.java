@@ -2,6 +2,9 @@ package com.delivery.infrastructure.client.user;
 
 import com.common.exception.BusinessException;
 import com.common.exception.DeliveryErrorCode;
+import com.common.exception.UserErrorCode;
+import com.common.remote.RemoteBusinessException;
+import com.common.remote.RemoteCallTemplate;
 import com.delivery.application.client.UserClient;
 import com.delivery.infrastructure.client.user.dto.UserAuthInfoResponse;
 import feign.FeignException;
@@ -15,14 +18,20 @@ import java.util.UUID;
 public class UserClientImpl implements UserClient {
 
     private final UserFeignClient userFeignClient;
+    private final RemoteCallTemplate remoteCallTemplate;
 
 
     @Override
     public boolean isDeliveryManager(UUID userId) {
         try {
-            return userFeignClient.getAuthInfo(userId).isDeliveryManager();
-        } catch (FeignException.NotFound e) {
-            throw new BusinessException(DeliveryErrorCode.DELIVERY_REQUESTER_NOT_FOUND);
+            return remoteCallTemplate
+                    .execute("user-ms", () -> userFeignClient.getAuthInfo(userId))
+                    .isDeliveryManager();
+        } catch (RemoteBusinessException e) {
+            if(e.getErrorCode() == UserErrorCode.USER_NOT_FOUND) {
+                throw new BusinessException(DeliveryErrorCode.DELIVERY_REQUESTER_NOT_FOUND);
+            }
+            throw e;
         }
     }
 }
