@@ -3,6 +3,7 @@ package com.company.product.presentation.dto;
 import com.company.product.application.dto.ProductResult;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record ProductResponse(
@@ -10,7 +11,9 @@ public record ProductResponse(
         UUID companyId,
         String name,
         String description,
-        BigDecimal unitPrice
+        BigDecimal unitPrice,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
     public static ProductResponse from(ProductResult result) {
         return new ProductResponse(
@@ -18,7 +21,9 @@ public record ProductResponse(
                 result.companyId(),
                 result.name(),
                 result.description(),
-                result.unitPrice()
+                result.unitPrice(),
+                result.createdAt(),
+                result.updatedAt()
         );
     }
 }

@@ -1,5 +1,8 @@
 package com.company.product.infrastructure.persistence;
 
+import com.common.page.PageData;
+import com.common.page.PageQuery;
+import com.common.page.SpringDataPages;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,5 +25,12 @@ public class ProductRepositoryImpl implements ProductRepository {
     @Override
     public Optional<Product> findById(UUID id) {
         return jpa.findById(id);
+    }
+
+    @Override
+    public PageData<Product> findActiveByCompanyId(UUID companyId, PageQuery query) {
+        return SpringDataPages.toPageData(
+                jpa.findActiveByCompanyId(companyId, SpringDataPages.toPageable(query))
+        );
     }
 }
