@@ -62,4 +62,9 @@ public class DeliveryCommandService {
         delivery.changeStatus(nextStatus);
         return DeliveryResult.from(delivery);
     }
+
+    public void cancelDelivery(UUID deliveryId) {
+        deliveryRepository.findById(deliveryId)
+                .ifPresent(Delivery::cancel);
+    }
 }

@@ -11,20 +11,28 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
-@RequestMapping("/internal/v1")
+@RequestMapping("/internal/v1/deliveries")
 @RequiredArgsConstructor
 public class InternalDeliveryController {
 
     private final DeliveryCommandService deliveryCommandService;
 
 
-    @PostMapping("/deliveries")
+    @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public DeliveryCreateResponse createDelivery(@RequestBody @Valid DeliveryCreateRequest request) {
         DeliveryCreateCommand command = request.toCommand();
         DeliveryCreateResult result = deliveryCommandService.createDelivery(command);
 
         return DeliveryCreateResponse.from(result);
+    }
+
+    @PostMapping("/{deliveryId}/cancel")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelDelivery(@PathVariable UUID deliveryId) {
+        deliveryCommandService.cancelDelivery(deliveryId);
     }
 }

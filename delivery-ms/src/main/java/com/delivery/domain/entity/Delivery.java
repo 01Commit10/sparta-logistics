@@ -98,6 +98,18 @@ public class Delivery extends BaseEntity {
         }
         this.status = nextStatus;
     }
+
+    public void cancel() {
+        if(status == DeliveryStatus.CANCELED) return;
+        if(!isBeforeDispatch()) throw new BusinessException(DeliveryErrorCode.DELIVERY_NOT_CANCELABLE);
+        this.status = DeliveryStatus.CANCELED;
+    }
+
+    // 아직 아무 이동도 시작하지 않았는가
+    private boolean isBeforeDispatch() {
+        return status == DeliveryStatus.HUB_WAITING
+                || (status == DeliveryStatus.HUB_ARRIVED && departureHubId.equals(arrivalHubId));
+    }
 }
 
 
