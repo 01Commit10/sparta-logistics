@@ -7,6 +7,7 @@ import com.delivery.application.dto.result.DeliveryResult;
 import com.delivery.application.service.DeliveryCommandService;
 import com.delivery.application.service.DeliveryQueryService;
 import com.delivery.presentation.dto.request.DeliveryManagerAssignRequest;
+import com.delivery.presentation.dto.request.DeliveryStatusChangeRequest;
 import com.delivery.presentation.dto.response.DeliveryResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,40 +31,37 @@ public class DeliveryController {
 
 
     @GetMapping("/{deliveryId}")
-    public ResponseEntity<DeliveryResponse> getDelivery(@PathVariable UUID deliveryId,
+    public DeliveryResponse getDelivery(@PathVariable UUID deliveryId,
                                                         @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId) {
         DeliveryResult result = deliveryQueryService.getDelivery(deliveryId, userId);
-        DeliveryResponse deliveryResponse = DeliveryResponse.from(result);
 
-        return ResponseEntity.ok(deliveryResponse);
+        return DeliveryResponse.from(result);
     }
 
     @GetMapping
-    public ResponseEntity<PageResponse<DeliveryResponse>> getDeliveries(@RequestHeader(AuthContract.HEADER_USER_ID) UUID userId,
+    public PageResponse<DeliveryResponse> getDeliveries(@RequestHeader(AuthContract.HEADER_USER_ID) UUID userId,
                                                                 Pageable pageable) {
         Pageable normalized = PAGE_POLICY.apply(pageable);
         Page<DeliveryResult> deliveries = deliveryQueryService.getDeliveries(userId, normalized);
 
-        return ResponseEntity.ok(PageResponse.from(deliveries, DeliveryResponse::from));
+        return PageResponse.from(deliveries, DeliveryResponse::from);
     }
 
     @GetMapping("/by-order/{orderId}")
-    public ResponseEntity<DeliveryResponse> getDeliveryByOrderId(@PathVariable UUID orderId,
+    public DeliveryResponse getDeliveryByOrderId(@PathVariable UUID orderId,
                                                                  @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId) {
         DeliveryResult result = deliveryQueryService.getDeliveryByOrderId(orderId, userId);
-        DeliveryResponse deliveryResponse = DeliveryResponse.from(result);
 
-        return ResponseEntity.ok(deliveryResponse);
+        return DeliveryResponse.from(result);
     }
 
     @PatchMapping("/{deliveryId}/manager")
-    public ResponseEntity<DeliveryResponse> assignDeliveryManager(@PathVariable UUID deliveryId,
+    public DeliveryResponse assignDeliveryManager(@PathVariable UUID deliveryId,
                                                                   @RequestBody @Valid DeliveryManagerAssignRequest request) {
 
         DeliveryResult result = deliveryCommandService.assignDeliveryManager(deliveryId, request.deliveryManagerId());
-        DeliveryResponse deliveryResponse = DeliveryResponse.from(result);
 
-        return ResponseEntity.ok(deliveryResponse);
+        return DeliveryResponse.from(result);
     }
 
 }
