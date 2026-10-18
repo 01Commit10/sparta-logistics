@@ -5,14 +5,14 @@
 
 ## 개요
 
-| 항목 | 내용 |
-|---|---|
-| DBMS | PostgreSQL (단일 컨테이너, 서비스별 스키마 분리) |
-| 스키마 | `auth`, `hub`, `company`, `orders`, `delivery` (5개) |
-| 테이블 | 12개 (주문·배송 멱등성 기록 테이블 2개 포함) |
-| 기본키 | 모든 테이블 `id UUID` |
+| 항목 | 내용                                                           |
+|---|--------------------------------------------------------------|
+| DBMS | PostgreSQL (단일 컨테이너, 서비스별 스키마 분리)                            |
+| 스키마 | `auth`, `hub`, `company`, `orders`, `delivery` (5개)          |
+| 테이블 | 11개                                                          |
+| 기본키 | 모든 테이블 `id UUID`                                             |
 | 공통 컬럼 | Audit 6개 (`created_at/by`, `updated_at/by`, `deleted_at/by`) |
-| 삭제 방식 | Soft Delete (`deleted_at IS NULL`만 조회) |
+| 삭제 방식 | Soft Delete (`deleted_at IS NULL`만 조회)                       |
 
 ### 표기 규칙
 
@@ -57,7 +57,6 @@ flowchart LR
     subgraph DELIVERY["delivery · Delivery Service"]
         deliveries[p_deliveries]
         dlv_routes[p_delivery_routes]
-        dlv_hist[p_delivery_histories]
     end
 
     %% FK (같은 스키마)
@@ -67,7 +66,6 @@ flowchart LR
     companies --> products
     orders --> order_hist
     deliveries --> dlv_routes
-    deliveries --> dlv_hist
 
     %% REF (서비스 간)
     products -.-> inventories
@@ -82,7 +80,6 @@ flowchart LR
     users -.-> deliveries
     hubs -.-> dlv_routes
     users -.-> dlv_routes
-    orders -.-> dlv_hist
 ```
 
 ---
@@ -116,8 +113,8 @@ erDiagram
     }
     p_hub_routes {
         UUID id PK
-        UUID from_hub_id FK,UK "UQ*(from,to)"
-        UUID to_hub_id FK,UK "UQ*(from,to)"
+        UUID departure_hub_id FK,UK "UQ*(departure,arrival)"
+        UUID arrival_hub_id FK,UK "UQ*(departure,arrival)"
         NUMERIC distance_km "(10,2) CK >= 0"
         INTEGER duration_min "CK >= 0"
     }
@@ -185,7 +182,7 @@ erDiagram
         UUID order_id UK "REF p_orders"
         VARCHAR delivery_status "(24)"
         UUID departure_hub_id "REF p_hubs"
-        UUID destination_hub_id "REF p_hubs"
+        UUID arrival_hub_id "REF p_hubs"
         VARCHAR delivery_address "(255)"
         VARCHAR recipient_name "(100)"
         UUID recipient_user_id "REF p_users, NULL=비회원"
@@ -196,8 +193,8 @@ erDiagram
         UUID delivery_id FK,UK "UQ*(delivery,sequence)"
         INTEGER route_sequence UK "CK > 0"
         VARCHAR route_type "(20) HUB_TO_HUB/HUB_TO_COMPANY"
-        UUID from_hub_id "REF p_hubs"
-        UUID to_hub_id "REF p_hubs, 마지막 구간 NULL"
+        UUID departure_hub_id "REF p_hubs"
+        UUID arrival_hub_id "REF p_hubs, 마지막 구간 NULL"
         NUMERIC estimated_distance_km "(10,2) NULL"
         NUMERIC actual_distance_km "(10,2) NULL"
         INTEGER estimated_duration_min "NULL"
@@ -205,28 +202,15 @@ erDiagram
         VARCHAR route_status "(24)"
         UUID delivery_manager_id "REF p_users, NULL"
     }
-    p_delivery_histories {
-        UUID id PK
-        UUID delivery_id FK "NULL (생성 전)"
-        UUID order_id "REF p_orders"
-        VARCHAR operation_type UK "(32) UQ*(type,key)"
-        VARCHAR idempotency_key UK "(120) UQ*(type,key)"
-        CHAR request_hash "(64)"
-        VARCHAR operation_status "(20) PROCESSING/SUCCEEDED/FAILED"
-        INTEGER response_code "NULL"
-        INTEGER retry_count "DEFAULT 0"
-        TEXT last_error "NULL"
-    }
 
     %% ───────── FK (실선, 같은 스키마) ─────────
-    p_hubs ||--o{ p_hub_routes : "출발 from_hub_id"
-    p_hubs ||--o{ p_hub_routes : "도착 to_hub_id"
+    p_hubs ||--o{ p_hub_routes : "출발 departure_hub_id"
+    p_hubs ||--o{ p_hub_routes : "도착 arrival_hub_id"
     p_hubs ||--o{ p_inventories : "보관"
     p_inventories ||--o{ p_inventory_movements : "변경 기록"
     p_companies ||--o{ p_products : "소유"
     p_orders |o--o{ p_order_histories : "요청 처리 기록"
     p_deliveries ||--o{ p_delivery_routes : "이동 구간"
-    p_deliveries |o--o{ p_delivery_histories : "요청 처리 기록"
 
     %% ───────── REF (점선, 서비스 간) ─────────
     p_products ||..o{ p_inventories : "product_id"
@@ -244,7 +228,6 @@ erDiagram
     p_users |o..o{ p_deliveries : "배송담당자"
     p_hubs ||..o{ p_delivery_routes : "구간 허브"
     p_users |o..o{ p_delivery_routes : "구간 담당자"
-    p_orders ||..o{ p_delivery_histories : "원본 주문"
 ```
 
 > `p_users.organization_id`는 `organization_type`에 따라 `p_companies.id` 또는 `p_hubs.id`를 가리키는 **조건부 REF**라서 다이어그램에는 관계선으로 그리지 않았습니다.
@@ -267,7 +250,7 @@ erDiagram
 | 테이블 | 역할 | 핵심 제약 |
 |---|---|---|
 | `p_hubs` | 전국 17개 허브 (초기 적재, 변경 API 없음) | `name` UNIQUE |
-| `p_hub_routes` | 방향 있는 P2P 허브 간 경로 | UNIQUE(`from_hub_id`, `to_hub_id`) · 출발≠도착 |
+| `p_hub_routes` | 방향 있는 P2P 허브 간 경로 | UNIQUE(`departure_hub_id`, `arrival_hub_id`) · 출발≠도착 |
 | `p_inventories` | 허브별 상품 현재 재고 | UNIQUE(`hub_id`, `product_id`) · `quantity >= 0` |
 | `p_inventory_movements` | 재고 변경 이력 + 멱등성 | `idempotency_key` UNIQUE · `stock_after >= 0` |
 
@@ -296,10 +279,9 @@ erDiagram
 | 테이블 | 역할 | 핵심 제약 |
 |---|---|---|
 | `p_deliveries` | 주문 1건당 배송 1건 | `order_id` UNIQUE |
-| `p_delivery_routes` | 배송을 이루는 이동 구간 | UNIQUE(`delivery_id`, `route_sequence`) · 유형별 `to_hub_id` NULL 규칙 |
-| `p_delivery_histories` | 배송 생성·상태 변경 요청의 멱등성 기록 | UNIQUE(`operation_type`, `idempotency_key`) |
+| `p_delivery_routes` | 배송을 이루는 이동 구간 | UNIQUE(`delivery_id`, `route_sequence`) · 유형별 `arrival_hub_id` NULL 규칙 |
 
-- 구간 예시: `서울 허브 → 대전 허브`(HUB_TO_HUB) → `대전 → 부산`(HUB_TO_HUB) → `부산 허브 → 수령업체`(HUB_TO_COMPANY, `to_hub_id` NULL)
+- 구간 예시: `서울 허브 → 대전 허브`(HUB_TO_HUB) → `대전 → 부산`(HUB_TO_HUB) → `부산 허브 → 수령업체`(HUB_TO_COMPANY, `arrival_hub_id` NULL)
 
 ---
 
@@ -307,8 +289,8 @@ erDiagram
 
 | 출발 테이블 | 참조 컬럼 | 대상 테이블 | 종류 | 카디널리티 |
 |---|---|---|---|---|
-| p_hub_routes | from_hub_id | p_hubs | FK | N:1 |
-| p_hub_routes | to_hub_id | p_hubs | FK | N:1 |
+| p_hub_routes | departure_hub_id | p_hubs | FK | N:1 |
+| p_hub_routes | arrival_hub_id | p_hubs | FK | N:1 |
 | p_inventories | hub_id | p_hubs | FK | N:1 |
 | p_inventories | product_id | p_products | REF | N:1 |
 | p_inventory_movements | inventory_id | p_inventories | FK | N:1 |
@@ -324,15 +306,13 @@ erDiagram
 | p_order_histories | order_id | p_orders | FK | N:0..1 |
 | p_deliveries | order_id | p_orders | REF | 1:1 |
 | p_deliveries | departure_hub_id | p_hubs | REF | N:1 |
-| p_deliveries | destination_hub_id | p_hubs | REF | N:1 |
+| p_deliveries | arrival_hub_id | p_hubs | REF | N:1 |
 | p_deliveries | recipient_user_id | p_users | REF | N:0..1 |
 | p_deliveries | delivery_manager_id | p_users | REF | N:0..1 |
 | p_delivery_routes | delivery_id | p_deliveries | FK | N:1 |
-| p_delivery_routes | from_hub_id | p_hubs | REF | N:1 |
-| p_delivery_routes | to_hub_id | p_hubs | REF | N:0..1 |
+| p_delivery_routes | departure_hub_id | p_hubs | REF | N:1 |
+| p_delivery_routes | arrival_hub_id | p_hubs | REF | N:0..1 |
 | p_delivery_routes | delivery_manager_id | p_users | REF | N:0..1 |
-| p_delivery_histories | delivery_id | p_deliveries | FK | N:0..1 |
-| p_delivery_histories | order_id | p_orders | REF | N:1 |
 | p_users | organization_id | p_companies / p_hubs | REF (조건부) | N:0..1 |
 
 ---
