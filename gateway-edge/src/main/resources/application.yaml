@@ -18,6 +18,7 @@ spring:
       server:
         webflux:
           # 하위 서비스 연결·응답 타임아웃 (GW-09, SYS-13 3.2). 응답 초과 → 504 SERVICE_TIMEOUT, 연결 실패 → 503 SERVICE_UNAVAILABLE
+          # 하위 서비스 보호는 타임아웃만 쓴다. Circuit Breaker·Retry 필터는 두지 않는다 (C03)
           # 원칙: 바깥 > 안쪽 호출 시간 합. 같은 네트워크라 연결은 즉시 되므로 2초면 서비스가 없는 것
           httpclient:
             connect-timeout: ${GW_CONNECT_TIMEOUT_MS:2000}
@@ -27,34 +28,18 @@ spring:
               uri: lb://user-ms
               predicates:
                 - Path=/api/v1/auth/**, /api/v1/users/**
-              filters:
-                - name: CircuitBreaker   # 서비스별 회로 (GW-10). fallbackUri·statusCodes 없음 → CircuitBreakerConfigTest
-                  args:
-                    name: user-ms
             - id: company-ms
               uri: lb://company-ms
               predicates:
                 - Path=/api/v1/companies/**, /api/v1/products/**
-              filters:
-                - name: CircuitBreaker   # 서비스별 회로 (GW-10). fallbackUri·statusCodes 없음 → CircuitBreakerConfigTest
-                  args:
-                    name: company-ms
             - id: hub-ms
               uri: lb://hub-ms
               predicates:
                 - Path=/api/v1/hubs/**, /api/v1/hub-routes/**, /api/v1/inventories/**
-              filters:
-                - name: CircuitBreaker   # 서비스별 회로 (GW-10). fallbackUri·statusCodes 없음 → CircuitBreakerConfigTest
-                  args:
-                    name: hub-ms
             - id: order-ms
               uri: lb://order-ms
               predicates:
                 - Path=/api/v1/orders/**
-              filters:
-                - name: CircuitBreaker   # 서비스별 회로 (GW-10). fallbackUri·statusCodes 없음 → CircuitBreakerConfigTest
-                  args:
-                    name: order-ms
               # 주문 생성은 Hub(재고)·Delivery(배송 생성)를 차례로 Feign 호출한다 (연결 1초 + 읽기 2초씩, C02).
               # 라우트 metadata 단위는 밀리초 숫자다 (전역 response-timeout은 Duration)
               metadata:
@@ -63,36 +48,39 @@ spring:
               uri: lb://delivery-ms
               predicates:
                 - Path=/api/v1/deliveries/**, /api/v1/delivery-routes/**
-              filters:
-                - name: CircuitBreaker   # 서비스별 회로 (GW-10). fallbackUri·statusCodes 없음 → CircuitBreakerConfigTest
-                  args:
-                    name: delivery-ms
-    # CB 필터의 TimeLimiter(기본 1초)를 끈다. 타임아웃은 위 httpclient·라우트 metadata 값 하나만 쓴다 (GW-09·10).
-    # 켜 두면 1초 넘는 정상 주문 요청이 끊기고, 두 값을 함께 맞춰야 한다
-    circuitbreaker:
-      resilience4j:
-        disable-time-limiter: true
     loadbalancer:
       cache:
         ttl: ${LB_CACHE_TTL:5s}   # 기본 35s. 새로 뜬 서비스를 빨리 찾도록 줄임 (GW-02)
 
-# Circuit Breaker (GW-10, SYS-13 4장). 이름 = route id라 서비스마다 따로 열린다.
-# - 실패로 세는 것: 연결 실패·타임아웃(예외)만. 하위 4xx·5xx 응답은 세지 않고 본문 그대로 전달한다
-# - 열리면 하위로 보내지 않고 503 SERVICE_UNAVAILABLE (CallNotPermittedException → GW-04 매핑). 별도 fallbackUri는 없다
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        sliding-window-type: COUNT_BASED
-        sliding-window-size: 10
-        minimum-number-of-calls: 5
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: ${GW_CB_OPEN_WAIT:10s}
-        permitted-number-of-calls-in-half-open-state: 3
-        automatic-transition-from-open-to-half-open-enabled: true
-
 server:
   port: 19090
+
+# 운영 확인 (GW-11). actuator는 관리 포트에만 둔다. Compose에서 이 포트를 publish하지 않으면 외부에서 닿지 않는다
+# - 서비스 포트(19090): 헬스체크용 /livez·/readyz만. /actuator/**는 404
+# - 관리 포트(19190): 헬스 상세(Redis·Eureka), 라우트 목록. 설정·메모리(env, heapdump 등)는 노출하지 않는다
+management:
+  server:
+    port: ${GW_MANAGEMENT_PORT:19190}   # 19091은 company-ms 서버 포트라 로컬에서 함께 못 띄움
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway
+  endpoint:
+    health:
+      show-components: always
+      probes:
+        enabled: true
+        add-additional-paths: true   # 서비스 포트에 /livez·/readyz
+      group:
+        # Redis가 죽어도 재시작하거나 트래픽을 끊지 않는다. 공개 경로·라우팅은 동작하고, 보호 경로만 GW-07이 503으로 응답한다
+        liveness:
+          include: livenessState
+          show-components: never
+        readiness:
+          include: readinessState
+          show-components: never
+    gateway:
+      access: read-only   # 라우트 조회만. refresh 등 변경 요청은 막는다
 
 jwt:
   secret-key: ${JWT_SECRET_KEY}
@@ -138,7 +126,7 @@ gateway:
       - "PATCH,DELETE /api/v1/hub-routes/*"
       - "POST /api/v1/companies"
       - "DELETE /api/v1/companies/*"
-    # 관리자가 비밀번호를 초기화한 사용자(토큰 pcr=true)가 호출할 수 있는 요청 (GW-07). 그 밖은 403 PASSWORD_CHANGE_REQUIRED
+    # 관리자가 비밀번호를 정한 사용자(사용자 생성·비밀번호 초기화, 토큰 pcr=true)가 호출할 수 있는 요청 (GW-07). 그 밖은 403 PASSWORD_CHANGE_REQUIRED
     password-change-allowed:
       - "GET /api/v1/users/me"
       - "PATCH /api/v1/users/me/password"

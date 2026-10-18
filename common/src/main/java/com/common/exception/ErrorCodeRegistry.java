@@ -18,7 +18,9 @@ public final class ErrorCodeRegistry {
     private static final List<ErrorCode> ALL = Stream.of(
                     CommonErrorCode.values(),
                     AuthErrorCode.values(),
-                    UserErrorCode.values())
+                    UserErrorCode.values(),
+                    CompanyErrorCode.values(),
+                    ProductErrorCode.values())
             .flatMap(Arrays::stream)
             .map(ErrorCode.class::cast)
             .toList();

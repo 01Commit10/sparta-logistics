@@ -8,8 +8,6 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-starter-data-jpa'
     compileOnly 'org.springframework.boot:spring-boot-starter-validation'
     compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
-    // Feign Circuit Breaker (C02). Feign을 쓰는 서비스가 openfeign과 함께 추가한다
-    compileOnly 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
     compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
     compileOnly 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
 
@@ -29,11 +27,10 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     testRuntimeOnly 'com.h2database:h2'
 
-    // Feign 헤더 전달(C01)·장애 대응(C02) 검증용
+    // Feign 헤더 전달(C01)·원격 호출 실패 분류(C02) 검증용
     testImplementation 'io.github.openfeign:feign-core'
     testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     testImplementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer'   // 서비스와 같이 이름(lb)으로 호출
-    testImplementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
     testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
     testImplementation 'org.wiremock:wiremock-standalone:3.9.2'
 }

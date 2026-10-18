@@ -7,9 +7,6 @@ import com.common.remote.RemoteCallTemplate;
 import com.common.remote.RemoteServiceException;
 import com.common.remote.RemoteTimeoutException;
 import com.github.tomakehurst.wiremock.WireMockServer;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,20 +32,18 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 실제 Feign + Circuit Breaker + LoadBalancer로 장애 대응을 확인한다 (C02 테스트 13~19).
- * application-common.yaml의 값을 그대로 쓰고, 시간 값(read 300ms, OPEN 대기 1초)만 테스트용으로 줄인다.
+ * 실제 Feign + LoadBalancer로 원격 호출 실패 분류를 확인한다 (C02 테스트 13·18·19, C03에서 Circuit Breaker·재시도 제거).
+ * application-common.yaml의 값을 그대로 쓰고, read 타임아웃(300ms)만 테스트용으로 줄인다.
  */
-@SpringBootTest(classes = RemoteTestApplication.class, properties = {
-        "spring.cloud.openfeign.client.config.default.read-timeout=300",
-        "resilience4j.circuitbreaker.configs.default.wait-duration-in-open-state=1s"})
+@SpringBootTest(classes = RemoteTestApplication.class, properties =
+        "spring.cloud.openfeign.client.config.default.read-timeout=300")
 @AutoConfigureMockMvc
 @ActiveProfiles("common")
-class FeignResilienceIntegrationTest {
+class FeignRemoteCallIntegrationTest {
 
     static final WireMockServer HUB = new WireMockServer(options().dynamicPort());
     static final int CLOSED_PORT = closedPort();
@@ -81,15 +76,11 @@ class FeignResilienceIntegrationTest {
     RemoteCallTemplate remote;
 
     @Autowired
-    CircuitBreakerRegistry circuitBreakers;
-
-    @Autowired
     MockMvc mockMvc;
 
     @BeforeEach
     void reset() {
         HUB.resetAll();
-        circuitBreakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
         HUB.stubFor(get("/hub/ok").willReturn(aResponse().withStatus(200).withBody("ok")));
     }
 
@@ -106,20 +97,6 @@ class FeignResilienceIntegrationTest {
                 .withHeader("Content-Type", "application/json").withBody(body)));
     }
 
-    /** CB 이름: 기본 AlphanumericCircuitBreakerNameResolver가 Feign configKey("HubTestClient#unstable()")에서 영숫자만 남긴 값 */
-    private CircuitBreaker.State unstableState() {
-        assertThat(circuitBreakers.getAllCircuitBreakers()).extracting(CircuitBreaker::getName).contains("HubTestClientunstable");
-        return circuitBreakers.circuitBreaker("HubTestClientunstable").getState();
-    }
-
-    private void callUnstableIgnoringFailure() {
-        try {
-            remote.execute("hub-ms", hubClient::unstable);
-        } catch (RuntimeException ignored) {
-            // 실패 횟수를 쌓기만 한다
-        }
-    }
-
     @Test
     @DisplayName("13. 응답이 read-timeout(300ms)보다 늦으면 RemoteTimeoutException (결과 모름)")
     void readTimeout() {
@@ -132,63 +109,47 @@ class FeignResilienceIntegrationTest {
     }
 
     @Test
-    @DisplayName("14. 5xx 5회 → CB OPEN → 다음 호출은 원격에 닿지 않고 RemoteServiceException")
-    void opensOnServerErrors() {
-        stubUnstable(500, "{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"x\"}");
+    @DisplayName("리뷰: 200인데 본문이 깨진 JSON·타입 불일치·HTML → RemoteTimeoutException (원격은 처리했으니 결과 모름)")
+    void decodeFailures() {
+        for (String[] body : new String[][]{{"application/json", "{\"id\":"},
+                {"application/json", "{\"id\":\"not-uuid\",\"quantity\":1}"}, {"text/html", "<html>ok</html>"}}) {
+            HUB.stubFor(get("/hub/item").willReturn(aResponse().withStatus(200)
+                    .withHeader("Content-Type", body[0]).withBody(body[1])));
 
-        for (int i = 0; i < 5; i++) {
-            assertThatThrownBy(() -> remote.execute("hub-ms", hubClient::unstable)).isInstanceOf(RemoteServiceException.class);
+            assertThatThrownBy(() -> remote.execute("hub-ms", hubClient::item))
+                    .as(body[1]).isInstanceOf(RemoteTimeoutException.class);
         }
-        assertThat(unstableState()).isEqualTo(CircuitBreaker.State.OPEN);
-
-        assertThatThrownBy(() -> remote.execute("hub-ms", hubClient::unstable))
-                .isInstanceOfSatisfying(RemoteServiceException.class,
-                        e -> assertThat(e.getCause()).isInstanceOf(CallNotPermittedException.class));
-        HUB.verify(5, getRequestedFor(urlEqualTo("/hub/unstable")));
     }
 
     @Test
-    @DisplayName("15. 4xx 10회는 장애가 아니므로 CB가 닫힌 채로 남고, 매번 원래 code의 RemoteBusinessException")
-    void ignoresBusinessErrors() {
+    @DisplayName("4xx → 원래 code의 RemoteBusinessException, 다시 보내지 않는다 (요청 1번)")
+    void businessError() {
         stubUnstable(409, "{\"code\":\"DUPLICATE_USERNAME\",\"message\":\"중복\"}");
 
-        for (int i = 0; i < 10; i++) {
-            assertThatThrownBy(() -> remote.execute("hub-ms", hubClient::unstable))
-                    .isInstanceOfSatisfying(RemoteBusinessException.class,
-                            e -> assertThat(e.getErrorCode()).isSameAs(UserErrorCode.DUPLICATE_USERNAME));
-        }
-        assertThat(unstableState()).isEqualTo(CircuitBreaker.State.CLOSED);
-        HUB.verify(10, getRequestedFor(urlEqualTo("/hub/unstable")));
+        assertThatThrownBy(() -> remote.execute("hub-ms", hubClient::unstable))
+                .isInstanceOfSatisfying(RemoteBusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isSameAs(UserErrorCode.DUPLICATE_USERNAME));
+        HUB.verify(1, getRequestedFor(urlEqualTo("/hub/unstable")));
     }
 
     @Test
-    @DisplayName("16. OPEN → 1초 뒤 HALF_OPEN → 성공 3회 → CLOSED")
-    void recovers() {
-        stubUnstable(503, "");
-        for (int i = 0; i < 5; i++) {
-            callUnstableIgnoringFailure();
-        }
-        assertThat(unstableState()).isEqualTo(CircuitBreaker.State.OPEN);
+    @DisplayName("5xx → RemoteServiceException, 다시 보내지 않는다 (요청 1번)")
+    void serverError() {
+        stubUnstable(500, "{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"x\"}");
 
-        await().atMost(Duration.ofSeconds(3)).until(() -> unstableState() == CircuitBreaker.State.HALF_OPEN);
-        stubUnstable(200, "\"ok\"");
-        for (int i = 0; i < 3; i++) {
-            assertThat(remote.execute("hub-ms", hubClient::unstable)).isNotNull();
-        }
-
-        assertThat(unstableState()).isEqualTo(CircuitBreaker.State.CLOSED);
+        assertThatThrownBy(() -> remote.execute("hub-ms", hubClient::unstable))
+                .isInstanceOfSatisfying(RemoteServiceException.class, e -> assertThat(e.getStatus()).isEqualTo(500));
+        HUB.verify(1, getRequestedFor(urlEqualTo("/hub/unstable")));
     }
 
     @Test
-    @DisplayName("17. CB는 메서드 단위: unstable()이 OPEN이어도 같은 서비스의 ok()는 정상 (C02 E1)")
-    void perMethod() {
-        stubUnstable(500, "");
-        for (int i = 0; i < 5; i++) {
-            callUnstableIgnoringFailure();
-        }
-        assertThat(unstableState()).isEqualTo(CircuitBreaker.State.OPEN);
+    @DisplayName("리뷰: 원격 504 → RemoteTimeoutException(status 504), 다시 보내지 않는다 (요청 1번)")
+    void remoteGatewayTimeout() {
+        stubUnstable(504, "{\"code\":\"SERVICE_TIMEOUT\",\"message\":\"응답 시간이 초과되었습니다.\"}");
 
-        assertThat(remote.execute("hub-ms", hubClient::ok)).isEqualTo("ok");
+        assertThatThrownBy(() -> remote.execute("hub-ms", hubClient::unstable))
+                .isInstanceOfSatisfying(RemoteTimeoutException.class, e -> assertThat(e.getStatus()).isEqualTo(504));
+        HUB.verify(1, getRequestedFor(urlEqualTo("/hub/unstable")));
     }
 
     @Test
@@ -209,10 +170,9 @@ class FeignResilienceIntegrationTest {
     class InRequest {
 
         @Test
-        @DisplayName("18. CB를 켠 상태에서도 사용자 헤더를 전달하고, Feign은 요청 스레드에서 실행된다 (C01 테스트 18, C02 E2)")
+        @DisplayName("18. 사용자 헤더를 전달하고 Authorization은 넘기지 않는다 (C01 테스트 18)")
         void relaysUserHeaders() throws Exception {
             String userId = UUID.randomUUID().toString();
-            RemoteTestApplication.FEIGN_THREAD.set(null);
 
             mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/test/hub-ok")
                             .header(AuthContract.HEADER_USER_ID, userId)
@@ -226,11 +186,10 @@ class FeignResilienceIntegrationTest {
                     .withHeader(AuthContract.HEADER_USER_ROLE, equalTo("USER"))
                     .withHeader(AuthContract.HEADER_REQUEST_ID, equalTo("req-1"))
                     .withoutHeader("Authorization"));
-            assertThat(RemoteTestApplication.FEIGN_THREAD.get().getName()).doesNotContain("resilience4j", "pool");
         }
 
         @Test
-        @DisplayName("19. 잡지 않은 원격 예외 → 공통 형식: 5xx는 503, 타임아웃은 504, 4xx는 원래 상태·code")
+        @DisplayName("19. 잡지 않은 원격 예외 → 공통 형식: 5xx는 503, 타임아웃·원격 504는 504, 4xx는 원래 상태·code")
         void uncaughtRemoteExceptions() throws Exception {
             var request = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/test/hub-unstable");
 
@@ -239,6 +198,10 @@ class FeignResilienceIntegrationTest {
                     .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
 
             HUB.stubFor(get("/hub/unstable").willReturn(aResponse().withStatus(200).withFixedDelay(1000)));
+            mockMvc.perform(request).andExpect(status().isGatewayTimeout())
+                    .andExpect(jsonPath("$.code").value("SERVICE_TIMEOUT"));
+
+            stubUnstable(504, "{\"code\":\"SERVICE_TIMEOUT\",\"message\":\"x\"}");
             mockMvc.perform(request).andExpect(status().isGatewayTimeout())
                     .andExpect(jsonPath("$.code").value("SERVICE_TIMEOUT"));
 

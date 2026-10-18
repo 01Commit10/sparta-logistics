@@ -12,6 +12,7 @@ spring:
       mode: always
       data-locations:
         - classpath:db/seed/hubs.sql
+        - classpath:db/seed/hub_routes.sql
 
 server:
   port: 19093

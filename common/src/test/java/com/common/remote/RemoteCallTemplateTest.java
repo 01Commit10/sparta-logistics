@@ -4,25 +4,26 @@ import com.common.exception.CommonErrorCode;
 import com.common.exception.UserErrorCode;
 import feign.Request;
 import feign.RetryableException;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import feign.codec.DecodeException;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.cloud.client.circuitbreaker.NoFallbackAvailableException;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Feign·Circuit Breaker 예외 → 원격 예외 3종 (C02 테스트 7~11, E5).
+ * Feign 예외 → 원격 예외 3종 (C02 테스트 7~11, E5).
  */
 class RemoteCallTemplateTest {
 
@@ -37,13 +38,15 @@ class RemoteCallTemplateTest {
         return new RetryableException(-1, cause.getMessage(), Request.HttpMethod.POST, cause, (Long) null, REQUEST);
     }
 
-    /** fallback이 없는 Feign Circuit Breaker는 실패를 NoFallbackAvailableException으로 감싼다 */
-    private static NoFallbackAvailableException noFallback(Throwable cause) {
-        return new NoFallbackAvailableException("No fallback available.", cause);
+    /** 2xx를 받았지만 본문을 DTO로 못 바꿈. Feign은 디코더 예외를 DecodeException으로 감싼다 */
+    private static DecodeException decodeFailure(Throwable cause) {
+        return new DecodeException(200, "decode failed", REQUEST, cause);
     }
 
-    private static CallNotPermittedException circuitOpen() {
-        return CallNotPermittedException.createCallNotPermittedException(CircuitBreaker.ofDefaults("HubClient#decrease()"));
+    /** 실제 Spring 디코더 원인: 깨진 JSON·타입 불일치는 Jackson 예외(IOException), HTML 등은 RestClientException(IOException 아님) */
+    static Stream<Throwable> decodeCauses() {
+        return Stream.of(new IOException("Unexpected end-of-input"),
+                new org.springframework.web.client.RestClientException("no suitable HttpMessageConverter for text/html"));
     }
 
     private static Supplier<String> failing(RuntimeException e) {
@@ -63,7 +66,7 @@ class RemoteCallTemplateTest {
     void readTimeout() {
         SocketTimeoutException cause = new SocketTimeoutException("Read timed out");
 
-        assertThatThrownBy(() -> template.execute(HUB, failing(noFallback(feignIo(cause)))))
+        assertThatThrownBy(() -> template.execute(HUB, failing(feignIo(cause))))
                 .isInstanceOfSatisfying(RemoteTimeoutException.class, e -> {
                     assertThat(e.getTarget()).isEqualTo(HUB);
                     assertThat(e.getErrorCode()).isSameAs(CommonErrorCode.SERVICE_TIMEOUT);
@@ -74,7 +77,7 @@ class RemoteCallTemplateTest {
     @Test
     @DisplayName("연결 거부 → RemoteServiceException (요청이 닿지 않아 처리되지 않은 것이 확실함, E5)")
     void connectionRefused() {
-        assertThatThrownBy(() -> template.execute(HUB, failing(noFallback(feignIo(new ConnectException("Connection refused"))))))
+        assertThatThrownBy(() -> template.execute(HUB, failing(feignIo(new ConnectException("Connection refused")))))
                 .isInstanceOfSatisfying(RemoteServiceException.class, e -> assertThat(e.getTarget()).isEqualTo(HUB));
     }
 
@@ -93,28 +96,32 @@ class RemoteCallTemplateTest {
     }
 
     @Test
-    @DisplayName("Circuit Breaker OPEN → RemoteServiceException (호출하지 않음)")
-    void circuitBreakerOpen() {
-        CallNotPermittedException open = circuitOpen();
-
-        assertThatThrownBy(() -> template.execute(HUB, failing(noFallback(open))))
-                .isInstanceOfSatisfying(RemoteServiceException.class, e -> assertThat(e).hasCause(open));
-    }
-
-    @Test
     @DisplayName("ErrorDecoder가 만든 원격 예외는 감싼 것을 벗겨 그대로 던진다")
     void unwrapsDecodedExceptions() {
         RemoteBusinessException business = new RemoteBusinessException(HUB, 404, UserErrorCode.USER_NOT_FOUND, "없음");
         RemoteServiceException service = new RemoteServiceException(HUB, 503);
 
-        assertThatThrownBy(() -> template.execute(HUB, failing(noFallback(business)))).isSameAs(business);
+        assertThatThrownBy(() -> template.execute(HUB, failing(business))).isSameAs(business);
         assertThatThrownBy(() -> template.execute(HUB, failing(service))).isSameAs(service);
     }
 
+    @ParameterizedTest(name = "원인 {0}")
+    @MethodSource("decodeCauses")
+    @DisplayName("리뷰: 2xx 응답 본문 변환 실패(DecodeException) → 원인과 상관없이 RemoteTimeoutException (원격은 처리했으니 '처리 안 됨'이 아님)")
+    void decodeFailureIsUnknown(Throwable cause) {
+        DecodeException decode = decodeFailure(cause);
+
+        assertThatThrownBy(() -> template.execute(HUB, failing(decode)))
+                .isInstanceOfSatisfying(RemoteTimeoutException.class, e -> {
+                    assertThat(e.getTarget()).isEqualTo(HUB);
+                    assertThat(e).hasCause(decode);
+                });
+    }
+
     @Test
-    @DisplayName("그 밖의 예외(응답 변환 실패 등) → RemoteServiceException")
+    @DisplayName("그 밖의 예외(I/O·변환 실패가 아닌 것) → RemoteServiceException")
     void unknownFailure() {
-        IllegalStateException cause = new IllegalStateException("decode failed");
+        IllegalStateException cause = new IllegalStateException("unexpected");
 
         assertThatThrownBy(() -> template.execute(HUB, failing(cause)))
                 .isInstanceOfSatisfying(RemoteServiceException.class, e -> assertThat(e).hasCause(cause));
@@ -128,76 +135,7 @@ class RemoteCallTemplateTest {
 
         assertThat(calls).hasValue(1);
         assertThatThrownBy(() -> template.run(HUB, () -> {
-            throw noFallback(circuitOpen());
+            throw feignIo(new ConnectException("Connection refused"));
         })).isInstanceOf(RemoteServiceException.class);
-    }
-
-    @Nested
-    @DisplayName("executeWithRetryOnce (멱등성 키가 있는 호출만)")
-    class RetryOnce {
-
-        private Supplier<String> failThenSucceed(RuntimeException first, AtomicInteger calls) {
-            return () -> {
-                if (calls.incrementAndGet() == 1) {
-                    throw first;
-                }
-                return "ok";
-            };
-        }
-
-        @Test
-        @DisplayName("타임아웃 1회 후 성공 → 값 (2번 호출)")
-        void retriesTimeoutOnce() {
-            AtomicInteger calls = new AtomicInteger();
-
-            String result = template.executeWithRetryOnce(HUB,
-                    failThenSucceed(feignIo(new SocketTimeoutException("Read timed out")), calls));
-
-            assertThat(result).isEqualTo("ok");
-            assertThat(calls).hasValue(2);
-        }
-
-        @Test
-        @DisplayName("5xx 1회 후 성공 → 값 (2번 호출)")
-        void retriesServiceErrorOnce() {
-            AtomicInteger calls = new AtomicInteger();
-
-            assertThat(template.executeWithRetryOnce(HUB, failThenSucceed(new RemoteServiceException(HUB, 503), calls)))
-                    .isEqualTo("ok");
-            assertThat(calls).hasValue(2);
-        }
-
-        @Test
-        @DisplayName("두 번 모두 실패하면 두 번째 실패를 던진다 (최대 2번 호출)")
-        void retriesOnlyOnce() {
-            AtomicInteger calls = new AtomicInteger();
-
-            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, () -> {
-                calls.incrementAndGet();
-                throw feignIo(new SocketTimeoutException("Read timed out"));
-            })).isInstanceOf(RemoteTimeoutException.class);
-            assertThat(calls).hasValue(2);
-        }
-
-        @Test
-        @DisplayName("업무 거절(4xx)은 다시 보내도 같으므로 재시도하지 않는다")
-        void noRetryOnBusiness() {
-            AtomicInteger calls = new AtomicInteger();
-
-            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, failThenSucceed(
-                    new RemoteBusinessException(HUB, 409, UserErrorCode.DUPLICATE_USERNAME, "중복"), calls)))
-                    .isInstanceOf(RemoteBusinessException.class);
-            assertThat(calls).hasValue(1);
-        }
-
-        @Test
-        @DisplayName("Circuit Breaker OPEN은 바로 다시 보내도 막히므로 재시도하지 않는다")
-        void noRetryOnCircuitOpen() {
-            AtomicInteger calls = new AtomicInteger();
-
-            assertThatThrownBy(() -> template.executeWithRetryOnce(HUB, failThenSucceed(noFallback(circuitOpen()), calls)))
-                    .isInstanceOf(RemoteServiceException.class);
-            assertThat(calls).hasValue(1);
-        }
     }
 }

@@ -1,5 +1,6 @@
 package com.hub.hub.domain.entity;
 
+import com.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -10,7 +11,7 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor
 @Table(name="p_hubs", schema = "hub")
-public class Hub {
+public class Hub extends BaseEntity {
     @Id
     @Column(nullable = false, updatable = false)
     private UUID id;

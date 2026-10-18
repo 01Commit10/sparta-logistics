@@ -6,7 +6,6 @@ import java.util.UUID;
 
 /**
  * 사용자 저장소 Port. 구현은 infrastructure.persistence (DIP).
- * 목록 검색(USR-11)은 U13에서 추가한다.
  */
 public interface UserRepository {
 
@@ -33,4 +32,7 @@ public interface UserRepository {
     long countActiveMastersForUpdate();
 
     boolean existsActiveMaster();
+
+    /** USR-11 MASTER 목록 검색. 조건·페이지·정렬은 순수 Java 타입으로 받는다 (domain은 Spring 타입 금지) */
+    PageData<User> search(UserSearchCondition condition, PageQuery pageQuery);
 }

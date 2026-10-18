@@ -12,6 +12,7 @@ import com.user.fake.FakePasswordHasher;
 import com.user.fake.FakeRefreshTokenParser;
 import com.user.fake.FakeTokenIssuer;
 import com.user.fake.FakeTokenStore;
+import com.user.fake.FakeTemporaryPasswordGenerator;
 import com.user.fake.FakeUserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,7 @@ class AccountFacadeTest {
     private final FakePasswordHasher passwordHasher = new FakePasswordHasher();
     private final FakeTokenStore tokenStore = new FakeTokenStore();
     private final AccountFacade facade = new AccountFacade(
-            new UserCommandService(userRepository, passwordHasher),
+            new UserCommandService(userRepository, passwordHasher, new FakeTemporaryPasswordGenerator()),
             new TokenService(new FakeTokenIssuer(), new FakeRefreshTokenParser(), tokenStore, Clock.systemUTC()));
 
     private User loggedIn() {

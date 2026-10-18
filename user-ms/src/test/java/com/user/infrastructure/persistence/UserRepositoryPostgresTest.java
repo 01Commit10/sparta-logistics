@@ -3,7 +3,10 @@ package com.user.infrastructure.persistence;
 import com.common.exception.BusinessException;
 import com.common.exception.UserErrorCode;
 import com.user.domain.entity.User;
+import com.user.domain.repository.PageData;
+import com.user.domain.repository.PageQuery;
 import com.user.domain.repository.UserRepository;
+import com.user.domain.repository.UserSearchCondition;
 import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.UserRole;
 import com.user.domain.vo.Username;
@@ -26,6 +29,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -158,7 +162,9 @@ class UserRepositoryPostgresTest {
     @DisplayName("활성 MASTER 수를 셀 때 행을 잠가, 동시에 들어온 다른 요청은 먼저 요청이 끝난 뒤의 값을 본다")
     void countActiveMastersLocksRows() throws Exception {
         User first = master("master01", "M001");
-        User second = master("master02", "M002");
+        // 본사(HQ) 소속은 USER로 바꿀 수 없으므로 강등 대상은 허브 소속 MASTER
+        User second = User.createByMaster(UUID.randomUUID(), Username.of("master02"), "관리자", "hashed", "M002",
+                OrganizationType.HUB, "서울센터", UserRole.MASTER, false, first.getId());
         tx().executeWithoutResult(s -> {
             userRepository.save(first);
             userRepository.save(second);
@@ -182,6 +188,34 @@ class UserRepositoryPostgresTest {
 
         assertThat(secondCount.get()).isEqualTo(1);
         assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)).isGreaterThanOrEqualTo(500);
+    }
+
+    @Test
+    @DisplayName("U13 목록 검색: 부분 일치(대소문자 무시)·%와 _ 글자 검색·활성만·생성일 역순+id, 전체 건수")
+    void search() {
+        tx().executeWithoutResult(s -> {
+            userRepository.save(User.signup(UUID.randomUUID(), Username.of("user01"), "Kim 100%", "hashed", "U001",
+                    OrganizationType.HUB, "서울센터"));
+            userRepository.save(User.signup(UUID.randomUUID(), Username.of("user02"), "kim 1000", "hashed", "U002",
+                    OrganizationType.HUB, "서울센터"));
+            userRepository.save(User.signup(UUID.randomUUID(), Username.of("user03"), "KIM 100%", "hashed", "U003",
+                    OrganizationType.COMPANY, "스파르타상사"));
+            User withdrawn = User.signup(UUID.randomUUID(), Username.of("user04"), "kim 100%", "hashed", "U004",
+                    OrganizationType.HUB, "서울센터");
+            withdrawn.withdraw(withdrawn.getId());
+            userRepository.save(withdrawn);
+        });
+        jdbc.update("update auth.p_users set created_at = timestamp '2026-10-01 09:00' + (cast(substr(username, 5) as int) * interval '1 day')");
+        List<PageQuery.Order> orders = List.of(new PageQuery.Order("createdAt", false), new PageQuery.Order("id", true));
+
+        PageData<User> active = tx().execute(s -> userRepository.search(
+                new UserSearchCondition(null, "0%", null, null, null, false), new PageQuery(0, 10, orders)));
+        PageData<User> withDeleted = tx().execute(s -> userRepository.search(
+                new UserSearchCondition("USER", "kim", null, null, OrganizationType.HUB, true), new PageQuery(0, 1, orders)));
+
+        assertThat(active.content()).extracting(User::getUsername).containsExactly("user03", "user01");
+        assertThat(withDeleted.content()).extracting(User::getUsername).containsExactly("user04");
+        assertThat(withDeleted.totalElements()).isEqualTo(3);
     }
 
     private static void sleep(long millis) {
