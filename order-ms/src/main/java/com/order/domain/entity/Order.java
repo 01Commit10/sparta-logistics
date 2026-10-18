@@ -8,15 +8,16 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Check;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
 @Table(name = "p_orders")
-/*@Check(name = "ck_orders_quantity", constraints = "quantity > 0")
+@Check(name = "ck_orders_quantity", constraints = "quantity > 0")
 @Check(name = "ck_orders_unit_price_snapshot", constraints = "unit_price_snapshot >= 0")
-@Check(name = "ck_orders_total_amount", constraints = "total_amount >= 0")*/
+@Check(name = "ck_orders_total_amount", constraints = "total_amount >= 0")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order extends BaseEntity {
@@ -85,24 +86,11 @@ public class Order extends BaseEntity {
             throw new BusinessException(OrderErrorCode.INVALID_UNIT_PRICE);
         }
     }
-/*
-    *//** 재고 차감 + 배송 생성 성공 시 *//*
-    public void complete(UUID deliveryId) {
-        validateProcessing();
-        this.deliveryId = deliveryId;
-        this.orderStatus = OrderStatus.COMPLETED;
-    }
-
-    *//** 재고 부족, 배송 생성 실패 등으로 주문 생성 실패 시 *//*
-    public void fail() {
-        validateProcessing();
-        this.orderStatus = OrderStatus.FAILED;
-    }
 
     private void validateProcessing() {
         if (orderStatus != OrderStatus.PROCESSING) {
             throw new BusinessException(OrderErrorCode.ORDER_NOT_PROCESSING);
         }
-    }*/
+    }
 
 }

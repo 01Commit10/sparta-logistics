@@ -8,5 +8,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface OrderHistoryJpaRepository extends JpaRepository<OrderHistory, UUID> {
+
     Optional<OrderHistory> findByOperationTypeAndIdempotencyKey(OrderOperationType operationType, String idempotencyKey);
 }

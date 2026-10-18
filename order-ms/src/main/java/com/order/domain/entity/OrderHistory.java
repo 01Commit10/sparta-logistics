@@ -14,7 +14,13 @@ import org.hibernate.annotations.ColumnDefault;
 import java.util.UUID;
 
 @Entity
-@Table(name = "p_order_histories")
+@Table(
+        name = "p_order_histories",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_order_histories_operation_key",
+                columnNames = {"operation_type", "idempotency_key"}
+        )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OrderHistory extends BaseEntity {
@@ -61,14 +67,6 @@ public class OrderHistory extends BaseEntity {
         history.retryCount = 0;
         return history;
     }
-
-    /*public boolean isSameRequest(String requestHash) {
-        return this.requestHash.equals(requestHash);
-    }
-
-    public void linkOrder(Order order) {
-        this.order = order;
-    }*/
 
     // 409 들어오면 실패
     public void fail(int responseCode, String lastError) {
