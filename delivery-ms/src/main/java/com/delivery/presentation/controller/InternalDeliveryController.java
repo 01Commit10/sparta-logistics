@@ -20,8 +20,7 @@ public class InternalDeliveryController {
 
 
     @PostMapping("/deliveries")
-    public ResponseEntity<DeliveryCreateResponse> createDelivery(@RequestBody @Valid DeliveryCreateRequest request,
-                                                                 @RequestHeader("Idempotency-Key") String idempotencyKey) {
+    public ResponseEntity<DeliveryCreateResponse> createDelivery(@RequestBody @Valid DeliveryCreateRequest request) {
         DeliveryCreateCommand command = request.toCommand();
         DeliveryCreateResult result = deliveryCommandService.createDelivery(command);
         DeliveryCreateResponse response = DeliveryCreateResponse.from(result);
