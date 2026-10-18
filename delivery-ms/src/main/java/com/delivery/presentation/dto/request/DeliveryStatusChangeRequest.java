@@ -1,4 +1,9 @@
 package com.delivery.presentation.dto.request;
 
-public record DeliveryStatusChangeRequest() {
+import com.delivery.domain.vo.DeliveryStatus;
+import jakarta.validation.constraints.NotNull;
+
+public record DeliveryStatusChangeRequest(
+        @NotNull DeliveryStatus status
+) {
 }

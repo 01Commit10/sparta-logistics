@@ -1,6 +1,8 @@
 package com.delivery.domain.entity;
 
 import com.common.entity.BaseEntity;
+import com.common.exception.BusinessException;
+import com.common.exception.DeliveryErrorCode;
 import com.delivery.domain.vo.DeliveryStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -81,8 +83,20 @@ public class Delivery extends BaseEntity {
                 : DeliveryStatus.HUB_WAITING;
     }
 
+
     public void assignDeliveryManager(UUID deliveryManagerId) {
         this.deliveryManagerId = deliveryManagerId;
+    }
+
+    public void changeStatus(DeliveryStatus nextStatus) {
+        if(nextStatus == null) {
+            throw new IllegalArgumentException("changeStatus의 next는 null일 수 없습니다."); // 서버 내부 에러
+        }
+        if(status == nextStatus) return;
+        if(!status.canChangeTo(nextStatus)) {
+            throw new BusinessException(DeliveryErrorCode.DELIVERY_INVALID_STATUS_TRANSITION);
+        }
+        this.status = nextStatus;
     }
 }
 

@@ -1,6 +1,8 @@
 package com.delivery.presentation.controller;
 
 import com.common.auth.AuthContract;
+import com.common.auth.AuthUser;
+import com.common.auth.web.CurrentUser;
 import com.common.page.PagePolicy;
 import com.common.page.PageResponse;
 import com.delivery.application.dto.result.DeliveryResult;
@@ -32,7 +34,7 @@ public class DeliveryController {
 
     @GetMapping("/{deliveryId}")
     public DeliveryResponse getDelivery(@PathVariable UUID deliveryId,
-                                                        @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId) {
+                                        @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId) {
         DeliveryResult result = deliveryQueryService.getDelivery(deliveryId, userId);
 
         return DeliveryResponse.from(result);
@@ -40,7 +42,7 @@ public class DeliveryController {
 
     @GetMapping
     public PageResponse<DeliveryResponse> getDeliveries(@RequestHeader(AuthContract.HEADER_USER_ID) UUID userId,
-                                                                Pageable pageable) {
+                                                        Pageable pageable) {
         Pageable normalized = PAGE_POLICY.apply(pageable);
         Page<DeliveryResult> deliveries = deliveryQueryService.getDeliveries(userId, normalized);
 
@@ -49,7 +51,7 @@ public class DeliveryController {
 
     @GetMapping("/by-order/{orderId}")
     public DeliveryResponse getDeliveryByOrderId(@PathVariable UUID orderId,
-                                                                 @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId) {
+                                                 @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId) {
         DeliveryResult result = deliveryQueryService.getDeliveryByOrderId(orderId, userId);
 
         return DeliveryResponse.from(result);
@@ -57,11 +59,18 @@ public class DeliveryController {
 
     @PatchMapping("/{deliveryId}/manager")
     public DeliveryResponse assignDeliveryManager(@PathVariable UUID deliveryId,
-                                                                  @RequestBody @Valid DeliveryManagerAssignRequest request) {
-
+                                                  @RequestBody @Valid DeliveryManagerAssignRequest request) {
         DeliveryResult result = deliveryCommandService.assignDeliveryManager(deliveryId, request.deliveryManagerId());
 
         return DeliveryResponse.from(result);
     }
 
+    @PatchMapping("/{deliveryId}/status")
+    public DeliveryResponse changeDeliveryStatus(@PathVariable UUID deliveryId,
+                                                 @CurrentUser AuthUser user,
+                                                 @RequestBody @Valid DeliveryStatusChangeRequest request) {
+        DeliveryResult result = deliveryCommandService.changeDeliveryStatus(deliveryId, request.status(), user.id(), user.isMaster());
+
+        return DeliveryResponse.from(result);
+    }
 }

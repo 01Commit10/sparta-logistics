@@ -6,5 +6,15 @@ public enum DeliveryStatus {
     HUB_ARRIVED, // 경우 1) 허브 간 이동을 마치고 목적지 허브에 도착, 경우 2) 출발 허브와 도착 허브가 같을 경우 출고 대기(아무 이동도 시작 안 함)
     DELIVERING, // 목적지 허브에서 업체로 배송 중
     DELIVERED, // 수령 완료
-    CANCELED // 취소
+    CANCELED; // 취소
+
+    public boolean canChangeTo(DeliveryStatus next) {
+        return switch (this) {
+            case HUB_WAITING -> next == HUB_MOVING;
+            case HUB_MOVING -> next == HUB_ARRIVED;
+            case HUB_ARRIVED -> next == DELIVERING;
+            case DELIVERING -> next == DELIVERED;
+            case DELIVERED, CANCELED -> false;
+        };
+    }
 }
