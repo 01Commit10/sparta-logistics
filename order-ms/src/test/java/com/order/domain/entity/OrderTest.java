@@ -78,4 +78,30 @@ public class OrderTest {
                 .extracting(BusinessException::getErrorCode)
                 .isEqualTo(OrderErrorCode.INVALID_UNIT_PRICE);
     }
+
+    @Test
+    @DisplayName("처리 중인 주문을 완료하면 상태는 COMPLETED이고 배송 ID가 저장된다.")
+    void completedOrderSuccess() {
+        Order order = createOrder(3, UNIT_PRICE);
+        UUID deliveryId = UUID.randomUUID();
+
+        order.complete(deliveryId);
+
+        assertThat(order.getOrderStatus()).isEqualTo(OrderStatus.COMPLETED);
+        assertThat(order.getDeliveryId()).isEqualTo(deliveryId);
+    }
+
+    @Test
+    @DisplayName("처리 중인 주문을 실패 처리하면 상태는 FAILED이다.")
+    void failOrderSuccess() {
+        Order order = createOrder(3, UNIT_PRICE);
+
+        order.fail(); // 처리 중인 주문만 실패 처리
+
+        assertThat(order.getOrderStatus()).isEqualTo(OrderStatus.FAILED);
+    }
+
+    // 처리 중이 아닌 주문은 상태를 바꿀 수 없다.
+
+
 }

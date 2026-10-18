@@ -87,10 +87,21 @@ public class Order extends BaseEntity {
         }
     }
 
-    private void validateProcessing() {
+    /** 재고 차감 + 배송 생성 성공 시 주문 완료 */
+    public void complete(UUID deliveryId) {
+        this.deliveryId = deliveryId;
+        this.orderStatus = OrderStatus.COMPLETED;
+    }
+
+    /** 재고 부족, 배송 생성 실패 등으로 주문 생성 실패 (처리 중인 주문만 실패 처리)*/
+    public void fail() {
+        this.orderStatus = OrderStatus.FAILED;
+    }
+
+    /*private void validateProcessing() {
         if (orderStatus != OrderStatus.PROCESSING) {
             throw new BusinessException(OrderErrorCode.ORDER_NOT_PROCESSING);
         }
     }
-
+*/
 }
