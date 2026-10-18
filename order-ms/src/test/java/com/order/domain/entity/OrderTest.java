@@ -101,7 +101,21 @@ public class OrderTest {
         assertThat(order.getOrderStatus()).isEqualTo(OrderStatus.FAILED);
     }
 
-    // 처리 중이 아닌 주문은 상태를 바꿀 수 없다.
+    @Test
+    @DisplayName("처리 중이 아닌 주문은 완료, 실패 처리를 할 수 없다.")
+    void changeOrderStatusFailNotProcessing() {
+        Order order = createOrder(3, UNIT_PRICE);
+        order.complete(UUID.randomUUID());
 
+        assertThatThrownBy(() -> order.complete(UUID.randomUUID()))
+                .asInstanceOf(type(BusinessException.class))
+                .extracting(BusinessException::getErrorCode)
+                .isEqualTo(OrderErrorCode.ORDER_NOT_PROCESSING);
+
+        assertThatThrownBy(order::fail)
+                .asInstanceOf(type(BusinessException.class))
+                .extracting(BusinessException::getErrorCode)
+                .isEqualTo(OrderErrorCode.ORDER_NOT_PROCESSING);
+    }
 
 }
