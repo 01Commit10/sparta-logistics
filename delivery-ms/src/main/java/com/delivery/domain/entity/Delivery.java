@@ -80,6 +80,10 @@ public class Delivery extends BaseEntity {
                 ? DeliveryStatus.HUB_ARRIVED
                 : DeliveryStatus.HUB_WAITING;
     }
+
+    public void assignDeliveryManager(UUID deliveryManagerId) {
+        this.deliveryManagerId = deliveryManagerId;
+    }
 }
 
 
