@@ -2,6 +2,7 @@ package com.company.company.presentation.dto;
 
 import com.company.company.application.dto.CompanyResult;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record CompanyResponse(
@@ -9,7 +10,9 @@ public record CompanyResponse(
         String name,
         String address,
         UUID hubId,
-        UUID managerUserId
+        UUID managerUserId,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
     public static CompanyResponse from(CompanyResult result) {
         return new CompanyResponse(
@@ -17,7 +20,9 @@ public record CompanyResponse(
                 result.name(),
                 result.address(),
                 result.hubId(),
-                result.managerUserId()
+                result.managerUserId(),
+                result.createdAt(),
+                result.updatedAt()
         );
     }
 }

@@ -14,6 +14,7 @@ import com.company.fake.FakeUserClient;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.util.UUID;
 
@@ -31,7 +32,7 @@ class CreateCompanyTest {
     private final FakeCompanyRepository companyRepository = new FakeCompanyRepository();
     private final FakeUserClient userClient = new FakeUserClient().add(MANAGER_ID, "USER");
     private final FakeHubClient hubClient = new FakeHubClient().add(HUB_ID);
-    private final CompanyService service = new CompanyService(companyRepository, userClient, hubClient);
+    private final CompanyService service = new CompanyService(companyRepository, userClient, hubClient, TransactionOperations.withoutTransaction());
 
     private static CreateCompanyCommand command(UUID hubId, UUID managerUserId) {
         return new CreateCompanyCommand("스파르타상사", "서울시 강남구 테헤란로 1", hubId, managerUserId);

@@ -2,6 +2,7 @@ package com.common.page;
 
 import com.common.exception.BusinessException;
 import com.common.exception.CommonErrorCode;
+import com.common.page.PageQuery.PageOrder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -89,5 +90,39 @@ class PagePolicyTest {
                     assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_SORT_PROPERTY);
                     assertThat(e.getMessage()).contains("password");
                 });
+    }
+
+    @Test
+    @DisplayName("toQuery: apply와 같은 규칙으로 정규화한 결과를 PageQuery로 돌려준다 (size 보정, 정렬 유지, id 보조 정렬)")
+    void toQueryNormalizesLikeApply() {
+        Sort requested = Sort.by(Sort.Order.desc("name"), Sort.Order.asc("createdAt"));
+
+        PageQuery query = POLICY.toQuery(PageRequest.of(1, 500, requested));
+
+        assertThat(query.page()).isEqualTo(1);
+        assertThat(query.size()).isEqualTo(PagePolicy.DEFAULT_SIZE);
+        assertThat(query.orderList()).containsExactly(
+                new PageOrder("name", false), new PageOrder("createdAt", true), new PageOrder("id", true));
+    }
+
+    @Test
+    @DisplayName("toQuery: 정렬이 없거나 unpaged면 0페이지, 10건, createdAt DESC + id ASC")
+    void toQueryDefaults() {
+        for (Pageable pageable : new Pageable[]{null, Pageable.unpaged(), PageRequest.of(0, 10)}) {
+            PageQuery query = POLICY.toQuery(pageable);
+
+            assertThat(query.page()).isZero();
+            assertThat(query.size()).isEqualTo(PagePolicy.DEFAULT_SIZE);
+            assertThat(query.orderList()).containsExactly(
+                    new PageOrder("createdAt", false), new PageOrder("id", true));
+        }
+    }
+
+    @Test
+    @DisplayName("toQuery: 허용하지 않은 필드로 정렬하면 INVALID_SORT_PROPERTY")
+    void toQueryRejectsUnknownSortProperty() {
+        assertThatThrownBy(() -> POLICY.toQuery(PageRequest.of(0, 10, Sort.by("password"))))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_SORT_PROPERTY));
     }
 }

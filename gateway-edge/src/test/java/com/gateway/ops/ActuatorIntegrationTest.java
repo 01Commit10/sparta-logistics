@@ -69,7 +69,7 @@ class ActuatorIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/actuator", "/actuator/health", "/actuator/gateway/routes", "/actuator/circuitbreakers", "/actuator/env"})
+    @ValueSource(strings = {"/actuator", "/actuator/health", "/actuator/gateway/routes", "/actuator/env"})
     @DisplayName("4. 서비스 포트의 /actuator/**는 공통 형식 404 (운영 정보 비노출)")
     void notOnServicePort(String path) {
         client.get().uri(path).exchange()
@@ -85,19 +85,6 @@ class ActuatorIntegrationTest {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$[*].route_id").value(containsInAnyOrder("user-ms", "company-ms", "hub-ms", "order-ms", "delivery-ms"));
-    }
-
-    @Test
-    @DisplayName("6. 관리 포트 /actuator/circuitbreakers: 서비스별 회로 5개")
-    void circuitBreakers() {
-        management().get().uri("/actuator/circuitbreakers").exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.circuitBreakers.user-ms").exists()
-                .jsonPath("$.circuitBreakers.company-ms").exists()
-                .jsonPath("$.circuitBreakers.hub-ms").exists()
-                .jsonPath("$.circuitBreakers.order-ms").exists()
-                .jsonPath("$.circuitBreakers.delivery-ms").exists();
     }
 
     @Test

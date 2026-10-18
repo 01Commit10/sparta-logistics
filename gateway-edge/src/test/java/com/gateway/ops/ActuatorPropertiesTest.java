@@ -78,9 +78,9 @@ class ActuatorPropertiesTest {
     }
 
     @Test
-    @DisplayName("노출 엔드포인트는 헬스·정보·라우트·회로 상태만")
+    @DisplayName("노출 엔드포인트는 헬스·정보·라우트만")
     void exposure() throws IOException {
         assertThat(binder().bind("management.endpoints.web.exposure.include", Bindable.listOf(String.class)).get())
-                .containsExactlyInAnyOrder("health", "info", "gateway", "circuitbreakers", "circuitbreakerevents");
+                .containsExactlyInAnyOrder("health", "info", "gateway");
     }
 }

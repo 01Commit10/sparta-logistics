@@ -1,5 +1,8 @@
 package com.company.architecture;
 
+import com.common.page.PagePolicy;
+import com.common.page.PageResponse;
+import com.common.page.SpringDataPages;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -84,6 +87,17 @@ class ArchitectureTest {
     static final ArchRule 저장소_Port는_domain_repository에_있다 =
             classes().that().resideInAPackage(DOMAIN).and().haveSimpleNameEndingWith("Repository")
                     .should().resideInAPackage("com.company..domain.repository..").andShould().beInterfaces();
+
+    // PagePolicy·PageResponse·SpringDataPages는 Spring에 의존하지만 패키지가 com.common.page라 위 규칙으로 잡히지 않는다
+    @ArchTest
+    static final ArchRule 페이지_도구는_presentation에서만_쓴다 =
+            noClasses().that().resideInAnyPackage(DOMAIN, APPLICATION, INFRASTRUCTURE)
+                    .should().dependOnClassesThat().belongToAnyOf(PagePolicy.class, PageResponse.class);
+
+    @ArchTest
+    static final ArchRule SpringDataPages는_infrastructure에서만_쓴다 =
+            noClasses().that().resideInAnyPackage(DOMAIN, APPLICATION, PRESENTATION)
+                    .should().dependOnClassesThat().belongToAnyOf(SpringDataPages.class);
 
     @ArchTest
     static final ArchRule 다른_서비스의_코드를_import하지_않는다 =

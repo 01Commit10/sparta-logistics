@@ -15,17 +15,15 @@ import java.util.function.Supplier;
  * </pre>
  * <ul>
  *     <li>{@link RemoteBusinessException}: 원격 4xx (ErrorDecoder가 만든 것을 그대로)</li>
- *     <li>{@link RemoteServiceException}: 원격 5xx·401, Circuit Breaker OPEN, 연결 실패(거부·연결 타임아웃) — 처리 안 됨</li>
+ *     <li>{@link RemoteServiceException}: 원격 5xx·401, 연결 실패(거부·연결 타임아웃·인스턴스 없음) — 처리 안 됨</li>
  *     <li>{@link RemoteTimeoutException}: 요청을 보낸 뒤 결과를 알 수 없음(read 타임아웃, 응답 중 연결 끊김,
  *         2xx 본문 변환 실패, 원격 504) — 결과 모름</li>
  * </ul>
- * Feign·Circuit Breaker는 원인을 여러 겹으로 감싸 던지므로(RetryableException, NoFallbackAvailableException 등) 원인 체인을 따라가며 판단한다.
+ * Feign은 원인을 감싸 던지므로(RetryableException 등) 원인 체인을 따라가며 판단한다. 재시도는 하지 않는다 (C03).
  */
 public class RemoteCallTemplate {
 
     private static final int MAX_CAUSE_DEPTH = 10;
-    /** 이름으로 비교한다. resilience4j 없이 openfeign만 넣은 서비스에서도 이 클래스가 로딩되게 한다 */
-    private static final String CIRCUIT_OPEN = "io.github.resilience4j.circuitbreaker.CallNotPermittedException";
     /** 2xx를 받았지만 본문을 반환 타입으로 못 바꿈. 원격은 처리했다 */
     private static final String DECODE_FAILURE = "feign.codec.DecodeException";
 
@@ -44,33 +42,6 @@ public class RemoteCallTemplate {
         });
     }
 
-    /**
-     * 실패하면 한 번만 다시 보낸다. <b>멱등성 키가 있어 두 번 처리돼도 결과가 같은 호출에만</b> 쓴다 (SYS-13 6장).
-     * 업무 거절(4xx), Circuit Breaker OPEN, 2xx 본문 변환 실패는 다시 보내도 같으므로 재시도하지 않는다.
-     * <p>
-     * 첫 시도가 타임아웃(결과 모름)이면 재시도가 5xx·연결 실패·OPEN(처리 안 됨)으로 끝나도 첫 요청이 처리됐을 수 있으므로
-     * 첫 타임아웃을 던진다 (재시도 실패는 suppressed). 처리 안 됨으로 알리면 호출한 쪽이 보상(재고 복구 등)을 건너뛴다.
-     * 재시도가 성공하거나 4xx로 답하면 멱등성 키로 받은 확정 응답이라 그대로 쓴다.
-     */
-    public <T> T executeWithRetryOnce(String target, Supplier<T> call) {
-        try {
-            return execute(target, call);
-        } catch (RemoteTimeoutException | RemoteServiceException first) {
-            if (isCircuitOpen(first.getCause()) || isDecodeFailure(first.getCause())) {
-                throw first;
-            }
-            try {
-                return execute(target, call);
-            } catch (RemoteServiceException retryFailure) {
-                if (first instanceof RemoteTimeoutException) {
-                    first.addSuppressed(retryFailure);
-                    throw first;
-                }
-                throw retryFailure;
-            }
-        }
-    }
-
     RuntimeException translate(String target, Throwable failure) {
         Throwable cause = failure;
         IOException ioFailure = null;
@@ -79,7 +50,7 @@ public class RemoteCallTemplate {
                     || cause instanceof RemoteTimeoutException) {
                 return (RuntimeException) cause;
             }
-            if (isCircuitOpen(cause) || isConnectFailure(cause)) {
+            if (isConnectFailure(cause)) {
                 return new RemoteServiceException(target, cause);
             }
             // Jackson 예외도 IOException이라 원인을 따라가기 전에 먼저 본다 (HTML 등 IOException이 아닌 원인과 같게 분류)
@@ -94,10 +65,6 @@ public class RemoteCallTemplate {
             return new RemoteTimeoutException(target, ioFailure);
         }
         return new RemoteServiceException(target, failure);
-    }
-
-    private static boolean isCircuitOpen(Throwable cause) {
-        return cause != null && CIRCUIT_OPEN.equals(cause.getClass().getName());
     }
 
     private static boolean isDecodeFailure(Throwable cause) {
