@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -89,6 +90,16 @@ public class InventoryService {
 
             return InventoryResult.fromEntity(savedInventory);
         });
+    }
+
+    // 상품 삭제에 따른 재고 정리. 대상이 없거나 이미 삭제되었어도 성공으로 처리한다.
+    @Transactional
+    public void deleteInventoriesByProductId(UUID productId, UUID actorId) {
+        if (productId == null || actorId == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+
+        inventoryRepository.softDeleteByProductId(productId, actorId, LocalDateTime.now());
     }
 
     //재고 등록 명령의 필수 값 누락과 초기 수량의 유효성 검증

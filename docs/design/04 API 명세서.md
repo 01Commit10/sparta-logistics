@@ -75,22 +75,26 @@
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 업체 목록 조회 | GET | `/companies` | 로그인 | hubId, name | 200 |
+| 업체 목록 조회 | GET | `/companies` | 로그인 | hubId, name(부분 일치), 페이지. 정렬: createdAt·name | 200 |
 | 업체 상세 조회 | GET | `/companies/{companyId}` | 로그인 | companyId | 200 |
 | 업체 등록 | POST | `/companies` | MASTER | name, address, hubId, managerUserId | 201 |
-| 업체 수정 | PATCH | `/companies/{companyId}` | MASTER·업체관리자 | 업체 변경 정보 | 200 |
+| 업체 수정 | PATCH | `/companies/{companyId}` | MASTER·업체관리자 | name, address, hubId, managerUserId 중 보낸 필드만. hubId·managerUserId 변경은 MASTER만 | 200 |
 | 업체 삭제 | DELETE | `/companies/{companyId}` | MASTER | companyId | 204 |
+
+*업체 등록·수정 시 관리 허브는 Hub Service, 업체 관리자는 User Service 내부 API로 존재를 확인합니다. 삭제된 업체는 조회·수정·삭제 모두 404입니다.*
 
 ## Product
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 상품 목록 조회 | GET | `/products` | 로그인 | companyId, name | 200 |
-| 상품 상세 조회 | GET | `/products/{productId}` | 로그인 | productId | 200 |
-| 업체별 상품 조회 | GET | `/companies/{companyId}/products` | 로그인 | companyId | 200 |
+| 상품 목록 조회 | GET | `/products` | 로그인 | companyId, name(부분 일치), 페이지. 정렬: createdAt·name·unitPrice·viewCount | 200 |
+| 상품 상세 조회 | GET | `/products/{productId}` | 로그인 | productId. **조회할 때마다 조회수 +1** | 200 |
+| 업체별 상품 조회 | GET | `/companies/{companyId}/products` | 로그인 | companyId, 페이지. 정렬: createdAt·name·unitPrice·viewCount | 200 |
 | 상품 등록 | POST | `/companies/{companyId}/products` | MASTER·업체관리자 | name, description, unitPrice | 201 |
-| 상품 수정 | PATCH | `/products/{productId}` | MASTER·업체관리자 | 상품 변경 정보 | 200 |
+| 상품 수정 | PATCH | `/products/{productId}` | MASTER·업체관리자 | name, description, unitPrice 중 보낸 필드만 | 200 |
 | 상품 삭제 | DELETE | `/products/{productId}` | MASTER·업체관리자 | productId | 204 |
+
+*상품 응답에는 조회수(`viewCount`)가 포함됩니다. 인기 상품은 `sort=viewCount,desc`로 조회합니다. 삭제된 상품과 삭제된 업체의 상품은 조회·검색에서 제외합니다.*
 
 ## Order
 
@@ -135,18 +139,22 @@
 | 기능 | Method | Endpoint | 호출 목적 |
 |---|---|---|---|
 | 사용자 검증 | GET | `/users/{userId}` | 사용자·배송담당자 확인. 응답: id, name, role, isDeliveryManager, slackId, active. 삭제된 사용자는 404 |
-| 허브 검증 | GET | `/hubs/{hubId}` | 허브 존재 여부 확인 |
-| 상품 검증 | GET | `/products/{productId}` | 상품·공급업체 확인 |
-| 업체 검증 | GET | `/companies/{companyId}` | 업체·관리 허브 확인 |
+| 배송담당자 무작위 배정 | GET | `/users/delivery-managers/random?departureHubId={id}&arrivalHubId={id}` | 배송 생성 시 허브별 담당자 1명씩. 200(departureManagerId, arrivalManagerId: 담당자 사용자 ID 문자열). 후보 없으면 404 `DELIVERY_MANAGER_NOT_FOUND`(메시지에 출발지/도착지), 파라미터 누락·형식 오류 400 |
+| 허브 검증 | GET | `/hubs/{hubId}` | 활성 허브면 200(id, name, address), 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
+| 상품 검증 | GET | `/products/{productId}` | 상품·공급업체 확인. 응답: id, companyId, name, unitPrice. 없거나 삭제된 상품은 404 `PRODUCT_NOT_FOUND`, 소속 업체가 삭제됐으면 404 `COMPANY_NOT_FOUND`. 조회수는 올리지 않음 |
+| 업체 검증 | GET | `/companies/{companyId}` | 업체·관리 허브 확인. 응답: id, name, address, hubId, managerUserId. 없거나 삭제된 업체는 404 `COMPANY_NOT_FOUND` |
 | 재고 차감 | POST | `/inventories/decrease` | 주문 시 원자적 재고 차감 |
 | 재고 복원 | POST | `/inventories/restore` | Saga 실패 시 보상 트랜잭션 |
-| 허브 경로 조회 | GET | `/hub-routes?departureHubId={id}&arrivalHubId={id}` | 배송 구간 자동 생성 시 거리·예상 소요시간 확인 |
+| 상품 재고 정리 | DELETE | `/inventories/products/{productId}` | 상품의 모든 허브 재고를 논리 삭제. 없음·이미 삭제도 204, 수량·Operation·History 보존 |
+| 허브 경로 조회 | GET | `/hub-routes?departureHubId={id}&arrivalHubId={id}` | 200(id, departureHubId, arrivalHubId, distanceKm, durationMin). 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
 | 배송 생성 | POST | `/deliveries` | 주문에 연결된 배송 생성 |
 | 배송 취소 | POST | `/deliveries/{deliveryId}/cancel` | 주문 취소 시 배송·구간 취소 (Saga 보상) |
 | 주문 완료 처리 | POST | `/orders/{orderId}/complete` | Saga 완료 상태 반영 |
 | 주문 실패 처리 | POST | `/orders/{orderId}/fail` | Saga 실패 상태 반영 |
 
 *내부 API는 일반 사용자에게 공개하지 않으며 서비스 간 인증이 필요합니다.*
+
+**Hub 구현 참고(2026-10-19):** 위 허브 검증·경로 조회·상품 재고 정리 API를 제공합니다. 상세 필드·감사 작업자·현재 접근 통제와 Company 연동 범위는 [Hub-MS Feign 연동 사용법](<../guide/사용법/Hub-MS Feign 연동 사용법.md>)을 참고합니다. Hub의 별도 서비스 호출자 인증과 Company의 상품 삭제 후 Hub 호출은 아직 연결되어 있지 않습니다.
 
 *주문 완료·실패 처리 API는 비동기 Saga에서만 필요합니다. Order Service가 동기로 오케스트레이션하는 초기 구현에서는 생략할 수 있습니다.*
 

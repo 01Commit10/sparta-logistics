@@ -185,9 +185,9 @@ bash gradlew :hub-ms:test --rerun-tasks
 | 목록 API에 출발·도착 Hub 검색 조건 전달 | `/fromtosearch`에서 `fromHubId`·`toHubId`를 받아 객체 1개 반환 |
 | 공통 `page`·`size`·`sort` 규칙 | 목록은 페이지네이션 없이 고정 정렬의 JSON 배열 반환 |
 | 경로 등록·수정·삭제 API | 미제공. 원본 요구사항의 초기 적재·조회 범위로 구현 |
-| `GET /internal/v1/hub-routes?departureHubId={id}&arrivalHubId={id}` | 미구현. 내부 전용 경로·파라미터는 현재 공개 API 계약과 다름 |
+| `GET /internal/v1/hub-routes?departureHubId={id}&arrivalHubId={id}` | 2026-10-19 구현. 응답은 id·departureHubId·arrivalHubId·distanceKm·durationMin이며 공개 API와 이름을 구분 |
 
-배송 등 다른 서비스에서 호출할 때는 현재 `/api/v1/hub-routes/fromtosearch` 계약과 공통 헤더 전달 규칙을 맞춰야 합니다. 별도의 내부 전용 API는 실제 호출 계약을 확정한 뒤 검토합니다. 서비스 간 호출 규칙은 [Feign 호출 사용법](<Feign 호출 사용법.md>)을 참고합니다.
+Delivery 등 다른 서비스는 `/internal/v1/hub-routes`에서 `departureHubId`·`arrivalHubId`로 조회할 수 있습니다. 내부 응답 DTO에서만 기존 응용 DTO의 `fromHubId/toHubId`를 변환하므로 공개 API는 기존 이름을 유지합니다. 내부 조회는 사용자 헤더를 필수로 요구하지 않으며, 별도 서비스 호출자 인증은 아직 미구현입니다. Feign 예시와 검증 범위는 [Hub-MS Feign 연동 사용법](<Hub-MS Feign 연동 사용법.md>)을 참고합니다.
 
 구현 확인 위치:
 

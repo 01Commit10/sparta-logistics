@@ -1,6 +1,7 @@
 package com.user.domain.repository;
 
 import com.user.domain.entity.User;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,4 +36,7 @@ public interface UserRepository {
 
     /** USR-11 MASTER 목록 검색. 조건·페이지·정렬은 순수 Java 타입으로 받는다 (domain은 Spring 타입 금지) */
     PageData<User> search(UserSearchCondition condition, PageQuery pageQuery);
+
+    /** USR-23 배정 후보: 그 허브에 소속이 연결된(organizationId) 활성 배송담당자 */
+    List<User> findActiveDeliveryManagersByHubId(UUID hubId);
 }

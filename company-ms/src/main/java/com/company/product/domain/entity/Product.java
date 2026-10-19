@@ -9,6 +9,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Check;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -37,6 +38,12 @@ public class Product extends BaseEntity {
 
     @Column(name = "unit_price", nullable = false, precision = 15, scale = 2)
     private BigDecimal unitPrice;
+
+    // 상세 조회 수 (인기 상품용). 동시 조회에도 빠지지 않게 엔티티가 아니라 Repository의 조건부 UPDATE로만 올린다.
+    // DEFAULT 0: 기존 행이 있는 테이블에 ddl-auto(update)로 NOT NULL 컬럼을 추가할 수 있도록
+    @ColumnDefault("0")
+    @Column(name = "view_count", nullable = false)
+    private long viewCount;
 
     private Product(Company company, String name, String description, BigDecimal unitPrice) {
         this.company = company;

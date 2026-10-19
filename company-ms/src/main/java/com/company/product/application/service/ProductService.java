@@ -44,12 +44,23 @@ public class ProductService {
         return ProductResult.from(productRepository.save(product));
     }
 
-    // 상품 단건 조회로 로그인 사용자 모두 접근 가능 (07 서비스 정책 4장 권한)
+    // 상품 단건 조회로 로그인 사용자 모두 접근 가능 (07 서비스 정책 4장 권한).
+    // 조회수는 올리지 않는다: 내부 API(주문 검증 등) 호출까지 인기 지표에 섞이지 않도록
     @Transactional(readOnly = true)
     public ProductResult getProduct(UUID productId) {
         Product product = findActiveProduct(productId);
         findActiveCompany(product.getCompany().getId());
         return ProductResult.from(product);
+    }
+
+    // 사용자 상세 조회: 상품·소속 업체 확인 → 조회수 +1 → 올라간 값으로 응답.
+    // 조회수는 DB에서 바로 올리므로(벌크 UPDATE) 다시 읽어야 응답에 반영된다
+    @Transactional
+    public ProductResult viewProduct(UUID productId) {
+        Product product = findActiveProduct(productId);
+        findActiveCompany(product.getCompany().getId());
+        productRepository.increaseViewCount(productId);
+        return ProductResult.from(findActiveProduct(productId));
     }
 
     @Transactional(readOnly = true)

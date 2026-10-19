@@ -22,6 +22,8 @@ public enum UserErrorCode implements ErrorCode {
 
     // 404
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+    // 허브에 배정할 활성 배송담당자가 없다 (배송 생성 시 무작위 배정, delivery-ms가 호출)
+    DELIVERY_MANAGER_NOT_FOUND(HttpStatus.NOT_FOUND, "배정할 수 있는 배송담당자가 없습니다."),
 
     // 409 - 중복·상태 충돌
     DUPLICATE_USERNAME(HttpStatus.CONFLICT, "이미 사용 중인 아이디입니다."),
