@@ -32,7 +32,7 @@ public class OrderService {
     public OrderResult createOrder(CreateOrderCommand command) {
         // 1. 이력 생성(IN_PROCESSING) ← 번호표: 중복 차단 + 이후 모든 성공/실패를 기록할 자리 확보
         OrderHistory history = OrderHistory.create(
-                OrderOperationType.CREATE, command.idempotencyKey(), hash(command));
+                OrderOperationType.CREATE, command.idempotencyKey(), command.requestHash());
         orderHistoryRepository.save(history);
 
         // 2. 재고 조회 -> 차감 할 허브 선택
@@ -68,24 +68,6 @@ public class OrderService {
         history.succeed(201);
 
         return OrderResult.from(order);
-    }
-
-    private String hash(CreateOrderCommand command) {
-        String raw = String.join("|",
-                String.valueOf(command.requesterCompanyId()),
-                String.valueOf(command.supplierCompanyId()),
-                String.valueOf(command.productId()),
-                String.valueOf(command.quantity()),
-                command.unitPrice().stripTrailingZeros().toPlainString(),
-                String.valueOf(command.requestNote()),
-                String.valueOf(command.orderedBy())
-        );
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", e);
-        }
     }
 
     private InventoryInfo selectInventory(CreateOrderCommand command) {
