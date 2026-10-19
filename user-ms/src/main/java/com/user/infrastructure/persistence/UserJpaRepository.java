@@ -1,6 +1,7 @@
 package com.user.infrastructure.persistence;
 
 import com.user.domain.entity.User;
+import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.UserRole;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,6 +26,9 @@ interface UserJpaRepository extends JpaRepository<User, UUID>, JpaSpecificationE
     boolean existsBySlackIdAndIdNotAndDeletedAtIsNull(String slackId, UUID id);
 
     boolean existsByRoleAndDeletedAtIsNull(UserRole role);
+
+    List<User> findByDeliveryManagerTrueAndOrganizationTypeAndOrganizationIdAndDeletedAtIsNull(
+            OrganizationType organizationType, UUID organizationId);
 
     /**
      * PostgreSQL은 count(*)에 FOR UPDATE를 쓸 수 없으므로 행을 잠가 조회한 뒤 개수를 센다.

@@ -7,6 +7,7 @@ import com.user.domain.repository.PageData;
 import com.user.domain.repository.PageQuery;
 import com.user.domain.repository.UserRepository;
 import com.user.domain.repository.UserSearchCondition;
+import com.user.domain.vo.OrganizationType;
 import com.user.domain.vo.UserRole;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -93,6 +94,12 @@ public class UserRepositoryImpl implements UserRepository {
         Page<User> page = jpa.findAll(UserSpecifications.of(condition),
                 PageRequest.of(pageQuery.page(), pageQuery.size(), toSort(pageQuery.orders())));
         return new PageData<>(page.getContent(), page.getTotalElements());
+    }
+
+    @Override
+    public List<User> findActiveDeliveryManagersByHubId(UUID hubId) {
+        return jpa.findByDeliveryManagerTrueAndOrganizationTypeAndOrganizationIdAndDeletedAtIsNull(
+                OrganizationType.HUB, hubId);
     }
 
     private static Sort toSort(List<PageQuery.Order> orders) {

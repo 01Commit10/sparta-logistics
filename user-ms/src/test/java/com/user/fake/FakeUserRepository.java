@@ -105,6 +105,15 @@ public class FakeUserRepository implements UserRepository {
         return new PageData<>(page, matched.size());
     }
 
+    @Override
+    public List<User> findActiveDeliveryManagersByHubId(UUID hubId) {
+        return store.values().stream()
+                .filter(User::isActive)
+                .filter(User::isDeliveryManager)
+                .filter(u -> hubId.equals(u.getOrganizationId()))
+                .toList();
+    }
+
     public UserSearchCondition lastCondition() {
         return lastCondition;
     }
