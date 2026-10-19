@@ -139,7 +139,7 @@
 | 기능 | Method | Endpoint | 호출 목적 |
 |---|---|---|---|
 | 사용자 검증 | GET | `/users/{userId}` | 사용자·배송담당자 확인. 응답: id, name, role, isDeliveryManager, slackId, active. 삭제된 사용자는 404 |
-| 배송담당자 무작위 배정 | GET | `/users/delivery-managers/random?departureHubId={id}&arrivalHubId={id}` | 배송 생성 시 허브별 담당자 1명씩. 200(departureManager, arrivalManager: 각 id, name, slackId, hubId). 후보 없으면 404 `DELIVERY_MANAGER_NOT_FOUND`(메시지에 출발지/도착지), 파라미터 누락·형식 오류 400 |
+| 배송담당자 무작위 배정 | GET | `/users/delivery-managers/random?departureHubId={id}&arrivalHubId={id}` | 배송 생성 시 허브별 담당자 1명씩. 200(departureManagerId, arrivalManagerId: 담당자 사용자 ID 문자열). 후보 없으면 404 `DELIVERY_MANAGER_NOT_FOUND`(메시지에 출발지/도착지), 파라미터 누락·형식 오류 400 |
 | 허브 검증 | GET | `/hubs/{hubId}` | 활성 허브면 200(id, name, address), 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
 | 상품 검증 | GET | `/products/{productId}` | 상품·공급업체 확인. 응답: id, companyId, name, unitPrice. 없거나 삭제된 상품은 404 `PRODUCT_NOT_FOUND`, 소속 업체가 삭제됐으면 404 `COMPANY_NOT_FOUND`. 조회수는 올리지 않음 |
 | 업체 검증 | GET | `/companies/{companyId}` | 업체·관리 허브 확인. 응답: id, name, address, hubId, managerUserId. 없거나 삭제된 업체는 404 `COMPANY_NOT_FOUND` |

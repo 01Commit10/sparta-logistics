@@ -105,9 +105,8 @@ class UserSeedPostgresTest {
         mockMvc.perform(get("/internal/v1/users/delivery-managers/random")
                         .param("departureHubId", SEOUL).param("arrivalHubId", BUSAN))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.departureManager.hubId").value(SEOUL))
-                .andExpect(jsonPath("$.departureManager.name").value(startsWith("서울 배송담당자")))
-                .andExpect(jsonPath("$.arrivalManager.hubId").value(BUSAN))
-                .andExpect(jsonPath("$.arrivalManager.name").value(startsWith("부산 배송담당자")));
+                // 시드 담당자 id는 a0000000-0000-4000-8000-00000000{허브 번호}0{n}
+                .andExpect(jsonPath("$.departureManagerId").value(startsWith("a0000000-0000-4000-8000-0000000001")))
+                .andExpect(jsonPath("$.arrivalManagerId").value(startsWith("a0000000-0000-4000-8000-0000000004")));
     }
 }
