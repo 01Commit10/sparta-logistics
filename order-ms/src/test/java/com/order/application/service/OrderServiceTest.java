@@ -192,7 +192,101 @@ class OrderServiceTest {
         then(orderRepository).shouldHaveNoInteractions();
         then(orderHistoryRepository).should(never()).save(any());
     }
+    
+    @Test
+    @DisplayName("재고 차감 중 시스템 오류가 나면 재고를 복원하고 503 예외가 발생하며 주문과 이력은 FAILED가 된다")
+    void createOrderRestoresStockWhenDecreaseErrors() {
+        // given: 차감 호출 자체가 실패 (타임아웃 등 → 구현체가 INVENTORY_UNAVAILABLE로 변환)
+        givenOrderSavedSuccessfully();
+        given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
+                .willThrow(new BusinessException(OrderErrorCode.INVENTORY_UNAVAILABLE));
 
+        // when & then
+        assertThatThrownBy(() -> orderService.createOrder(createCommand(3)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.INVENTORY_UNAVAILABLE);
+
+        // then: 빠졌는지 모르므로 orderId 기준 복원
+        then(hubClient).should().restoreStock(new StockRestoreCommand(ORDER_ID));
+        then(deliveryClient).shouldHaveNoInteractions();
+        assertFailed(503);
+    }
+
+    @Test
+    @DisplayName("재고 차감이 재고 부족으로 거절되면 409 예외가 발생하고 주문과 이력은 FAILED가 된다")
+    void createOrderFailsWhenStockDecreaseRejected() {
+        // given: 주문 저장까지는 성공, 차감 단계에서 재고 부족으로 거절
+        givenOrderSavedSuccessfully();
+        given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
+                .willReturn(new StockOperationResult(UUID.randomUUID(), false, "INSUFFICIENT_STOCK", 2));
+
+        // when & then
+        assertThatThrownBy(() -> orderService.createOrder(createCommand(3)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.INSUFFICIENT_STOCK);
+
+        // then: 주문은 FAILED
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        then(orderRepository).should().save(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getOrderStatus()).isEqualTo(OrderStatus.FAILED);
+
+        // then: 이력은 FAILED, 409
+        ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
+        then(orderHistoryRepository).should().save(historyCaptor.capture());
+        OrderHistory history = historyCaptor.getValue();
+        assertThat(history.getOperationStatus()).isEqualTo(OrderOperationStatus.FAILED);
+        assertThat(history.getResponseCode()).isEqualTo(409);
+
+        // then: 차감이 안 됐으니 배송도, 복원도 없음
+        then(deliveryClient).shouldHaveNoInteractions();
+        then(hubClient).should(never()).restoreStock(any());
+    }
+
+    @Test
+    @DisplayName("배송 생성이 실패하면 재고를 복원하고 503 예외가 발생하며 주문과 이력은 FAILED가 된다")
+    void createOrderRestoresStockWhenDeliveryFails() {
+        // given: 재고 차감까지 성공, 배송 생성 실패
+        givenOrderSavedSuccessfully();
+        given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
+                .willReturn(new StockOperationResult(UUID.randomUUID(), true, null, 97));
+        given(deliveryClient.createDelivery(any(CreateDeliveryCommand.class)))
+                .willThrow(new BusinessException(OrderErrorCode.DELIVERY_FAILED));
+
+        // when & then
+        assertThatThrownBy(() -> orderService.createOrder(createCommand(3)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.DELIVERY_FAILED);
+
+        // then: 빠진 재고 복원
+        then(hubClient).should().restoreStock(new StockRestoreCommand(ORDER_ID));
+        assertFailed(503);
+    }
+
+    // ①~③ 이력 저장, 재고 조회, 주문 저장 까지는 정상 진행되도록 각본 준비
+    private void givenOrderSavedSuccessfully() {
+        given(orderHistoryRepository.save(any(OrderHistory.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        given(hubClient.findInventories(PRODUCT_ID))
+                .willReturn(List.of(new InventoryInfo(UUID.randomUUID(), HUB_ID, PRODUCT_ID, 100)));
+        given(orderRepository.save(any(Order.class)))
+                .willAnswer(invocation -> {
+                    Order order = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(order, "id", ORDER_ID);  // DB가 id를 채워주는 것을 흉내
+                    return order;
+                });
+    }
+
+    // 주문 FAILED + 이력 FAILED(응답코드) 공통 검증
+    private void assertFailed(int expectedResponseCode) {
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        then(orderRepository).should().save(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getOrderStatus()).isEqualTo(OrderStatus.FAILED);
+
+        ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
+        then(orderHistoryRepository).should().save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getOperationStatus()).isEqualTo(OrderOperationStatus.FAILED);
+        assertThat(historyCaptor.getValue().getResponseCode()).isEqualTo(expectedResponseCode);
+    }
 
 
 }
