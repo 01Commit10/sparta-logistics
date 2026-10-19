@@ -1,5 +1,7 @@
 package com.order.application.service;
 
+import com.common.exception.BusinessException;
+import com.common.exception.OrderErrorCode;
 import com.order.application.dto.CreateOrderCommand;
 import com.order.application.dto.OrderResult;
 import com.order.domain.client.*;
@@ -13,6 +15,8 @@ import com.order.domain.vo.OrderStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -25,6 +29,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -163,6 +168,30 @@ class OrderServiceTest {
         then(orderHistoryRepository).should(never()).save(any());
     }
 
+    @ParameterizedTest
+    @EnumSource(value = OrderOperationStatus.class, names = {"IN_PROGRESS", "FAILED"})
+    @DisplayName("같은 키로 같은 요청이 왔지만 이전 요청이 진행 중이거나 실패했으면 409 예외가 발생한다")
+    void createOrderFailsWhenPreviousRequestNotSucceeded(OrderOperationStatus previousStatus) {
+        // given: 같은 내용의 이전 요청이 진행 중(IN_PROGRESS) 또는 실패(FAILED) 상태
+        CreateOrderCommand command = createCommand(3);
+        OrderHistory history = OrderHistory.create(OrderOperationType.CREATE, IDEMPOTENCY_KEY, command.requestHash());
+        if (previousStatus == OrderOperationStatus.FAILED) {
+            history.fail(503, "이전 요청 처리 실패");
+        }
+
+        given(orderHistoryRepository.findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, IDEMPOTENCY_KEY))
+                .willReturn(Optional.of(history));
+
+        // when & then
+        assertThatThrownBy(() -> orderService.createOrder(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.PREVIOUS_REQUEST_NOT_SUCCEEDED);
+
+        then(hubClient).shouldHaveNoInteractions();
+        then(deliveryClient).shouldHaveNoInteractions();
+        then(orderRepository).shouldHaveNoInteractions();
+        then(orderHistoryRepository).should(never()).save(any());
+    }
 
 
 

@@ -31,12 +31,7 @@ public class OrderService {
         Optional<OrderHistory> previous = orderHistoryRepository
                 .findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, command.idempotencyKey());
         if (previous.isPresent()) {
-            OrderHistory previousHistory = previous.get();
-            // 같은 키인테 내용이 다르면 키 재사용으로 보고 거절
-            if (!previousHistory.isSameReqeust(command.requestHash())) {
-                throw new BusinessException(OrderErrorCode.IDEMPOTENCY_KEY_CONFLICT);
-            }
-            return OrderResult.from(previous.get().getOrder());
+            return returnPreviousResult(previous.get(), command);
         }
 
         // 1. 이력 생성(IN_PROCESSING) ← 번호표: 중복 차단 + 이후 모든 성공/실패를 기록할 자리 확보
@@ -77,6 +72,17 @@ public class OrderService {
         history.succeed(201);
 
         return OrderResult.from(order);
+    }
+
+    // 같은 키의 이전 요청: 내용이 같고 성공했을 때만 이전 결과를 돌려준다.
+    private OrderResult returnPreviousResult(OrderHistory previousHistory, CreateOrderCommand command) {
+        if (!previousHistory.isSameReqeust(command.requestHash())) {
+            throw new BusinessException(OrderErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+        }
+        if (!previousHistory.isSucceeded()) {
+            throw new BusinessException(OrderErrorCode.PREVIOUS_REQUEST_NOT_SUCCEEDED);
+        }
+        return OrderResult.from(previousHistory.getOrder());
     }
 
     private InventoryInfo selectInventory(CreateOrderCommand command) {

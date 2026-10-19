@@ -96,4 +96,8 @@ public class OrderHistory extends BaseEntity {
     public boolean isSameReqeust(String requestHash) {
         return this.requestHash.equals(requestHash);
     }
+
+    public boolean isSucceeded() {
+        return this.operationStatus == OrderOperationStatus.SUCCEEDED;
+    }
 }
