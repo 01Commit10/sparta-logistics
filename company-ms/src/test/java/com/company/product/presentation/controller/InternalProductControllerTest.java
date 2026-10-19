@@ -48,7 +48,7 @@ class InternalProductControllerTest {
 
     private static ProductResult result() {
         LocalDateTime at = LocalDateTime.of(2026, 10, 17, 9, 0);
-        return new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50"), at, at);
+        return new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50"), 0L, at, at);
     }
 
     @Test

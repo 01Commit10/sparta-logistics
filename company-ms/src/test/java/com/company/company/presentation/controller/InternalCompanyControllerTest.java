@@ -51,7 +51,7 @@ class InternalCompanyControllerTest {
     }
 
     @Test
-    @DisplayName("X-User-* 헤더 없이 호출하면 200과 계약 필드 3개만 돌려준다 (주소·관리자·생성/수정 일시는 없다)")
+    @DisplayName("X-User-* 헤더 없이 호출하면 200과 계약 필드 5개만 돌려준다 (생성/수정 일시는 없다)")
     void ok() throws Exception {
         given(companyService.getCompany(COMPANY_ID)).willReturn(result());
 
@@ -60,12 +60,14 @@ class InternalCompanyControllerTest {
                 .andExpect(jsonPath("$.id").value(COMPANY_ID.toString()))
                 .andExpect(jsonPath("$.name").value("스파르타상사"))
                 .andExpect(jsonPath("$.hubId").value(HUB_ID.toString()))
+                .andExpect(jsonPath("$.address").value("서울시 강남구 테헤란로 1"))
+                .andExpect(jsonPath("$.managerUserId").value(MANAGER_ID.toString()))
                 .andReturn().getResponse().getContentAsString();
 
         JsonNode json = objectMapper.readTree(body);
         List<String> fields = new ArrayList<>();
         json.fieldNames().forEachRemaining(fields::add);
-        assertThat(fields).containsExactlyInAnyOrder("id", "name", "hubId");
+        assertThat(fields).containsExactlyInAnyOrder("id", "name", "hubId", "address", "managerUserId");
     }
 
     @Test

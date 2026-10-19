@@ -12,6 +12,7 @@ public record ProductResponse(
         String name,
         String description,
         BigDecimal unitPrice,
+        Long viewCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -22,6 +23,7 @@ public record ProductResponse(
                 result.name(),
                 result.description(),
                 result.unitPrice(),
+                result.viewCount(),
                 result.createdAt(),
                 result.updatedAt()
         );

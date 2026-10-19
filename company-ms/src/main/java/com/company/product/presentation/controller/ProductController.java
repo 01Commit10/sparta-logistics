@@ -25,8 +25,8 @@ import java.util.UUID;
 public class ProductController {
 
     private final ProductService productService;
-    // 상품 목록·업체별 상품 목록 공통 (정렬 허용: createdAt·name·unitPrice)
-    private static final PagePolicy PRODUCTS_PAGE_POLICY = PagePolicy.of("name", "unitPrice");
+    // 상품 목록·업체별 상품 목록 공통 (정렬 허용: createdAt·name·unitPrice·viewCount). 인기 상품은 sort=viewCount,desc
+    private static final PagePolicy PRODUCTS_PAGE_POLICY = PagePolicy.of("name", "unitPrice", "viewCount");
 
     // MASTER·업체 관리자 본인 (본인 여부는 업체 데이터를 봐야 해서 ProductService가 판단)
     @PostMapping("/companies/{companyId}/products")
@@ -47,10 +47,10 @@ public class ProductController {
         return PageResponse.from(productService.searchProducts(request.toQuery(), query), query, ProductResponse::from);
     }
 
-    // 로그인 사용자 모두 (권한 확인 없이 X-User-* 헤더로 로그인 여부만 본다)
+    // 로그인 사용자 모두 (권한 확인 없이 X-User-* 헤더로 로그인 여부만 본다). 조회할 때마다 조회수 +1
     @GetMapping("/products/{productId}")
     public ProductResponse getProduct(@CurrentUser AuthUser authUser, @PathVariable UUID productId) {
-        return ProductResponse.from(productService.getProduct(productId));
+        return ProductResponse.from(productService.viewProduct(productId));
     }
 
     // MASTER·업체 관리자 본인. 보낸 필드만 수정 (PATCH)
