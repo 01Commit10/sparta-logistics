@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -32,6 +33,9 @@ public class ProductService {
     private final CompanyRepository companyRepository;
     private final InventoryClient inventoryClient;
     private final TransactionOperations transactionOperations;
+
+    // 인기 상품 개수 (조회수 상위 N개)
+    static final int POPULAR_LIMIT = 10;
 
     // 업체 조회와 상품 저장을 한 트랜잭션으로 (원격 호출 없음)
     @Transactional
@@ -79,6 +83,15 @@ public class ProductService {
     public PageData<ProductResult> searchProducts(ProductSearchQuery searchQuery, PageQuery query) {
         ProductSearchCondition condition = new ProductSearchCondition(searchQuery.companyId(), searchQuery.name());
         return productRepository.search(condition, query).map(ProductResult::from);
+    }
+
+    // 인기 상품 (조회수 상위 10개)으로 로그인 사용자 모두 접근 가능. companyId는 선택 조건이라
+    // 목록 검색과 같이 없거나 삭제된 업체면 빈 목록
+    @Transactional(readOnly = true)
+    public List<ProductResult> getPopularProducts(UUID companyId) {
+        return productRepository.findPopular(companyId, POPULAR_LIMIT).stream()
+                .map(ProductResult::from)
+                .toList();
     }
 
     // 상품·소속 업체 존재 확인 → 권한 확인 순서.

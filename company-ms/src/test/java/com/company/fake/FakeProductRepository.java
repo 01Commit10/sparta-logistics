@@ -8,6 +8,7 @@ import com.company.product.domain.repository.ProductSearchCondition;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -58,6 +59,18 @@ public class FakeProductRepository implements ProductRepository {
                 .toList();
         List<Product> content = matched.stream().skip(query.offset()).limit(query.size()).toList();
         return new PageData<>(content, matched.size());
+    }
+
+    // 실제 구현처럼 조회수 내림차순 → id 오름차순으로 정렬해 limit개만. id 순서는 Java UUID 비교라 DB와 다를 수 있다
+    @Override
+    public List<Product> findPopular(UUID companyId, int limit) {
+        return store.values().stream()
+                .filter(product -> !product.isDeleted())
+                .filter(product -> !product.getCompany().isDeleted())
+                .filter(product -> companyId == null || product.getCompany().getId().equals(companyId))
+                .sorted(Comparator.comparingLong(Product::getViewCount).reversed().thenComparing(Product::getId))
+                .limit(limit)
+                .toList();
     }
 
     // 실제 구현(벌크 UPDATE)처럼 Auditing 필드는 건드리지 않고 조회수만 올린다. 없는 ID는 아무 일도 하지 않는다

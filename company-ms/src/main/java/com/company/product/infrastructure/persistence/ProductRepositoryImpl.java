@@ -7,8 +7,10 @@ import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
 import com.company.product.domain.repository.ProductSearchCondition;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,6 +43,13 @@ public class ProductRepositoryImpl implements ProductRepository {
         return SpringDataPages.toPageData(
                 jpa.findAll(ProductSpecifications.of(condition), SpringDataPages.toPageable(query))
         );
+    }
+
+    @Override
+    public List<Product> findPopular(UUID companyId, int limit) {
+        return companyId == null
+                ? jpa.findPopular(Limit.of(limit))
+                : jpa.findPopularByCompanyId(companyId, Limit.of(limit));
     }
 
     @Override

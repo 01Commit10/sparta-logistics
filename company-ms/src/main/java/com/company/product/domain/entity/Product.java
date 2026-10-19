@@ -17,7 +17,11 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "p_products", indexes = @Index(name = "idx_products_company_id", columnList = "company_id"))
+@Table(name = "p_products", indexes = {
+        @Index(name = "idx_products_company_id", columnList = "company_id"),
+        @Index(name = "idx_products_view_count", columnList = "view_count desc, id"),
+        @Index(name = "idx_products_company_id_view_count", columnList = "company_id, view_count desc, id")
+})
 @Check(name = "ck_products_unit_price", constraints = "unit_price >= 0")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product extends BaseEntity {

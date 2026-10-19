@@ -17,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -45,6 +46,13 @@ public class ProductController {
                                                         Pageable pageable) {
         PageQuery query = PRODUCTS_PAGE_POLICY.toQuery(pageable);
         return PageResponse.from(productService.searchProducts(request.toQuery(), query), query, ProductResponse::from);
+    }
+
+    // 로그인 사용자 모두. 조회수 상위 10개 (페이지 없음). companyId를 보내면 그 업체 상품 중에서
+    @GetMapping("/products/popular")
+    public List<ProductResponse> getPopularProducts(@CurrentUser AuthUser authUser,
+                                                    @RequestParam(required = false) UUID companyId) {
+        return productService.getPopularProducts(companyId).stream().map(ProductResponse::from).toList();
     }
 
     // 로그인 사용자 모두 (권한 확인 없이 X-User-* 헤더로 로그인 여부만 본다). 조회할 때마다 조회수 +1
