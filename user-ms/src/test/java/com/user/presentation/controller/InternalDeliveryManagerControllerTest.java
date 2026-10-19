@@ -47,7 +47,7 @@ class InternalDeliveryManagerControllerTest {
     DeliveryManagerAssignService deliveryManagerAssignService;
 
     @Test
-    @DisplayName("200과 출발지·도착지 담당자 (각각 id·name·slackId·hubId만)")
+    @DisplayName("200과 출발지·도착지 담당자 id 두 개만, 평평한 문자열로 (이름·Slack ID는 내보내지 않는다)")
     void ok() throws Exception {
         given(deliveryManagerAssignService.assignRandomly(SEOUL, BUSAN)).willReturn(new DeliveryManagerAssignment(
                 new DeliveryManagerResult(MANAGER_1, "김서울", "U001", SEOUL),
@@ -56,17 +56,14 @@ class InternalDeliveryManagerControllerTest {
         String body = mockMvc.perform(get(URL).param("departureHubId", SEOUL.toString())
                         .param("arrivalHubId", BUSAN.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.departureManager.id").value(MANAGER_1.toString()))
-                .andExpect(jsonPath("$.departureManager.name").value("김서울"))
-                .andExpect(jsonPath("$.departureManager.slackId").value("U001"))
-                .andExpect(jsonPath("$.departureManager.hubId").value(SEOUL.toString()))
-                .andExpect(jsonPath("$.arrivalManager.id").value(MANAGER_2.toString()))
-                .andExpect(jsonPath("$.arrivalManager.hubId").value(BUSAN.toString()))
+                .andExpect(jsonPath("$.departureManagerId").value(MANAGER_1.toString()))
+                .andExpect(jsonPath("$.arrivalManagerId").value(MANAGER_2.toString()))
                 .andReturn().getResponse().getContentAsString();
 
         JsonNode json = objectMapper.readTree(body);
-        assertThat(fields(json)).containsExactlyInAnyOrder("departureManager", "arrivalManager");
-        assertThat(fields(json.get("departureManager"))).containsExactlyInAnyOrder("id", "name", "slackId", "hubId");
+        assertThat(fields(json)).containsExactlyInAnyOrder("departureManagerId", "arrivalManagerId");
+        assertThat(json.get("departureManagerId").isTextual()).isTrue();
+        assertThat(json.get("arrivalManagerId").isTextual()).isTrue();
     }
 
     @Test
