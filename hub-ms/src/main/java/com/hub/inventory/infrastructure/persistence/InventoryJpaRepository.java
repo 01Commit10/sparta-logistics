@@ -32,6 +32,23 @@ public interface InventoryJpaRepository extends JpaRepository<Inventory, UUID> {
             UUID productId
     );
 
+    // 벌크 UPDATE에는 Auditing이 적용되지 않으므로 삭제·수정 감사 정보를 함께 기록한다.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE Inventory i
+            SET i.deletedAt = :deletedAt,
+                i.deletedBy = :actorId,
+                i.updatedAt = :deletedAt,
+                i.updatedBy = :actorId
+            WHERE i.productId = :productId
+              AND i.deletedAt IS NULL
+            """)
+    int softDeleteActiveByProductId(
+            @Param("productId") UUID productId,
+            @Param("actorId") UUID actorId,
+            @Param("deletedAt") LocalDateTime deletedAt
+    );
+
     // 재고가 충분하면 차감
     @Modifying(flushAutomatically = true)
     @Query("""

@@ -2,6 +2,7 @@ package com.hub.inventory.domain.repository;
 
 import com.hub.inventory.domain.entity.Inventory;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,5 +16,8 @@ public interface InventoryRepository {
 
     // 새 재고 저장후 Inventory  entity 반환
     Inventory save(Inventory inventory);
+
+    // 상품의 모든 활성 재고를 논리 삭제하며 최초 삭제 정보와 수량은 보존한다.
+    void softDeleteByProductId(UUID productId, UUID actorId, LocalDateTime deletedAt);
 
 }

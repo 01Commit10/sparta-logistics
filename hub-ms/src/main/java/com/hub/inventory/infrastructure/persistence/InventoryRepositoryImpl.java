@@ -7,7 +7,10 @@ import com.hub.inventory.domain.repository.InventoryRepository;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,6 +56,12 @@ public class InventoryRepositoryImpl implements InventoryRepository {
 
             throw e;
         }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void softDeleteByProductId(UUID productId, UUID actorId, LocalDateTime deletedAt) {
+        inventoryJpaRepository.softDeleteActiveByProductId(productId, actorId, deletedAt);
     }
 
     private static boolean isHubProductUniqueViolation(Throwable exception) {
