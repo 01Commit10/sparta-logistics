@@ -9,10 +9,12 @@
 |---|--------------------------------------------------------------|
 | DBMS | PostgreSQL (단일 컨테이너, 서비스별 스키마 분리)                            |
 | 스키마 | `auth`, `hub`, `company`, `orders`, `delivery` (5개)          |
-| 테이블 | 11개                                                          |
+| 테이블 | 12개 (Hub 5개)                                               |
 | 기본키 | 모든 테이블 `id UUID`                                             |
 | 공통 컬럼 | Audit 6개 (`created_at/by`, `updated_at/by`, `deleted_at/by`) |
-| 삭제 방식 | Soft Delete (`deleted_at IS NULL`만 조회)                       |
+| 삭제 방식 | Soft Delete (조회 시 삭제 제외는 각 Repository에서 처리)         |
+
+> **Hub 반영 기준:** `feature/inventory-stock`의 엔티티와 PostgreSQL 통합 테스트 생성 DDL(2026-10-19). Hub는 5개 테이블·59개 컬럼(Audit 포함)이며, 다른 서비스의 설계는 유지했습니다. 원본 draw.io·이미지는 이번 Markdown 변경과 별개입니다.
 
 ### 표기 규칙
 
@@ -20,7 +22,7 @@
 |---|---|---|
 | PK | 기본키 | `PK` |
 | FK | **같은 서비스(스키마) 안의** 실제 외래키 | `FK` + 실선 `--` |
-| REF | **다른 서비스의** UUID 논리 참조 (DB 외래키 없음, API로 검증) | `"REF"` 주석 + 점선 `..` |
+| REF | UUID 논리 참조 (같은 서비스도 가능, DB 외래키 없음) | `"REF"` 주석 + 점선 `..` |
 | UQ / UQ* | 단일 UNIQUE / 복합 UNIQUE | `UK` |
 | CK | CHECK 제약조건 | 주석에 조건 표기 |
 
@@ -41,7 +43,8 @@ flowchart LR
         hubs[p_hubs]
         hub_routes[p_hub_routes]
         inventories[p_inventories]
-        inv_mv[p_inventory_movements]
+        inv_op[p_inventory_operations]
+        inv_hist[p_inventory_histories]
     end
 
     subgraph COMPANY["company · Company/Product Service"]
@@ -60,16 +63,23 @@ flowchart LR
     end
 
     %% FK (같은 스키마)
-    hubs --> hub_routes
-    hubs --> inventories
-    inventories --> inv_mv
     companies --> products
     orders --> order_hist
     deliveries --> dlv_routes
 
+    %% REF (Hub 내부도 UUID만 저장하며 실제 FK 없음)
+    hubs -.-> hub_routes
+    hubs -.-> inventories
+    hubs -.-> inv_op
+    products -.-> inv_op
+    inventories -.-> inv_op
+    inventories -.-> inv_hist
+    inv_op -.-> inv_hist
+    orders -.-> inv_op
+    orders -.-> inv_hist
+
     %% REF (서비스 간)
     products -.-> inventories
-    orders -.-> inv_mv
     hubs -.-> companies
     users -.-> companies
     companies -.-> orders
@@ -113,25 +123,37 @@ erDiagram
     }
     p_hub_routes {
         UUID id PK
-        UUID departure_hub_id FK,UK "UQ*(departure,arrival)"
-        UUID arrival_hub_id FK,UK "UQ*(departure,arrival)"
-        NUMERIC distance_km "(10,2) CK >= 0"
-        INTEGER duration_min "CK >= 0"
+        UUID from_hub_id UK "REF p_hubs, UQ*(from,to)"
+        UUID to_hub_id UK "REF p_hubs, UQ*(from,to)"
+        NUMERIC distance_km "(10,2)"
+        INTEGER duration_min
     }
     p_inventories {
         UUID id PK
-        UUID hub_id FK,UK "UQ*(hub,product)"
+        UUID hub_id UK "REF p_hubs, UQ*(hub,product)"
         UUID product_id UK "REF p_products, UQ*(hub,product)"
         INTEGER quantity "CK >= 0"
     }
-    p_inventory_movements {
+    p_inventory_operations {
         UUID id PK
-        UUID inventory_id FK
+        VARCHAR idempotency_key UK "(120)"
         UUID order_id "REF p_orders, NULL"
-        VARCHAR change_type "(20) INCREASE/DECREASE/RESTORE"
+        UUID hub_id "REF p_hubs"
+        UUID product_id "REF p_products"
+        VARCHAR operation_type "(20) CK INCREASE/DECREASE/RESTORE"
+        VARCHAR operation_status "(20) CK SUCCEEDED/REJECTED"
+        INTEGER requested_quantity
+        UUID inventory_id "REF p_inventories, NULL"
+        INTEGER remaining_quantity "NULL"
+    }
+    p_inventory_histories {
+        UUID id PK
+        UUID operation_id UK "REF p_inventory_operations"
+        UUID inventory_id "REF p_inventories"
+        UUID order_id "REF p_orders, NULL"
+        VARCHAR change_type "(20) CK INCREASE/DECREASE/RESTORE"
         INTEGER stock_change "CK != 0"
         INTEGER stock_after "CK >= 0"
-        VARCHAR idempotency_key UK "(100)"
     }
 
     %% ───────── company ─────────
@@ -205,17 +227,22 @@ erDiagram
     }
 
     %% ───────── FK (실선, 같은 스키마) ─────────
-    p_hubs ||--o{ p_hub_routes : "출발 departure_hub_id"
-    p_hubs ||--o{ p_hub_routes : "도착 arrival_hub_id"
-    p_hubs ||--o{ p_inventories : "보관"
-    p_inventories ||--o{ p_inventory_movements : "변경 기록"
     p_companies ||--o{ p_products : "소유"
     p_orders |o--o{ p_order_histories : "요청 처리 기록"
     p_deliveries ||--o{ p_delivery_routes : "이동 구간"
 
-    %% ───────── REF (점선, 서비스 간) ─────────
+    %% ───────── REF (점선, Hub 내부 포함) ─────────
+    p_hubs ||..o{ p_hub_routes : "출발 from_hub_id"
+    p_hubs ||..o{ p_hub_routes : "도착 to_hub_id"
+    p_hubs ||..o{ p_inventories : "보관"
+    p_hubs ||..o{ p_inventory_operations : "요청 허브"
+    p_products ||..o{ p_inventory_operations : "요청 상품"
+    p_inventories |o..o{ p_inventory_operations : "처리 대상 재고"
+    p_inventories ||..o{ p_inventory_histories : "실제 변경 기록"
+    p_inventory_operations ||..o| p_inventory_histories : "작업별 최대 한 이력"
+    p_orders |o..o{ p_inventory_operations : "order_id"
+    p_orders |o..o{ p_inventory_histories : "order_id"
     p_products ||..o{ p_inventories : "product_id"
-    p_orders |o..o{ p_inventory_movements : "order_id"
     p_hubs ||..o{ p_companies : "관리 허브"
     p_users ||..o{ p_companies : "업체 관리자"
     p_companies ||..o{ p_orders : "요청 업체"
@@ -251,12 +278,18 @@ erDiagram
 | 테이블 | 역할 | 핵심 제약 |
 |---|---|---|
 | `p_hubs` | 전국 17개 허브 (초기 적재, 변경 API 없음) | `name` UNIQUE |
-| `p_hub_routes` | 방향 있는 P2P 허브 간 경로 | UNIQUE(`departure_hub_id`, `arrival_hub_id`) · 출발≠도착 |
+| `p_hub_routes` | 방향 있는 P2P 허브 간 경로 | UNIQUE(`from_hub_id`, `to_hub_id`) |
 | `p_inventories` | 허브별 상품 현재 재고 | UNIQUE(`hub_id`, `product_id`) · `quantity >= 0` |
-| `p_inventory_movements` | 재고 변경 이력 + 멱등성 | `idempotency_key` UNIQUE · `stock_after >= 0` |
+| `p_inventory_operations` | 어떤 재고를 얼마나 변경하도록 요청했고, 어떤 결과가 났는지 기록 | `idempotency_key` UNIQUE(120자) · 유형/상태 CHECK |
+| `p_inventory_histories` | 실제 반영된 수량 변경을 작업·주문과 연결 | `operation_id` UNIQUE · `stock_change <> 0` · `stock_after >= 0` |
 
-- 재고 차감은 조건부 UPDATE(Atomic UPDATE) 또는 잠금으로 음수를 막습니다.
-- 재고 수량 변경과 movement 기록을 하나의 로컬 트랜잭션으로 처리합니다.
+- 현재 차감 흐름: **조건부 UPDATE → 변경 후 재고 조회 → Operation 저장 → History 저장 → 커밋**. 세 테이블의 변경은 하나의 응용 서비스 트랜잭션으로 묶이며 이력 저장 실패 시 모두 롤백됩니다.
+- Inventory는 현재 값, Operation은 요청·결과, History는 실제 증감 내역을 담당합니다. 정상 차감은 Operation 1건·History 1건을 남깁니다. Operation의 DB상 이력 관계는 0..1건입니다.
+- **구현 범위:** 재고 등록·조건 조회 및 정상 차감·기록·롤백 검증. `REJECTED`와 `INCREASE/RESTORE`는 enum에만 정의되어 있으며, 거절 결과 저장·멱등성 재응답·복원·작업 결과 조회는 후속 구현입니다. 키 UNIQUE만으로 기존 결과를 재응답하는 멱등성이 완성되지는 않습니다.
+- Hub 내부 참조도 현재는 UUID 논리 참조이며 물리적 FK가 없습니다. 두 UNIQUE 제약(허브·상품 조합, 멱등성 키)은 논리 삭제된 행도 포함합니다.
+- **명칭 차이:** 최근 통합 설계의 `departure_hub_id/arrival_hub_id`와 달리 현재 Hub 코드·초기 데이터는 `from_hub_id/to_hub_id`입니다. 이 문서는 구현명을 사용하며, 명칭 통일 시 코드·SQL·API 계약의 영향 범위를 함께 검토해야 합니다.
+- 경로의 출발≠도착·거리/시간 비음수 CHECK는 현재 엔티티와 생성 DDL에 없으므로 구현된 DB 제약으로 표시하지 않았습니다.
+- Order·Delivery의 현재 호출 경로·필드와 소비자 Feign 예시는 [Hub-MS Feign 연동 사용법](<../guide/사용법/Hub-MS Feign 연동 사용법.md>)을 참고합니다.
 
 ### company — Company/Product Service
 
@@ -290,12 +323,17 @@ erDiagram
 
 | 출발 테이블 | 참조 컬럼 | 대상 테이블 | 종류 | 카디널리티 |
 |---|---|---|---|---|
-| p_hub_routes | departure_hub_id | p_hubs | FK | N:1 |
-| p_hub_routes | arrival_hub_id | p_hubs | FK | N:1 |
-| p_inventories | hub_id | p_hubs | FK | N:1 |
+| p_hub_routes | from_hub_id | p_hubs | REF | N:1 |
+| p_hub_routes | to_hub_id | p_hubs | REF | N:1 |
+| p_inventories | hub_id | p_hubs | REF | N:1 |
 | p_inventories | product_id | p_products | REF | N:1 |
-| p_inventory_movements | inventory_id | p_inventories | FK | N:1 |
-| p_inventory_movements | order_id | p_orders | REF | N:0..1 |
+| p_inventory_operations | hub_id | p_hubs | REF | N:1 |
+| p_inventory_operations | product_id | p_products | REF | N:1 |
+| p_inventory_operations | inventory_id | p_inventories | REF | N:0..1 |
+| p_inventory_operations | order_id | p_orders | REF | N:0..1 |
+| p_inventory_histories | operation_id | p_inventory_operations | REF, UQ | 0..1:1 |
+| p_inventory_histories | inventory_id | p_inventories | REF | N:1 |
+| p_inventory_histories | order_id | p_orders | REF | N:0..1 |
 | p_companies | hub_id | p_hubs | REF | N:1 |
 | p_companies | manager_user_id | p_users | REF | N:1 |
 | p_products | company_id | p_companies | FK | N:1 |
@@ -319,5 +357,7 @@ erDiagram
 ---
 
 ## 5. 원본 ERD 이미지
+
+원본 이미지에는 이번 Hub 변경이 반영되어 있지 않습니다. 현재 Hub 구현은 위 Mermaid와 테이블 명세를 기준으로 확인합니다.
 
 ![ERD](../assets/3f72dc3e-logistics_msa_erd_named_primary_keys_staging-01_물류_MSA__전체_ERD.jpg)
