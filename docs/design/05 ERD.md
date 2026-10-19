@@ -148,6 +148,7 @@ erDiagram
         VARCHAR name "(150)"
         TEXT description "NULL"
         NUMERIC unit_price "(15,2) CK >= 0"
+        BIGINT view_count "DEFAULT 0"
     }
 
     %% ───────── orders ─────────
