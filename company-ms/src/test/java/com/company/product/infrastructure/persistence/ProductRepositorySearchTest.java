@@ -130,4 +130,19 @@ class ProductRepositorySearchTest {
         assertThat(second.content()).extracting(Product::getName).containsExactly("B상품");
         assertThat(second.totalElements()).isEqualTo(3);
     }
+
+    @Test
+    @DisplayName("인기 상품: viewCount 내림차순으로 정렬하고, 조회수가 같으면 다음 정렬(name)을 따른다")
+    void sortByViewCount() {
+        Product rarelyViewed = persist(company, "B상품", "1000");
+        Product popular = persist(company, "A상품", "1000");
+        persist(otherCompany, "C상품", "1000");
+        persist(otherCompany, "D상품", "1000");
+        ReflectionTestUtils.setField(rarelyViewed, "viewCount", 1L);
+        ReflectionTestUtils.setField(popular, "viewCount", 10L);
+
+        PageData<Product> result = search(null, null, 0, 10, new PageOrder("viewCount", false), NAME_ASC);
+
+        assertThat(result.content()).extracting(Product::getName).containsExactly("A상품", "B상품", "C상품", "D상품");
+    }
 }

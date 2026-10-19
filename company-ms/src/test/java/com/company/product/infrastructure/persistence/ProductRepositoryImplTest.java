@@ -63,6 +63,25 @@ class ProductRepositoryImplTest {
     }
 
     @Test
+    @DisplayName("조회수 증가: 새 상품은 0에서 시작하고, 호출할 때마다 DB 값이 1씩 오르며 updatedAt은 바뀌지 않는다")
+    void increaseViewCount() {
+        Company company = Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), UUID.randomUUID());
+        em.persist(company);
+        Product saved = productRepository.save(Product.create(company, "생수 2L", "6개입", new BigDecimal("12000.50")));
+        // 비교 기준은 DB에 저장된 값으로 잡는다 (메모리 값은 나노초라 DB 정밀도로 바뀌면서 달라질 수 있다)
+        em.clear();
+        Product before = productRepository.findById(saved.getId()).orElseThrow();
+        assertThat(before.getViewCount()).isZero();
+
+        productRepository.increaseViewCount(saved.getId());
+        productRepository.increaseViewCount(saved.getId());
+
+        Product found = productRepository.findById(saved.getId()).orElseThrow();
+        assertThat(found.getViewCount()).isEqualTo(2);
+        assertThat(found.getUpdatedAt()).isEqualTo(before.getUpdatedAt());
+    }
+
+    @Test
     @DisplayName("없는 ID는 empty")
     void notFound() {
         assertThat(productRepository.findById(UUID.randomUUID())).isEmpty();

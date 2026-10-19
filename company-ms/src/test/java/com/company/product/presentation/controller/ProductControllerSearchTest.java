@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * 상품 목록 GET /api/v1/products (04 API 명세서 Product): 로그인, 200. companyId·name 검색은 선택.
- * 페이지 규칙은 SYS-08 페이지네이션 정렬 설계 (정렬 허용: createdAt·name·unitPrice).
+ * 페이지 규칙은 SYS-08 페이지네이션 정렬 설계 (정렬 허용: createdAt·name·unitPrice·viewCount).
  */
 @WebMvcTest(ProductController.class)
 class ProductControllerSearchTest {
@@ -74,7 +74,7 @@ class ProductControllerSearchTest {
     void ok() throws Exception {
         LocalDateTime createdAt = LocalDateTime.of(2026, 10, 17, 9, 0);
         given(productService.searchProducts(any(), any())).willReturn(new PageData<>(List.of(
-                new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50"), createdAt, createdAt)),
+                new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50"), 0L, createdAt, createdAt)),
                 11));
 
         search("?page=0&size=10")
@@ -113,6 +113,17 @@ class ProductControllerSearchTest {
                 new PageQuery(1, 20, List.of(new PageOrder("unitPrice", false), new PageOrder("name", true), ID_ASC)));
     }
 
+    @Test
+    @DisplayName("인기 상품: viewCount 정렬을 허용하고, 마지막에 id ASC를 붙인다")
+    void viewCountSort() throws Exception {
+        givenEmptyPage();
+
+        search("?sort=viewCount,desc").andExpect(status().isOk());
+
+        then(productService).should().searchProducts(new ProductSearchQuery(null, null),
+                new PageQuery(0, 10, List.of(new PageOrder("viewCount", false), ID_ASC)));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"0", "101"})
     @DisplayName("size가 1~100 밖이면 400이 아니라 10으로 바꾼다")
@@ -127,7 +138,7 @@ class ProductControllerSearchTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"unit_price", "description", "company"})
+    @ValueSource(strings = {"unit_price", "view_count", "description", "company"})
     @DisplayName("허용되지 않은 필드(컬럼명 포함)로 정렬하면 400 INVALID_SORT_PROPERTY, Service를 호출하지 않는다")
     void invalidSort(String property) throws Exception {
         search("?sort=" + property + ",asc")

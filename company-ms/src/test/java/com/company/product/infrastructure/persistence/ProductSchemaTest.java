@@ -61,4 +61,21 @@ class ProductSchemaTest {
 
         assertThatThrownBy(() -> em.flush()).isInstanceOf(PersistenceException.class);
     }
+
+    @Test
+    @DisplayName("view_count를 빼고 INSERT하면 DEFAULT 0이 들어간다 (기존 행에 컬럼을 추가할 때와 같은 조건)")
+    void viewCountDefaultsToZero() {
+        Company company = saveCompany();
+        em.flush();
+        UUID productId = UUID.randomUUID();
+
+        em.createNativeQuery("insert into company.p_products (id, company_id, name, unit_price, created_at) "
+                        + "values (?, ?, '생수 2L', 1000, now())")
+                .setParameter(1, productId)
+                .setParameter(2, company.getId())
+                .executeUpdate();
+        em.clear();
+
+        assertThat(em.find(Product.class, productId).getViewCount()).isZero();
+    }
 }
