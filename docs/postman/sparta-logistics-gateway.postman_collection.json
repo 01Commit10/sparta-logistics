@@ -697,12 +697,14 @@
 						"exec": [
 							"pm.test(\"200\", () => pm.response.to.have.status(200));",
 							"const body = pm.response.json();",
-							"pm.test(\"계약 필드 6개\", () => pm.expect(Object.keys(body)).to.have.members([\"id\", \"name\", \"role\", \"isDeliveryManager\", \"slackId\", \"active\"]));",
+							"pm.test(\"계약 필드 8개\", () => pm.expect(Object.keys(body)).to.have.members([\"id\", \"name\", \"role\", \"isDeliveryManager\", \"slackId\", \"active\", \"organizationType\", \"organizationId\"]));",
 							"pm.test(\"가입한 사용자\", () => {",
 							"    pm.expect(body.id).to.eql(pm.collectionVariables.get(\"signupUserId\"));",
 							"    pm.expect(body.slackId).to.eql(pm.collectionVariables.get(\"signupSlackId\"));",
 							"    pm.expect(body.isDeliveryManager).to.eql(false);",
 							"    pm.expect(body.active).to.eql(true);",
+							"    pm.expect(body.organizationType).to.eql(\"COMPANY\");",
+							"    pm.expect(body.organizationId).to.eql(null); // 가입 직후에는 소속 연결(U20) 전",
 							"});"
 						]
 					}

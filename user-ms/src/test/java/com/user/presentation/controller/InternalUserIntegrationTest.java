@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 가입 → DB 값 변경(배송담당자 지정·탈퇴·복구) → 내부 API가 DB의 현재 상태를 그대로 돌려주는지 실제 빈으로 확인한다 (H2).
+ * 가입 → DB 값 변경(배송담당자 지정·소속 연결·탈퇴·복구) → 내부 API가 DB의 현재 상태를 그대로 돌려주는지 실제 빈으로 확인한다 (H2).
  * 탈퇴 필터(deleted_at is null)는 저장소 쿼리가 하므로 Fake 단위 테스트로는 확인할 수 없다.
  */
 @SpringBootTest
@@ -65,6 +65,38 @@ class InternalUserIntegrationTest {
         mockMvc.perform(get("/internal/v1/users/{userId}", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isDeliveryManager").value(true));
+    }
+
+    @Test
+    @DisplayName("소속: 가입 직후 organizationId는 null, DB에 연결되면 바로 반영된다")
+    void reflectsOrganization() throws Exception {
+        UUID id = signup("intg03", "UINTG03");
+
+        mockMvc.perform(get("/internal/v1/users/{userId}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationType").value("HUB"))
+                .andExpect(jsonPath("$.organizationId").isEmpty());
+
+        UUID companyId = UUID.randomUUID();
+        jdbc.update("update auth.p_users set organization_type = 'COMPANY', organization_id = ? where id = ?", companyId, id);
+
+        mockMvc.perform(get("/internal/v1/users/{userId}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationType").value("COMPANY"))
+                .andExpect(jsonPath("$.organizationId").value(companyId.toString()));
+    }
+
+    @Test
+    @DisplayName("소속: 본사(HQ) MASTER는 organizationType=HQ, organizationId=null")
+    void headquarters() throws Exception {
+        UUID id = signup("intg04", "UINTG04");
+        jdbc.update("update auth.p_users set role = 'MASTER', organization_type = 'HQ', organization_id = null where id = ?", id);
+
+        mockMvc.perform(get("/internal/v1/users/{userId}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("MASTER"))
+                .andExpect(jsonPath("$.organizationType").value("HQ"))
+                .andExpect(jsonPath("$.organizationId").isEmpty());
     }
 
     @Test

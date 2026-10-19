@@ -437,7 +437,7 @@ class UserAdminIntegrationTest {
     }
 
     @Test
-    @DisplayName("U20: 소속 연결 → DB organization_id·updated_by=MASTER, 상세 조회에 organizationId (완료 기준). 정보 수정으로 유형 바꾸면 지워진다")
+    @DisplayName("U20: 소속 연결 → DB organization_id·updated_by=MASTER, 상세 조회·내부 API(U21)에 organizationId (완료 기준). 정보 수정으로 유형 바꾸면 지워진다")
     void linkOrganization() throws Exception {
         UUID user = signup("link01", "COMPANY");
         UUID companyId = UUID.randomUUID();
@@ -453,10 +453,16 @@ class UserAdminIntegrationTest {
                 .containsEntry("updated_by", MASTER_ID);
         mockMvc.perform(asMaster(get("/api/v1/users/{userId}", user)))
                 .andExpect(jsonPath("$.organizationId").value(companyId.toString()));
+        mockMvc.perform(get("/internal/v1/users/{userId}", user))               // U21: 주문 서비스가 보는 소속
+                .andExpect(jsonPath("$.organizationType").value("COMPANY"))
+                .andExpect(jsonPath("$.organizationId").value(companyId.toString()));
 
         mockMvc.perform(asMaster(patch("/api/v1/users/{userId}", user)).contentType(MediaType.APPLICATION_JSON)
                         .content("{ \"organizationType\": \"HUB\", \"organizationName\": \"경기센터\" }"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationId").isEmpty());
+        mockMvc.perform(get("/internal/v1/users/{userId}", user))
+                .andExpect(jsonPath("$.organizationType").value("HUB"))
                 .andExpect(jsonPath("$.organizationId").isEmpty());
     }
 
