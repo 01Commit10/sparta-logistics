@@ -89,18 +89,7 @@ public class OrderHistory extends BaseEntity {
         }
     }
 
-
-
-
-
-
-
-
-
-/*    assertThat(history.getOperationStatus()).isEqualTo(OperationStatus.IN_PROGRESS);
-    assertThat(history.getOperationType()).isEqualTo(OperationType.ORDER_CREATE);
-    assertThat(history.getIdempotencyKey()).isEqualTo(IDEMPOTENCY_KEY);
-    assertThat(history.getRequestHash()).isEqualTo(REQUEST_HASH);
-    assertThat(history.getOrderId()).isNull();
-    assertThat(history.getRetryCount()).isZero();*/
+    public void linkOrder(Order order) {
+        this.order = order;
+    }
 }

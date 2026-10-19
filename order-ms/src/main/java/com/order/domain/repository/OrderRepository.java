@@ -7,7 +7,7 @@ import java.util.UUID;
 
 /* 도메인은 JPA 모른다 */
 public interface OrderRepository {
-    Order Save(Order order);
+    Order save(Order order);
 
     Optional<Order> findById(UUID id);
 }

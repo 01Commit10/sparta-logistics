@@ -1,0 +1,99 @@
+package com.order.application.service;
+
+import com.common.exception.BusinessException;
+import com.common.exception.OrderErrorCode;
+import com.order.application.dto.CreateOrderCommand;
+import com.order.application.dto.OrderResult;
+import com.order.domain.client.*;
+import com.order.domain.entity.Order;
+import com.order.domain.entity.OrderHistory;
+import com.order.domain.repository.OrderHistoryRepository;
+import com.order.domain.repository.OrderRepository;
+import com.order.domain.vo.OrderOperationType;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private final OrderRepository orderRepository;
+    private final OrderHistoryRepository orderHistoryRepository;
+    private final HubClient hubClient;
+    private final DeliveryClient deliveryClient;
+
+    @Transactional
+    public OrderResult createOrder(CreateOrderCommand command) {
+        // 1. 이력 생성(IN_PROCESSING) ← 번호표: 중복 차단 + 이후 모든 성공/실패를 기록할 자리 확보
+        OrderHistory history = OrderHistory.create(
+                OrderOperationType.CREATE, command.idempotencyKey(), hash(command));
+        orderHistoryRepository.save(history);
+
+        // 2. 재고 조회 -> 차감 할 허브 선택
+        InventoryInfo inventoryInfo = selectInventory(command);
+
+        // 3. 주문 저장 (PROCESSING)
+        Order order = (Order) orderRepository.save(Order.create(
+                command.requesterCompanyId(),
+                command.supplierCompanyId(),
+                command.productId(),
+                command.quantity(),
+                command.unitPrice(),
+                command.requestNote(),
+                command.orderedBy()
+        ));
+        history.linkOrder(order);
+
+        // 4. 재고 차감
+        hubClient.decreaseStock(new StockDecreaseCommand(
+                order.getId(), inventoryInfo.hubId(), command.productId(), command.quantity()));
+
+        // 5. 배송 생성
+        DeliveryResult delivery = deliveryClient.createDelivery(new CreateDeliveryCommand(
+                order.getId(),
+                inventoryInfo.hubId(),
+                command.supplierCompanyId(),
+                command.requesterCompanyId(),
+                command.orderedBy()
+        ));
+
+        // 6. 주문 완료 처리(COMPLETED) (이력에 결과 기록)
+        order.complete(delivery.deliveryId());
+        history.succeed(201);
+
+        return OrderResult.from(order);
+    }
+
+    private String hash(CreateOrderCommand command) {
+        String raw = String.join("|",
+                String.valueOf(command.requesterCompanyId()),
+                String.valueOf(command.supplierCompanyId()),
+                String.valueOf(command.productId()),
+                String.valueOf(command.quantity()),
+                command.unitPrice().stripTrailingZeros().toPlainString(),
+                String.valueOf(command.requestNote()),
+                String.valueOf(command.orderedBy())
+        );
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", e);
+        }
+    }
+
+    private InventoryInfo selectInventory(CreateOrderCommand command) {
+        return hubClient.findInventories(command.productId()).stream()
+                .filter(inventoryInfo -> inventoryInfo.hasEnough(command.quantity()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.INSUFFICIENT_STOCK));
+    }
+
+
+}

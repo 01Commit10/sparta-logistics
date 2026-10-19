@@ -12,10 +12,11 @@ import java.util.UUID;
 @Repository
 @RequiredArgsConstructor
 public class OrderRepositoryImpl implements OrderRepository {
+
     private final OrderJpaRepository orderJpaRepository;
 
     @Override
-    public Order Save(Order order) {
+    public Order save(Order order) {
         return orderJpaRepository.save(order);
     }
 

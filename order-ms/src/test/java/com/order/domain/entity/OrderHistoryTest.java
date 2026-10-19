@@ -7,6 +7,9 @@ import com.order.domain.vo.OrderOperationType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
@@ -72,5 +75,16 @@ public class OrderHistoryTest {
                 .isEqualTo(OrderErrorCode.HISTORY_ALREADY_COMPLETED);
     }
 
+    @Test
+    @DisplayName("이력에 주문을 연결할 수 있다.")
+    void linkOrder() {
+        OrderHistory history = OrderHistory.create(OrderOperationType.CREATE, "key-1", "hash-1");
+        Order order = Order.create(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                3, new BigDecimal("1000"), null, UUID.randomUUID());
 
+        history.linkOrder(order);
+
+        assertThat(history.getOrder()).isSameAs(order); // 완전히 같은 객체(같은 참조) 인지 확인
+
+    }
 }
