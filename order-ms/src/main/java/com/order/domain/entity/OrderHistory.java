@@ -92,4 +92,8 @@ public class OrderHistory extends BaseEntity {
     public void linkOrder(Order order) {
         this.order = order;
     }
+
+    public boolean isSameReqeust(String requestHash) {
+        return this.requestHash.equals(requestHash);
+    }
 }

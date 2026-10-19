@@ -31,6 +31,11 @@ public class OrderService {
         Optional<OrderHistory> previous = orderHistoryRepository
                 .findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, command.idempotencyKey());
         if (previous.isPresent()) {
+            OrderHistory previousHistory = previous.get();
+            // 같은 키인테 내용이 다르면 키 재사용으로 보고 거절
+            if (!previousHistory.isSameReqeust(command.requestHash())) {
+                throw new BusinessException(OrderErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+            }
             return OrderResult.from(previous.get().getOrder());
         }
 
