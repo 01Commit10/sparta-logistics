@@ -136,6 +136,7 @@ public class Delivery extends BaseEntity {
         if(status == DeliveryStatus.CANCELED) return;
         if(!isBeforeDispatch()) throw new BusinessException(DeliveryErrorCode.DELIVERY_NOT_CANCELABLE);
         this.status = DeliveryStatus.CANCELED;
+        routes.forEach(DeliveryRoute::cancel);
     }
 
     // 아직 아무 이동도 시작하지 않았는가

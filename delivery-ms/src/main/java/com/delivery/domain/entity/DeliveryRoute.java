@@ -94,4 +94,11 @@ public class DeliveryRoute extends BaseEntity {
         this.routeStatus = DeliveryRouteStatus.ARRIVED;
     }
 
+    void cancel() {
+        if (routeStatus != DeliveryRouteStatus.WAITING) {
+            throw new IllegalArgumentException("WAITING 상태의 구간만 취소할 수 있습니다.");
+        }
+        this.routeStatus = DeliveryRouteStatus.CANCELED;
+    }
+
 }
