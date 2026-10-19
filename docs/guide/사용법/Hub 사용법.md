@@ -164,9 +164,9 @@ bash gradlew :hub-ms:test
 |---|---|
 | Hub 목록의 `페이지 조건`, 공통 `page`·`size` 규칙 | `name`·`sort`를 받고 JSON 배열을 반환. 페이지네이션 미적용 |
 | `PATCH /api/v1/hubs/{hubId}` | 미제공. [과제 요구사항](<../../design/숙련프로젝트발제.md>)에 따라 고정 Hub의 조회 API만 제공 |
-| `GET /internal/v1/hubs/{hubId}` | 미구현. 내부 전용 계약은 별도 확정 필요 |
+| `GET /internal/v1/hubs/{hubId}` | 2026-10-19 구현. 활성 허브는 id·name·address 반환, 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
 
-현재 company-ms의 `HubFeignClient`는 `/api/v1/hubs/{hubId}`를 호출하고 공통 헤더 전달 기능을 사용합니다. 내부 전용 API가 구현되면 호출 경로·인증 계약을 함께 맞춰야 합니다. 이 조회 API는 익명 내부 호출을 허용하는 계약이 아닙니다. 서비스 간 호출 규칙은 [Feign 호출 사용법](<Feign 호출 사용법.md>)을 참고합니다.
+현재 company-ms의 `HubFeignClient`는 `/api/v1/hubs/{hubId}`를 호출합니다. 소비자에서 `/internal/v1/hubs/{hubId}`로 경로를 변경할 수 있으며 응답 필드는 동일합니다. 내부 조회는 사용자 헤더를 필수로 요구하지 않습니다. 사용자 헤더 전달과 서비스 호출자 인증은 별개이며, 현재 Hub의 별도 서비스 호출자 인증은 미구현입니다. 내부 API 계약·검증 범위는 [Hub-MS Feign 연동 사용법](<Hub-MS Feign 연동 사용법.md>)을 참고합니다.
 
 구현 확인 위치:
 
