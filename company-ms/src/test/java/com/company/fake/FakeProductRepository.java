@@ -60,6 +60,15 @@ public class FakeProductRepository implements ProductRepository {
         return new PageData<>(content, matched.size());
     }
 
+    // 실제 구현(벌크 UPDATE)처럼 Auditing 필드는 건드리지 않고 조회수만 올린다. 없는 ID는 아무 일도 하지 않는다
+    @Override
+    public void increaseViewCount(UUID id) {
+        Product product = store.get(id);
+        if (product != null) {
+            ReflectionTestUtils.setField(product, "viewCount", product.getViewCount() + 1);
+        }
+    }
+
     public Collection<Product> all() {
         return store.values();
     }

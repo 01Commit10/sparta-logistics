@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -62,6 +63,19 @@ class InternalProductIntegrationTest {
         mockMvc.perform(get("/internal/v1/products/{productId}", product.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.unitPrice").value(9000));
+    }
+
+    @Test
+    @DisplayName("내부 API 조회는 조회수를 올리지 않는다 (주문 검증 호출이 인기 지표에 섞이지 않도록)")
+    void doesNotIncreaseViewCount() throws Exception {
+        Product product = saveProduct();
+
+        mockMvc.perform(get("/internal/v1/products/{productId}", product.getId()))
+                .andExpect(status().isOk());
+
+        Long viewCount = jdbc.queryForObject(
+                "select view_count from company.p_products where id = ?", Long.class, product.getId());
+        assertThat(viewCount).isZero();
     }
 
     @Test

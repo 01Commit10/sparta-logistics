@@ -41,7 +41,7 @@ class ProductControllerUpdateTest {
     static final UUID PRODUCT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
 
     static final ProductResult UPDATED =
-            new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 500ml", "6개입", new BigDecimal("9000.00"), null, null);
+            new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 500ml", "6개입", new BigDecimal("9000.00"), 0L, null, null);
 
     @Autowired
     MockMvc mockMvc;

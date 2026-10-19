@@ -34,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * 업체별 상품 목록 GET /api/v1/companies/{companyId}/products (04 API 명세서 Product): 로그인, 200.
- * 페이지 규칙은 SYS-08 페이지네이션 정렬 설계 (정렬 허용: createdAt·name·unitPrice).
+ * 페이지 규칙은 SYS-08 페이지네이션 정렬 설계 (정렬 허용: createdAt·name·unitPrice·viewCount).
  */
 @WebMvcTest(ProductController.class)
 class ProductControllerListTest {
@@ -74,7 +74,7 @@ class ProductControllerListTest {
     void ok() throws Exception {
         LocalDateTime createdAt = LocalDateTime.of(2026, 10, 17, 9, 0);
         given(productService.getProductsByCompany(any(), any())).willReturn(new PageData<>(List.of(
-                new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50"), createdAt, createdAt)),
+                new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.50"), 0L, createdAt, createdAt)),
                 11));
 
         list("?page=0&size=10")
@@ -111,14 +111,15 @@ class ProductControllerListTest {
     }
 
     @Test
-    @DisplayName("name·unitPrice 정렬을 요청 순서대로 넘기고, 마지막에 id ASC를 붙인다")
+    @DisplayName("name·unitPrice·viewCount 정렬을 요청 순서대로 넘기고, 마지막에 id ASC를 붙인다")
     void allowedSort() throws Exception {
         givenEmptyPage();
 
-        list("?page=2&size=30&sort=unitPrice,desc&sort=name,asc").andExpect(status().isOk());
+        list("?page=2&size=30&sort=viewCount,desc&sort=unitPrice,desc&sort=name,asc").andExpect(status().isOk());
 
         then(productService).should().getProductsByCompany(COMPANY_ID, new PageQuery(2, 30, List.of(
-                new PageOrder("unitPrice", false), new PageOrder("name", true), ID_ASC)));
+                new PageOrder("viewCount", false), new PageOrder("unitPrice", false), new PageOrder("name", true),
+                ID_ASC)));
     }
 
     @ParameterizedTest
@@ -136,7 +137,7 @@ class ProductControllerListTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"unit_price", "description", "company"})
+    @ValueSource(strings = {"unit_price", "view_count", "description", "company"})
     @DisplayName("허용되지 않은 필드(컬럼명 포함)로 정렬하면 400 INVALID_SORT_PROPERTY, Service를 호출하지 않는다")
     void invalidSort(String property) throws Exception {
         list("?sort=" + property + ",asc")

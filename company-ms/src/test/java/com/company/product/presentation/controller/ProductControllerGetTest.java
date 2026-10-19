@@ -35,7 +35,7 @@ class ProductControllerGetTest {
     static final UUID PRODUCT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
 
     static final ProductResult FOUND =
-            new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.00"), null, null);
+            new ProductResult(PRODUCT_ID, COMPANY_ID, "생수 2L", "6개입", new BigDecimal("12000.00"), 5L, null, null);
 
     @Autowired
     MockMvc mockMvc;
@@ -53,22 +53,23 @@ class ProductControllerGetTest {
     }
 
     @Test
-    @DisplayName("일반 USER도 조회할 수 있고, 200과 상품 정보를 돌려준다")
+    @DisplayName("일반 USER도 조회할 수 있고, 200과 상품 정보(조회수 포함)를 돌려준다. 조회수를 올리는 viewProduct를 쓴다")
     void found() throws Exception {
-        given(productService.getProduct(PRODUCT_ID)).willReturn(FOUND);
+        given(productService.viewProduct(PRODUCT_ID)).willReturn(FOUND);
 
         find("USER", PRODUCT_ID.toString())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(PRODUCT_ID.toString()))
                 .andExpect(jsonPath("$.companyId").value(COMPANY_ID.toString()))
                 .andExpect(jsonPath("$.name").value("생수 2L"))
-                .andExpect(jsonPath("$.unitPrice").value(12000.00));
+                .andExpect(jsonPath("$.unitPrice").value(12000.00))
+                .andExpect(jsonPath("$.viewCount").value(5));
     }
 
     @Test
     @DisplayName("상품이 없으면 404 PRODUCT_NOT_FOUND")
     void productNotFound() throws Exception {
-        given(productService.getProduct(any())).willThrow(new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        given(productService.viewProduct(any())).willThrow(new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
         find("USER", PRODUCT_ID.toString())
                 .andExpect(status().isNotFound())
