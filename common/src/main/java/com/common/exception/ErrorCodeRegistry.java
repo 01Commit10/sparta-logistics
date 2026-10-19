@@ -20,7 +20,8 @@ public final class ErrorCodeRegistry {
                     AuthErrorCode.values(),
                     UserErrorCode.values(),
                     CompanyErrorCode.values(),
-                    ProductErrorCode.values())
+                    ProductErrorCode.values(),
+                    OrderErrorCode.values())
             .flatMap(Arrays::stream)
             .map(ErrorCode.class::cast)
             .toList();
