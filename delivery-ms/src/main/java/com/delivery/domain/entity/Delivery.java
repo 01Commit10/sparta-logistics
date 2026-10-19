@@ -129,6 +129,7 @@ public class Delivery extends BaseEntity {
             throw new BusinessException(DeliveryErrorCode.DELIVERY_INVALID_STATUS_TRANSITION);
         }
         this.status = nextStatus;
+        syncRouteStatus(nextStatus);
     }
 
     public void cancel() {
@@ -141,6 +142,23 @@ public class Delivery extends BaseEntity {
     private boolean isBeforeDispatch() {
         return status == DeliveryStatus.HUB_WAITING
                 || (status == DeliveryStatus.HUB_ARRIVED && departureHubId.equals(arrivalHubId));
+    }
+
+    private void syncRouteStatus(DeliveryStatus nextStatus) {
+        switch (nextStatus) {
+            case HUB_MOVING -> routeOf(DeliveryRouteType.HUB_TO_HUB).start();
+            case HUB_ARRIVED -> routeOf(DeliveryRouteType.HUB_TO_HUB).arrive();
+            case DELIVERING -> routeOf(DeliveryRouteType.HUB_TO_COMPANY).start();
+            case DELIVERED -> routeOf(DeliveryRouteType.HUB_TO_COMPANY).arrive();
+            default -> {}
+        }
+    }
+
+    private DeliveryRoute routeOf(DeliveryRouteType type) {
+        return routes.stream()
+                .filter(route -> route.getRouteType() == type)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("배송 구간이 없습니다"));
     }
 }
 

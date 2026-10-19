@@ -21,6 +21,10 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class DeliveryRoute extends BaseEntity {
 
+    // 허브 -> 업체 이동 예상 거리/시간 고정값
+    static final BigDecimal DEFAULT_HUB_TO_COMPANY_DISTANCE_KM = new BigDecimal("10.00");
+    static final int DEFAULT_HUB_TO_COMPANY_DURATION_MIN = 30;
+
     @Id @GeneratedValue
     private UUID id;
 
@@ -75,8 +79,19 @@ public class DeliveryRoute extends BaseEntity {
         this.routeStatus = DeliveryRouteStatus.WAITING;
     }
 
-    // 허브 -> 업체 이동 예상 거리/시간 고정값
-    static final BigDecimal DEFAULT_HUB_TO_COMPANY_DISTANCE_KM = new BigDecimal("10.00");
-    static final int DEFAULT_HUB_TO_COMPANY_DURATION_MIN = 30;
+
+    void start() {
+        if (routeStatus != DeliveryRouteStatus.WAITING) {
+            throw new IllegalArgumentException("WAITING 상태의 구간만 이동을 시작할 수 있습니다.");
+        }
+        this.routeStatus = DeliveryRouteStatus.MOVING;
+    }
+
+    void arrive() {
+        if (routeStatus != DeliveryRouteStatus.MOVING) {
+            throw new IllegalArgumentException("MOVING 상태의 구간만 도착 처리할 수 있습니다.");
+        }
+        this.routeStatus = DeliveryRouteStatus.ARRIVED;
+    }
 
 }
