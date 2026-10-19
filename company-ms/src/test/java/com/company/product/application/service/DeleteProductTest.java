@@ -5,8 +5,10 @@ import com.common.exception.CommonErrorCode;
 import com.common.exception.CompanyErrorCode;
 import com.common.exception.ErrorCode;
 import com.common.exception.ProductErrorCode;
+import com.common.remote.RemoteServiceException;
 import com.company.company.domain.entity.Company;
 import com.company.fake.FakeCompanyRepository;
+import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
 import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.domain.entity.Product;
@@ -14,6 +16,7 @@ import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -33,7 +36,9 @@ class DeleteProductTest {
 
     private final FakeCompanyRepository companyRepository = new FakeCompanyRepository();
     private final FakeProductRepository productRepository = new FakeProductRepository();
-    private final ProductService service = new ProductService(productRepository, companyRepository);
+    private final FakeInventoryClient inventoryClient = new FakeInventoryClient();
+    private final ProductService service = new ProductService(productRepository, companyRepository,
+            inventoryClient, TransactionOperations.withoutTransaction());
 
     private final Company company = companyRepository.save(
             Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), MANAGER_ID));
@@ -54,6 +59,7 @@ class DeleteProductTest {
         assertThat(product.isDeleted()).isTrue();
         assertThat(product.getDeletedBy()).isEqualTo(MANAGER_ID);
         assertError(() -> service.getProduct(product.getId()), ProductErrorCode.PRODUCT_NOT_FOUND);
+        assertThat(inventoryClient.deletedProductIds()).containsExactly(product.getId());
     }
 
     @Test
@@ -71,6 +77,36 @@ class DeleteProductTest {
                 CommonErrorCode.ACCESS_DENIED);
 
         assertThat(product.isDeleted()).isFalse();
+        assertThat(inventoryClient.deletedProductIds()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("hub-ms 재고 삭제가 실패하면 예외를 그대로 던지고 상품은 지우지 않는다 (다시 요청 가능)")
+    void inventoryDeleteFails() {
+        inventoryClient.failWith(new RemoteServiceException("hub-ms", new IllegalStateException("down")));
+
+        assertThatThrownBy(() -> service.deleteProduct(new DeleteProductCommand(product.getId(), MANAGER_ID, false)))
+                .isInstanceOf(RemoteServiceException.class);
+
+        assertThat(product.isDeleted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("재고 삭제 중에 상품이 먼저 삭제됐으면 PRODUCT_NOT_FOUND, 최초 삭제자를 그대로 둔다")
+    void deletedDuringRemoteCall() {
+        TransactionOperations deleteBeforeWrite = new TransactionOperations() {
+            @Override
+            public <T> T execute(org.springframework.transaction.support.TransactionCallback<T> action) {
+                product.delete(MASTER_ID);
+                return action.doInTransaction(null);
+            }
+        };
+        ProductService racing = new ProductService(productRepository, companyRepository, inventoryClient, deleteBeforeWrite);
+
+        assertError(() -> racing.deleteProduct(new DeleteProductCommand(product.getId(), MANAGER_ID, false)),
+                ProductErrorCode.PRODUCT_NOT_FOUND);
+
+        assertThat(product.getDeletedBy()).isEqualTo(MASTER_ID);
     }
 
     @Test

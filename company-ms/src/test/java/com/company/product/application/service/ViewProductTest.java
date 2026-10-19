@@ -6,6 +6,7 @@ import com.common.exception.ErrorCode;
 import com.common.exception.ProductErrorCode;
 import com.company.company.domain.entity.Company;
 import com.company.fake.FakeCompanyRepository;
+import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
 import com.company.product.application.dto.ProductResult;
 import com.company.product.domain.entity.Product;
@@ -13,6 +14,7 @@ import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -28,7 +30,8 @@ class ViewProductTest {
 
     private final FakeCompanyRepository companyRepository = new FakeCompanyRepository();
     private final FakeProductRepository productRepository = new FakeProductRepository();
-    private final ProductService service = new ProductService(productRepository, companyRepository);
+    private final ProductService service = new ProductService(productRepository, companyRepository,
+            new FakeInventoryClient(), TransactionOperations.withoutTransaction());
 
     private final Company company = companyRepository.save(
             Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), UUID.randomUUID()));

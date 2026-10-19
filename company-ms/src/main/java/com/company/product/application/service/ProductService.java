@@ -13,12 +13,14 @@ import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.application.dto.ProductResult;
 import com.company.product.application.dto.ProductSearchQuery;
 import com.company.product.application.dto.UpdateProductCommand;
+import com.company.product.domain.client.InventoryClient;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
 import com.company.product.domain.repository.ProductSearchCondition;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.util.UUID;
 
@@ -28,6 +30,8 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CompanyRepository companyRepository;
+    private final InventoryClient inventoryClient;
+    private final TransactionOperations transactionOperations;
 
     // 업체 조회와 상품 저장을 한 트랜잭션으로 (원격 호출 없음)
     @Transactional
@@ -89,14 +93,23 @@ public class ProductService {
         return ProductResult.from(productRepository.save(product));
     }
 
-    // 수정과 같은 순서로 확인. 삭제 시각·삭제자는 dirty checking으로 반영
-    @Transactional
+    // 상품·소속 업체 존재 → 권한 → hub-ms 재고 삭제 → 상품 삭제 순서.
+    // 재고 삭제(원격)는 트랜잭션 밖에서 먼저 한다. hub-ms가 멱등이라 원격이 실패해도 상품이 남아 같은 요청으로 다시 시도할 수 있다.
+    // 상품을 먼저 지우면 원격 실패 시 다시 시도할 길이 없다(삭제된 상품은 404) — 재고만 남는다.
+    // 삭제는 트랜잭션 안에서 상품을 다시 읽어 반영한다. 삭제 시각·삭제자는 dirty checking으로 반영
     public void deleteProduct(DeleteProductCommand command) {
         Product product = findActiveProduct(command.productId());
         Company company = findActiveCompany(product.getCompany().getId());
         validateCanManage(company, command.actorId(), command.actorIsMaster());
 
-        product.delete(command.actorId());
+        inventoryClient.deleteInventory(product.getId());
+
+        transactionOperations.executeWithoutResult(status -> {
+            Product target = findActiveProduct(command.productId());
+            Company targetCompany = findActiveCompany(target.getCompany().getId());
+            validateCanManage(targetCompany, command.actorId(), command.actorIsMaster());
+            target.delete(command.actorId());
+        });
     }
 
     // MASTER 또는 해당 업체의 관리자 본인만 (07 서비스 정책 4장 권한)
