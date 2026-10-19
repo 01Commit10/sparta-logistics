@@ -14,6 +14,7 @@ import com.delivery.application.dto.result.DeliveryRouteResult;
 import com.delivery.domain.entity.Delivery;
 import com.delivery.domain.entity.DeliveryRoute;
 import com.delivery.domain.repository.DeliveryRepository;
+import com.delivery.domain.vo.DeliveryManagers;
 import com.delivery.domain.vo.DeliveryRouteType;
 import com.delivery.domain.vo.DeliveryStatus;
 import com.delivery.domain.vo.RouteEstimate;
@@ -35,18 +36,24 @@ public class DeliveryCommandService {
 
 
     public DeliveryCreateResult createDelivery(DeliveryCreateCommand command) {
-        RouteEstimate hubRouteEstimate = command.departureHubId().equals(command.arrivalHubId())
+        UUID departureHubId = command.departureHubId();
+        UUID arrivalHubId = command.arrivalHubId();
+
+        RouteEstimate hubRouteEstimate = departureHubId.equals(arrivalHubId)
                 ? null
-                : hubRouteClient.getRouteEstimate(command.departureHubId(), command.arrivalHubId());
+                : hubRouteClient.getRouteEstimate(departureHubId, command.arrivalHubId());
+
+        DeliveryManagers deliveryManagers = userClient.pickDeliveryManagers(departureHubId, arrivalHubId);
 
         Delivery delivery = Delivery.create(
                 command.orderId(),
-                command.departureHubId(),
-                command.arrivalHubId(),
+                departureHubId,
+                arrivalHubId,
                 command.deliveryAddress(),
                 command.recipientName(),
                 command.recipientUserId(),
-                hubRouteEstimate
+                hubRouteEstimate,
+                deliveryManagers
         );
         return DeliveryCreateResult.from(deliveryRepository.save(delivery));
     }

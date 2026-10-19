@@ -6,6 +6,8 @@ import com.common.exception.UserErrorCode;
 import com.common.remote.RemoteBusinessException;
 import com.common.remote.RemoteCallTemplate;
 import com.delivery.application.client.UserClient;
+import com.delivery.domain.vo.DeliveryManagers;
+import com.delivery.infrastructure.client.user.dto.DeliveryManagerAssignmentResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -32,4 +34,20 @@ public class UserClientImpl implements UserClient {
             throw e;
         }
     }
+
+    @Override
+    public DeliveryManagers pickDeliveryManagers(UUID departureHubId, UUID arrivalHubId) {
+        try {
+            DeliveryManagerAssignmentResponse response = remoteCallTemplate
+                    .execute("user-ms", () -> userFeignClient.getRandomDeliveryManagers(departureHubId, arrivalHubId));
+            return new DeliveryManagers(response.departureManagerId(), response.arrivalManagerId());
+        } catch (RemoteBusinessException e) {
+            if(e.getErrorCode() == UserErrorCode.DELIVERY_MANAGER_NOT_FOUND) { // 배송담당자 없이 배송 생성
+                return new DeliveryManagers(null, null);
+            }
+            throw e;
+        }
+    }
+
+
 }

@@ -3,6 +3,7 @@ package com.delivery.domain.entity;
 import com.common.entity.BaseEntity;
 import com.common.exception.BusinessException;
 import com.common.exception.DeliveryErrorCode;
+import com.delivery.domain.vo.DeliveryManagers;
 import com.delivery.domain.vo.DeliveryRouteType;
 import com.delivery.domain.vo.DeliveryStatus;
 import com.delivery.domain.vo.RouteEstimate;
@@ -75,7 +76,8 @@ public class Delivery extends BaseEntity {
                                   String deliveryAddress,
                                   String recipientName,
                                   UUID recipientUserId,
-                                  RouteEstimate hubRouteEstimate) {
+                                  RouteEstimate hubRouteEstimate,
+                                  DeliveryManagers deliveryManagers) {
         Delivery delivery = Delivery.builder()
                 .orderId(orderId)
                 .status(determineInitialStatus(departureHubId, arrivalHubId))
@@ -85,6 +87,10 @@ public class Delivery extends BaseEntity {
                 .recipientName(recipientName)
                 .recipientUserId(recipientUserId)
                 .build();
+
+        delivery.deliveryManagerId = departureHubId.equals(arrivalHubId)
+                ? deliveryManagers.arrivalManagerId()
+                : deliveryManagers.departureManagerId();
 
         int sequence = 1;
         if(!departureHubId.equals(arrivalHubId)) {
