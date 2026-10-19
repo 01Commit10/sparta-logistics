@@ -5,8 +5,9 @@ import com.common.exception.CommonErrorCode;
 import com.hub.inventory.application.dto.DecreaseInventoryCommand;
 import com.hub.inventory.application.dto.DecreaseInventoryResult;
 import com.hub.inventory.domain.dto.DecreaseResult;
-import com.hub.inventory.domain.entity.Inventory;
+import com.hub.inventory.domain.entity.InventoryHistory;
 import com.hub.inventory.domain.entity.InventoryOperation;
+import com.hub.inventory.domain.repository.InventoryHistoryRepository;
 import com.hub.inventory.domain.repository.InventoryOperationRepository;
 import com.hub.inventory.domain.repository.InventoryStockRepository;
 import jakarta.transaction.Transactional;
@@ -24,12 +25,15 @@ public class InventoryStockService {
 
     private final InventoryStockRepository inventoryStockRepository;
     private final InventoryOperationRepository inventoryOperationRepository;
+    private final InventoryHistoryRepository inventoryHistoryRepository;
 
-    public InventoryStockService(InventoryStockRepository inventoryStockRepository, InventoryOperationRepository inventoryOperationRepository) {
+    public InventoryStockService(InventoryStockRepository inventoryStockRepository, InventoryOperationRepository inventoryOperationRepository, InventoryHistoryRepository inventoryHistoryRepository) {
         this.inventoryStockRepository = inventoryStockRepository;
         this.inventoryOperationRepository = inventoryOperationRepository;
+        this.inventoryHistoryRepository = inventoryHistoryRepository;
     }
 
+    // 재고 차감 -> 차감한 재고 및 남은수량 조회 -> 작업결과 저장 -> 작업이력 저장
     @Transactional
     public Optional<DecreaseInventoryResult> decrease(
             DecreaseInventoryCommand command,
@@ -63,6 +67,16 @@ public class InventoryStockService {
 
         InventoryOperation savedOperation =
                 inventoryOperationRepository.save(operation);
+
+        InventoryHistory history = InventoryHistory.decrease(
+                savedOperation.getId(),
+                savedOperation.getInventoryId(),
+                savedOperation.getOrderId(),
+                savedOperation.getRequestedQuantity(),
+                savedOperation.getRemainingQuantity()
+        );
+
+        inventoryHistoryRepository.save(history);
 
         return Optional.of(new DecreaseInventoryResult(
                 savedOperation.getId(),
