@@ -3,18 +3,22 @@ package com.delivery.domain.entity;
 import com.common.entity.BaseEntity;
 import com.common.exception.BusinessException;
 import com.common.exception.DeliveryErrorCode;
+import com.delivery.domain.vo.DeliveryRouteType;
 import com.delivery.domain.vo.DeliveryStatus;
+import com.delivery.domain.vo.RouteEstimate;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
 @Table(name = "p_delivery",
-        uniqueConstraints = @UniqueConstraint(name = "uk_p_delivery_order_id", columnNames = "{order_id}"))
+        uniqueConstraints = @UniqueConstraint(name = "uk_p_delivery_order_id", columnNames = {"order_id"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Delivery extends BaseEntity {
@@ -47,6 +51,9 @@ public class Delivery extends BaseEntity {
     @Column(name = "delivery_manager_id")
     private UUID deliveryManagerId;
 
+    @OneToMany(mappedBy = "delivery", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<DeliveryRoute> routes = new ArrayList<>();
+
 
     @Builder
     private Delivery(UUID orderId, DeliveryStatus status, UUID departureHubId, UUID arrivalHubId, String deliveryAddress, String recipientName, UUID recipientUserId) {
@@ -65,8 +72,9 @@ public class Delivery extends BaseEntity {
                                   UUID arrivalHubId,
                                   String deliveryAddress,
                                   String recipientName,
-                                  UUID recipientUserId) {
-        return Delivery.builder()
+                                  UUID recipientUserId,
+                                  RouteEstimate hubRouteEstimate) {
+        Delivery delivery = Delivery.builder()
                 .orderId(orderId)
                 .status(determineInitialStatus(departureHubId, arrivalHubId))
                 .departureHubId(departureHubId)
@@ -75,6 +83,30 @@ public class Delivery extends BaseEntity {
                 .recipientName(recipientName)
                 .recipientUserId(recipientUserId)
                 .build();
+
+        int sequence = 1;
+        if(!departureHubId.equals(arrivalHubId)) {
+            delivery.routes.add(DeliveryRoute.builder()
+                    .delivery(delivery)
+                    .routeSequence(sequence++)
+                    .routeType(DeliveryRouteType.HUB_TO_HUB)
+                    .departureHubId(departureHubId)
+                    .arrivalHubId(arrivalHubId)
+                    .estimatedDistanceKm(hubRouteEstimate.distanceKm())
+                    .estimatedDurationMin(hubRouteEstimate.durationMin())
+                    .build());
+        }
+        delivery.routes.add(DeliveryRoute.builder()
+                .delivery(delivery)
+                .routeSequence(sequence)
+                .routeType(DeliveryRouteType.HUB_TO_COMPANY)
+                .departureHubId(arrivalHubId)
+                .arrivalHubId(null)
+                .estimatedDistanceKm(DeliveryRoute.DEFAULT_HUB_TO_COMPANY_DISTANCE_KM)
+                .estimatedDurationMin(DeliveryRoute.DEFAULT_HUB_TO_COMPANY_DURATION_MIN)
+                .build());
+
+        return delivery;
     }
 
     private static DeliveryStatus determineInitialStatus(UUID departureHubId, UUID arrivalHubId) {

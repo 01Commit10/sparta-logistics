@@ -18,8 +18,11 @@ public enum DeliveryErrorCode implements ErrorCode{
     // DB 저장 충돌
     DUPLICATE_IDEMPOTENT_REQUEST(HttpStatus.CONFLICT, "같은 작업에 같은 멱등성 키로 처리된 요청이 이미 있습니다."),
 
-    //user-ms 호출 관련
-    DELIVERY_REQUESTER_NOT_FOUND(HttpStatus.UNAUTHORIZED, "요청한 사용자 정보를 찾을 수 없습니다.");
+    // user-ms 호출 관련
+    DELIVERY_USER_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 사용자 정보를 찾을 수 없습니다."),
+
+    // hub-ms 호출 관련
+    HUB_ROUTE_NOT_FOUND(HttpStatus.BAD_REQUEST, "출발 허브와 도착 허브 사이의 경로를 찾을 수 없습니다.");
 
 
     private final HttpStatus httpStatus;

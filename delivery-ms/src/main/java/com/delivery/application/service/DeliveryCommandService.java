@@ -3,6 +3,7 @@ package com.delivery.application.service;
 import com.common.auth.AuthUser;
 import com.common.exception.BusinessException;
 import com.common.exception.DeliveryErrorCode;
+import com.delivery.application.client.HubRouteClient;
 import com.delivery.application.client.UserClient;
 import com.delivery.application.dto.command.DeliveryCreateCommand;
 import com.delivery.application.dto.result.DeliveryCreateResult;
@@ -10,6 +11,7 @@ import com.delivery.application.dto.result.DeliveryResult;
 import com.delivery.domain.entity.Delivery;
 import com.delivery.domain.repository.DeliveryRepository;
 import com.delivery.domain.vo.DeliveryStatus;
+import com.delivery.domain.vo.RouteEstimate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,16 +25,22 @@ public class DeliveryCommandService {
 
     private final DeliveryRepository deliveryRepository;
     private final UserClient userClient;
+    private final HubRouteClient hubRouteClient;
 
 
     public DeliveryCreateResult createDelivery(DeliveryCreateCommand command) {
+        RouteEstimate hubRouteEstimate = command.departureHubId().equals(command.arrivalHubId())
+                ? null
+                : hubRouteClient.getRouteEstimate(command.departureHubId(), command.arrivalHubId());
+
         Delivery delivery = Delivery.create(
                 command.orderId(),
                 command.departureHubId(),
                 command.arrivalHubId(),
                 command.deliveryAddress(),
                 command.recipientName(),
-                command.recipientUserId()
+                command.recipientUserId(),
+                hubRouteEstimate
         );
         return DeliveryCreateResult.from(deliveryRepository.save(delivery));
     }

@@ -6,8 +6,6 @@ import com.common.exception.UserErrorCode;
 import com.common.remote.RemoteBusinessException;
 import com.common.remote.RemoteCallTemplate;
 import com.delivery.application.client.UserClient;
-import com.delivery.infrastructure.client.user.dto.UserAuthInfoResponse;
-import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -25,11 +23,11 @@ public class UserClientImpl implements UserClient {
     public boolean isDeliveryManager(UUID userId) {
         try {
             return remoteCallTemplate
-                    .execute("user-ms", () -> userFeignClient.getAuthInfo(userId))
+                    .execute("user-ms", () -> userFeignClient.getUser(userId))
                     .isDeliveryManager();
         } catch (RemoteBusinessException e) {
             if(e.getErrorCode() == UserErrorCode.USER_NOT_FOUND) {
-                throw new BusinessException(DeliveryErrorCode.DELIVERY_REQUESTER_NOT_FOUND);
+                throw new BusinessException(DeliveryErrorCode.DELIVERY_USER_NOT_FOUND);
             }
             throw e;
         }
