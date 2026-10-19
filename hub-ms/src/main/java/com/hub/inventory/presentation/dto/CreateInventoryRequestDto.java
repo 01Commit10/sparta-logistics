@@ -7,7 +7,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.util.UUID;
 
-public record CreateInventoryRequest(
+public record CreateInventoryRequestDto(
         @NotNull UUID hubId,
         @NotNull UUID productId,
         @NotNull @PositiveOrZero Integer initialQuantity

@@ -12,4 +12,5 @@ public interface ProductRepository {
     Optional<Product> findById(UUID id);
     PageData<Product> findActiveByCompanyId(UUID companyId, PageQuery query);
     PageData<Product> search(ProductSearchCondition condition, PageQuery query);
+    void increaseViewCount(UUID id);
 }

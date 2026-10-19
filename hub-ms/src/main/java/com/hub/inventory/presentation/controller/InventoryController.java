@@ -4,7 +4,7 @@ import com.common.auth.AuthContract;
 import com.common.auth.AuthUser;
 import com.common.auth.web.CurrentUser;
 import com.hub.inventory.application.service.InventoryService;
-import com.hub.inventory.presentation.dto.CreateInventoryRequest;
+import com.hub.inventory.presentation.dto.CreateInventoryRequestDto;
 import com.hub.inventory.presentation.dto.InventoryResponseDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -38,7 +38,7 @@ public class InventoryController {
     @ResponseStatus(HttpStatus.CREATED)
     public InventoryResponseDto createInventory(
             @CurrentUser AuthUser authUser,
-            @Valid @RequestBody CreateInventoryRequest request
+            @Valid @RequestBody CreateInventoryRequestDto request
     ){
         return InventoryResponseDto.from(
                     inventoryService.createInventory(

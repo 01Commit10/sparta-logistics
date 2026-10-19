@@ -75,22 +75,26 @@
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 업체 목록 조회 | GET | `/companies` | 로그인 | hubId, name | 200 |
+| 업체 목록 조회 | GET | `/companies` | 로그인 | hubId, name(부분 일치), 페이지. 정렬: createdAt·name | 200 |
 | 업체 상세 조회 | GET | `/companies/{companyId}` | 로그인 | companyId | 200 |
 | 업체 등록 | POST | `/companies` | MASTER | name, address, hubId, managerUserId | 201 |
-| 업체 수정 | PATCH | `/companies/{companyId}` | MASTER·업체관리자 | 업체 변경 정보 | 200 |
+| 업체 수정 | PATCH | `/companies/{companyId}` | MASTER·업체관리자 | name, address, hubId, managerUserId 중 보낸 필드만. hubId·managerUserId 변경은 MASTER만 | 200 |
 | 업체 삭제 | DELETE | `/companies/{companyId}` | MASTER | companyId | 204 |
+
+*업체 등록·수정 시 관리 허브는 Hub Service, 업체 관리자는 User Service 내부 API로 존재를 확인합니다. 삭제된 업체는 조회·수정·삭제 모두 404입니다.*
 
 ## Product
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 상품 목록 조회 | GET | `/products` | 로그인 | companyId, name | 200 |
-| 상품 상세 조회 | GET | `/products/{productId}` | 로그인 | productId | 200 |
-| 업체별 상품 조회 | GET | `/companies/{companyId}/products` | 로그인 | companyId | 200 |
+| 상품 목록 조회 | GET | `/products` | 로그인 | companyId, name(부분 일치), 페이지. 정렬: createdAt·name·unitPrice·viewCount | 200 |
+| 상품 상세 조회 | GET | `/products/{productId}` | 로그인 | productId. **조회할 때마다 조회수 +1** | 200 |
+| 업체별 상품 조회 | GET | `/companies/{companyId}/products` | 로그인 | companyId, 페이지. 정렬: createdAt·name·unitPrice·viewCount | 200 |
 | 상품 등록 | POST | `/companies/{companyId}/products` | MASTER·업체관리자 | name, description, unitPrice | 201 |
-| 상품 수정 | PATCH | `/products/{productId}` | MASTER·업체관리자 | 상품 변경 정보 | 200 |
+| 상품 수정 | PATCH | `/products/{productId}` | MASTER·업체관리자 | name, description, unitPrice 중 보낸 필드만 | 200 |
 | 상품 삭제 | DELETE | `/products/{productId}` | MASTER·업체관리자 | productId | 204 |
+
+*상품 응답에는 조회수(`viewCount`)가 포함됩니다. 인기 상품은 `sort=viewCount,desc`로 조회합니다. 삭제된 상품과 삭제된 업체의 상품은 조회·검색에서 제외합니다.*
 
 ## Order
 
@@ -136,8 +140,8 @@
 |---|---|---|---|
 | 사용자 검증 | GET | `/users/{userId}` | 사용자·배송담당자 확인. 응답: id, name, role, isDeliveryManager, slackId, active. 삭제된 사용자는 404 |
 | 허브 검증 | GET | `/hubs/{hubId}` | 허브 존재 여부 확인 |
-| 상품 검증 | GET | `/products/{productId}` | 상품·공급업체 확인 |
-| 업체 검증 | GET | `/companies/{companyId}` | 업체·관리 허브 확인 |
+| 상품 검증 | GET | `/products/{productId}` | 상품·공급업체 확인. 응답: id, companyId, name, unitPrice. 없거나 삭제된 상품은 404 `PRODUCT_NOT_FOUND`, 소속 업체가 삭제됐으면 404 `COMPANY_NOT_FOUND`. 조회수는 올리지 않음 |
+| 업체 검증 | GET | `/companies/{companyId}` | 업체·관리 허브 확인. 응답: id, name, address, hubId, managerUserId. 없거나 삭제된 업체는 404 `COMPANY_NOT_FOUND` |
 | 재고 차감 | POST | `/inventories/decrease` | 주문 시 원자적 재고 차감 |
 | 재고 복원 | POST | `/inventories/restore` | Saga 실패 시 보상 트랜잭션 |
 | 허브 경로 조회 | GET | `/hub-routes?departureHubId={id}&arrivalHubId={id}` | 배송 구간 자동 생성 시 거리·예상 소요시간 확인 |

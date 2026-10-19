@@ -42,4 +42,9 @@ public class ProductRepositoryImpl implements ProductRepository {
                 jpa.findAll(ProductSpecifications.of(condition), SpringDataPages.toPageable(query))
         );
     }
+
+    @Override
+    public void increaseViewCount(UUID id) {
+        jpa.increaseViewCount(id);
+    }
 }
