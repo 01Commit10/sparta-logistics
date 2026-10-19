@@ -45,7 +45,7 @@ public class Delivery extends BaseEntity {
     @Column(name = "delivery_address", nullable = false)
     private String deliveryAddress;
 
-    @Column(name = "recipient_name", length = 10)
+    @Column(name = "recipient_name", length = 100)
     private String recipientName;
 
     @Column(name = "recipient_user_id", nullable = false)
@@ -102,6 +102,7 @@ public class Delivery extends BaseEntity {
                     .arrivalHubId(arrivalHubId)
                     .estimatedDistanceKm(hubRouteEstimate.distanceKm())
                     .estimatedDurationMin(hubRouteEstimate.durationMin())
+                    .deliveryManagerId(deliveryManagers.departureManagerId())
                     .build());
         }
         delivery.routes.add(DeliveryRoute.builder()
@@ -112,6 +113,7 @@ public class Delivery extends BaseEntity {
                 .arrivalHubId(null)
                 .estimatedDistanceKm(DeliveryRoute.DEFAULT_HUB_TO_COMPANY_DISTANCE_KM)
                 .estimatedDurationMin(DeliveryRoute.DEFAULT_HUB_TO_COMPANY_DURATION_MIN)
+                .deliveryManagerId(deliveryManagers.arrivalManagerId())
                 .build());
 
         return delivery;
@@ -169,7 +171,10 @@ public class Delivery extends BaseEntity {
     private void syncRouteStatus(DeliveryStatus nextStatus) {
         switch (nextStatus) {
             case HUB_MOVING -> routeByType(DeliveryRouteType.HUB_TO_HUB).start();
-            case HUB_ARRIVED -> routeByType(DeliveryRouteType.HUB_TO_HUB).arrive();
+            case HUB_ARRIVED -> { // 담당자 교대
+                routeByType(DeliveryRouteType.HUB_TO_HUB).arrive();
+                this.deliveryManagerId = routeByType(DeliveryRouteType.HUB_TO_COMPANY).getDeliveryManagerId();
+            }
             case DELIVERING -> routeByType(DeliveryRouteType.HUB_TO_COMPANY).start();
             case DELIVERED -> routeByType(DeliveryRouteType.HUB_TO_COMPANY).arrive();
             default -> {}

@@ -10,4 +10,5 @@ public interface UserClient {
 
     DeliveryManagers pickDeliveryManagers(UUID departureHubId, UUID arrivalHubId);
 
+    String getUserName(UUID userId);
 }

@@ -49,5 +49,17 @@ public class UserClientImpl implements UserClient {
         }
     }
 
+    @Override
+    public String getUserName(UUID userId) {
+        try {
+            return remoteCallTemplate.execute("user-ms", () -> userFeignClient.getUser(userId)).name();
+        } catch (RemoteBusinessException e) {
+            if(e.getErrorCode() == UserErrorCode.USER_NOT_FOUND) {
+                throw new BusinessException(DeliveryErrorCode.DELIVERY_INVALID_RECIPIENT);
+            }
+            throw e;
+        }
+    }
+
 
 }

@@ -10,9 +10,7 @@ import java.util.UUID;
 public record DeliveryCreateRequest(
         @NotNull UUID orderId,
         @NotNull UUID departureHubId,
-        @NotNull UUID arrivalHubId,
-        @NotBlank String deliveryAddress,
-        @NotBlank @Size(max = 10) String recipientName,
+        @NotNull UUID requesterCompanyId,
         @NotNull UUID recipientUserId
 ) {
 
@@ -21,9 +19,7 @@ public record DeliveryCreateRequest(
         return new DeliveryCreateCommand(
                 orderId,
                 departureHubId,
-                arrivalHubId,
-                deliveryAddress,
-                recipientName,
+                requesterCompanyId,
                 recipientUserId);
     }
 }

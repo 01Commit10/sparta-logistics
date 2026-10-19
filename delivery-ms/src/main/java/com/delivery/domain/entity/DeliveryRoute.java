@@ -70,7 +70,7 @@ public class DeliveryRoute extends BaseEntity {
     @Builder(access = AccessLevel.PACKAGE)
     DeliveryRoute(Delivery delivery, int routeSequence, DeliveryRouteType routeType,
                           UUID departureHubId, UUID arrivalHubId,
-                          BigDecimal estimatedDistanceKm, Integer estimatedDurationMin) {
+                          BigDecimal estimatedDistanceKm, Integer estimatedDurationMin, UUID deliveryManagerId) {
         this.delivery = delivery;
         this.routeSequence = routeSequence;
         this.routeType = routeType;
@@ -79,26 +79,27 @@ public class DeliveryRoute extends BaseEntity {
         this.estimatedDistanceKm = estimatedDistanceKm;
         this.estimatedDurationMin = estimatedDurationMin;
         this.routeStatus = DeliveryRouteStatus.WAITING;
+        this.deliveryManagerId = deliveryManagerId;
     }
 
 
     void start() {
         if (routeStatus != DeliveryRouteStatus.WAITING) {
-            throw new IllegalArgumentException("WAITING 상태의 구간만 이동을 시작할 수 있습니다.");
+            throw new IllegalStateException("WAITING 상태의 구간만 이동을 시작할 수 있습니다.");
         }
         this.routeStatus = DeliveryRouteStatus.MOVING;
     }
 
     void arrive() {
         if (routeStatus != DeliveryRouteStatus.MOVING) {
-            throw new IllegalArgumentException("MOVING 상태의 구간만 도착 처리할 수 있습니다.");
+            throw new IllegalStateException("MOVING 상태의 구간만 도착 처리할 수 있습니다.");
         }
         this.routeStatus = DeliveryRouteStatus.ARRIVED;
     }
 
     void cancel() {
         if (routeStatus != DeliveryRouteStatus.WAITING) {
-            throw new IllegalArgumentException("WAITING 상태의 구간만 취소할 수 있습니다.");
+            throw new IllegalStateException("WAITING 상태의 구간만 취소할 수 있습니다.");
         }
         this.routeStatus = DeliveryRouteStatus.CANCELED;
     }
