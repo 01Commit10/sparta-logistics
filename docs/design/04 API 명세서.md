@@ -135,18 +135,21 @@
 | 기능 | Method | Endpoint | 호출 목적 |
 |---|---|---|---|
 | 사용자 검증 | GET | `/users/{userId}` | 사용자·배송담당자 확인. 응답: id, name, role, isDeliveryManager, slackId, active. 삭제된 사용자는 404 |
-| 허브 검증 | GET | `/hubs/{hubId}` | 허브 존재 여부 확인 |
+| 허브 검증 | GET | `/hubs/{hubId}` | 활성 허브면 200(id, name, address), 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
 | 상품 검증 | GET | `/products/{productId}` | 상품·공급업체 확인 |
 | 업체 검증 | GET | `/companies/{companyId}` | 업체·관리 허브 확인 |
 | 재고 차감 | POST | `/inventories/decrease` | 주문 시 원자적 재고 차감 |
 | 재고 복원 | POST | `/inventories/restore` | Saga 실패 시 보상 트랜잭션 |
-| 허브 경로 조회 | GET | `/hub-routes?departureHubId={id}&arrivalHubId={id}` | 배송 구간 자동 생성 시 거리·예상 소요시간 확인 |
+| 상품 재고 정리 | DELETE | `/inventories/products/{productId}` | 상품의 모든 허브 재고를 논리 삭제. 없음·이미 삭제도 204, 수량·Operation·History 보존 |
+| 허브 경로 조회 | GET | `/hub-routes?departureHubId={id}&arrivalHubId={id}` | 200(id, departureHubId, arrivalHubId, distanceKm, durationMin). 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
 | 배송 생성 | POST | `/deliveries` | 주문에 연결된 배송 생성 |
 | 배송 취소 | POST | `/deliveries/{deliveryId}/cancel` | 주문 취소 시 배송·구간 취소 (Saga 보상) |
 | 주문 완료 처리 | POST | `/orders/{orderId}/complete` | Saga 완료 상태 반영 |
 | 주문 실패 처리 | POST | `/orders/{orderId}/fail` | Saga 실패 상태 반영 |
 
 *내부 API는 일반 사용자에게 공개하지 않으며 서비스 간 인증이 필요합니다.*
+
+**Hub 구현 참고(2026-10-19):** 위 허브 검증·경로 조회·상품 재고 정리 API를 제공합니다. 상세 필드·감사 작업자·현재 접근 통제와 Company 연동 범위는 [Hub-MS Feign 연동 사용법](<../guide/사용법/Hub-MS Feign 연동 사용법.md>)을 참고합니다. Hub의 별도 서비스 호출자 인증과 Company의 상품 삭제 후 Hub 호출은 아직 연결되어 있지 않습니다.
 
 *주문 완료·실패 처리 API는 비동기 Saga에서만 필요합니다. Order Service가 동기로 오케스트레이션하는 초기 구현에서는 생략할 수 있습니다.*
 
