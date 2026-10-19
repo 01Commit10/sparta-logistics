@@ -17,7 +17,8 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "p_products", indexes = @Index(name = "idx_products_company_id", columnList = "company_id"))
+// 성능 측정 기준선(일반 조회): PK 외 인덱스 없음. 인덱스는 인덱스 조회 브랜치에서 추가한다
+@Table(name = "p_products")
 @Check(name = "ck_products_unit_price", constraints = "unit_price >= 0")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product extends BaseEntity {
