@@ -101,4 +101,9 @@ public class DeliveryRoute extends BaseEntity {
         this.routeStatus = DeliveryRouteStatus.CANCELED;
     }
 
+    void updateActualMeasurement(BigDecimal actualDistanceKm, Integer actualDurationMin) {
+        this.actualDistanceKm = actualDistanceKm;
+        this.actualDurationMin = actualDurationMin;
+    }
+
 }

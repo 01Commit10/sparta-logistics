@@ -12,6 +12,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -139,6 +140,12 @@ public class Delivery extends BaseEntity {
         routes.forEach(DeliveryRoute::cancel);
     }
 
+    public void updateRouteActualMeasurement(UUID routeId, BigDecimal actualDistanceKm, int actualDurationMin) {
+        DeliveryRoute route = routeById(routeId);
+        route.updateActualMeasurement(actualDistanceKm, actualDurationMin);
+    }
+
+
     // 아직 아무 이동도 시작하지 않았는가
     private boolean isBeforeDispatch() {
         return status == DeliveryStatus.HUB_WAITING
@@ -147,19 +154,26 @@ public class Delivery extends BaseEntity {
 
     private void syncRouteStatus(DeliveryStatus nextStatus) {
         switch (nextStatus) {
-            case HUB_MOVING -> routeOf(DeliveryRouteType.HUB_TO_HUB).start();
-            case HUB_ARRIVED -> routeOf(DeliveryRouteType.HUB_TO_HUB).arrive();
-            case DELIVERING -> routeOf(DeliveryRouteType.HUB_TO_COMPANY).start();
-            case DELIVERED -> routeOf(DeliveryRouteType.HUB_TO_COMPANY).arrive();
+            case HUB_MOVING -> routeByType(DeliveryRouteType.HUB_TO_HUB).start();
+            case HUB_ARRIVED -> routeByType(DeliveryRouteType.HUB_TO_HUB).arrive();
+            case DELIVERING -> routeByType(DeliveryRouteType.HUB_TO_COMPANY).start();
+            case DELIVERED -> routeByType(DeliveryRouteType.HUB_TO_COMPANY).arrive();
             default -> {}
         }
     }
 
-    private DeliveryRoute routeOf(DeliveryRouteType type) {
+    private DeliveryRoute routeByType(DeliveryRouteType type) {
         return routes.stream()
                 .filter(route -> route.getRouteType() == type)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("배송 구간이 없습니다"));
+                .orElseThrow(() -> new IllegalStateException("배송에 해당 유형의 구간이 없습니다"));
+    }
+
+    public DeliveryRoute routeById(UUID routeId) {
+        return routes.stream()
+                .filter(route -> route.getId().equals(routeId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("배송에 해당 id의 구간이 없습니다"));
     }
 }
 

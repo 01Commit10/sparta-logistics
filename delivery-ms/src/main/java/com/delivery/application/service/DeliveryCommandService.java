@@ -6,9 +6,12 @@ import com.common.exception.DeliveryErrorCode;
 import com.delivery.application.client.HubRouteClient;
 import com.delivery.application.client.UserClient;
 import com.delivery.application.dto.command.DeliveryCreateCommand;
+import com.delivery.application.dto.command.DeliveryRouteActualMeasurementUpdateCommand;
 import com.delivery.application.dto.result.DeliveryCreateResult;
 import com.delivery.application.dto.result.DeliveryResult;
+import com.delivery.application.dto.result.DeliveryRouteResult;
 import com.delivery.domain.entity.Delivery;
+import com.delivery.domain.entity.DeliveryRoute;
 import com.delivery.domain.repository.DeliveryRepository;
 import com.delivery.domain.vo.DeliveryStatus;
 import com.delivery.domain.vo.RouteEstimate;
@@ -16,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
@@ -74,5 +78,19 @@ public class DeliveryCommandService {
     public void cancelDelivery(UUID deliveryId) {
         deliveryRepository.findById(deliveryId)
                 .ifPresent(Delivery::cancel);
+    }
+
+    public DeliveryRouteResult updateActualMeasurement(UUID routeId, DeliveryRouteActualMeasurementUpdateCommand command,
+                                                       UUID userId, boolean isMaster) {
+        Delivery delivery = deliveryRepository.findByRouteId(routeId)
+                .orElseThrow(() -> new BusinessException(DeliveryErrorCode.DELIVERY_ROUTE_NOT_FOUND));
+
+        DeliveryRoute route = delivery.routeById(routeId);
+        if(!isMaster && !userId.equals(route.getDeliveryManagerId())) {
+            throw new BusinessException(DeliveryErrorCode.DELIVERY_ACCESS_DENIED, "구간 실측 정보는 MASTER 또는 해당 구간의 배송담당자만 수정할 수 있습니다.");
+        }
+
+        delivery.updateRouteActualMeasurement(routeId, command.actualDistanceKm(), command.actualDurationMin());
+        return DeliveryRouteResult.from(route);
     }
 }

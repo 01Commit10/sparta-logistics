@@ -46,6 +46,11 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
         return jpaRepository.findByOrderIdAndDeletedAtIsNull(orderId);
     }
 
+    @Override
+    public Optional<Delivery> findByRouteId(UUID routeId) {
+        return jpaRepository.findByRoutes_IdAndDeletedAtIsNull(routeId);
+    }
+
 
     @Override
     public Page<Delivery> findAll(Pageable pageable) {
