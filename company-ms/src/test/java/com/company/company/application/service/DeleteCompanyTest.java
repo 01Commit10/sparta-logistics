@@ -9,6 +9,7 @@ import com.company.company.application.dto.DeleteCompanyCommand;
 import com.company.company.domain.entity.Company;
 import com.company.fake.FakeCompanyRepository;
 import com.company.fake.FakeHubClient;
+import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
 import com.company.fake.FakeUserClient;
 import com.company.product.application.dto.ProductSearchQuery;
@@ -91,7 +92,8 @@ class DeleteCompanyTest {
     @Test
     @DisplayName("소속 상품은 지우지 않지만, 상품 조회·검색에서는 함께 제외된다")
     void productsHidden() {
-        ProductService productService = new ProductService(productRepository, companyRepository);
+        ProductService productService = new ProductService(productRepository, companyRepository,
+            new FakeInventoryClient(), TransactionOperations.withoutTransaction());
         Product product = productRepository.save(
                 Product.create(company, "생수 2L", "6개입", new BigDecimal("12000.00")));
 
