@@ -14,10 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +27,13 @@ public class OrderService {
 
     @Transactional
     public OrderResult createOrder(CreateOrderCommand command) {
+        // 0. 같은 키로 처리한 이력이 있으면 이전 결과 반환 (멱등성)
+        Optional<OrderHistory> previous = orderHistoryRepository
+                .findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, command.idempotencyKey());
+        if (previous.isPresent()) {
+            return OrderResult.from(previous.get().getOrder());
+        }
+
         // 1. 이력 생성(IN_PROCESSING) ← 번호표: 중복 차단 + 이후 모든 성공/실패를 기록할 자리 확보
         OrderHistory history = OrderHistory.create(
                 OrderOperationType.CREATE, command.idempotencyKey(), command.requestHash());
