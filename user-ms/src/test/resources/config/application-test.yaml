@@ -4,3 +4,9 @@
 # 테스트 전용 키 (운영 키 아님, .env의 JWT_SECRET_KEY를 덮어씀)
 jwt:
   secret-key: dGVzdC1zZWNyZXQta2V5LWZvci11c2VyLW1zLXRva2VuLWlzc3VlciE=
+
+# 시드(db/seed/users.sql)는 넣지 않는다. 테스트가 사용자 수·목록을 직접 확인하므로. 시드 확인은 UserSeedPostgresTest
+spring:
+  sql:
+    init:
+      mode: never

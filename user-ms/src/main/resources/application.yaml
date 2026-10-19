@@ -3,6 +3,14 @@ spring:
     name: user-ms
   profiles:
     include: common
+  # U23 시연용 사용자 시드 (db/seed/users.sql, 비밀번호는 공개 값). 테이블 생성(ddl-auto) 뒤에 넣는다. 끄려면 USER_SEED_MODE=never
+  jpa:
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: ${USER_SEED_MODE:always}
+      data-locations:
+        - classpath:db/seed/users.sql
   data:
     redis:
       # 기본값(60초)이면 Redis가 멈췄을 때 로그인 응답이 60초 동안 걸린다. 짧게 끊고 503 AUTH_UNAVAILABLE로 응답
