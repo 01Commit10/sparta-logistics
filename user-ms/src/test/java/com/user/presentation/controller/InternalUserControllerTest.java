@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 서비스 간 계약(delivery-ms 등이 Feign으로 호출). Gateway를 거치지 않으므로 X-User-* 헤더가 없다.
+ * 서비스 간 계약(delivery-ms·order-ms 등이 Feign으로 호출). Gateway를 거치지 않으므로 X-User-* 헤더가 없다.
  */
 @WebMvcTest(InternalUserController.class)
 class InternalUserControllerTest {
@@ -48,7 +48,7 @@ class InternalUserControllerTest {
     }
 
     @Test
-    @DisplayName("200과 계약 필드 6개만 돌려준다 (username·소속·비밀번호 관련 값은 없다)")
+    @DisplayName("200과 계약 필드 8개만 돌려준다 (username·소속명·비밀번호 관련 값은 없다)")
     void ok() throws Exception {
         given(userQueryService.getActiveUser(USER_ID)).willReturn(result());
 
@@ -60,12 +60,29 @@ class InternalUserControllerTest {
                 .andExpect(jsonPath("$.isDeliveryManager").value(true))
                 .andExpect(jsonPath("$.slackId").value("U001"))
                 .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.organizationType").value("HUB"))
                 .andReturn().getResponse().getContentAsString();
 
         JsonNode json = objectMapper.readTree(body);
         List<String> fields = new ArrayList<>();
         json.fieldNames().forEachRemaining(fields::add);
-        assertThat(fields).containsExactlyInAnyOrder("id", "name", "role", "isDeliveryManager", "slackId", "active");
+        assertThat(fields).containsExactlyInAnyOrder("id", "name", "role", "isDeliveryManager", "slackId", "active",
+                "organizationType", "organizationId");
+        assertThat(json.get("organizationId").isNull()).as("연결 전이면 키는 있고 값은 null").isTrue();
+    }
+
+    @Test
+    @DisplayName("소속이 연결된 사용자는 organizationType·organizationId를 그대로 돌려준다 (주문자 소속 업체 확인용)")
+    void linkedOrganization() throws Exception {
+        UUID companyId = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+        given(userQueryService.getActiveUser(USER_ID)).willReturn(new UserResult(USER_ID, "buyer01", "김주문", "U002",
+                "USER", false, "COMPANY", "스파르타상사", companyId, false, true,
+                LocalDateTime.of(2026, 10, 15, 9, 0), null, null, null, null, null));
+
+        mockMvc.perform(get("/internal/v1/users/{userId}", USER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationType").value("COMPANY"))
+                .andExpect(jsonPath("$.organizationId").value(companyId.toString()));
     }
 
     @Test
