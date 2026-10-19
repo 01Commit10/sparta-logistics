@@ -1,6 +1,8 @@
 package com.delivery.domain.entity;
 
 import com.common.entity.BaseEntity;
+import com.common.exception.BusinessException;
+import com.common.exception.DeliveryErrorCode;
 import com.delivery.domain.vo.DeliveryRouteStatus;
 import com.delivery.domain.vo.DeliveryRouteType;
 import jakarta.persistence.*;
@@ -99,6 +101,13 @@ public class DeliveryRoute extends BaseEntity {
             throw new IllegalArgumentException("WAITING 상태의 구간만 취소할 수 있습니다.");
         }
         this.routeStatus = DeliveryRouteStatus.CANCELED;
+    }
+
+    void assignDeliveryManager(UUID deliveryManagerId) {
+        if(routeStatus == DeliveryRouteStatus.ARRIVED || routeStatus == DeliveryRouteStatus.CANCELED) {
+            throw new BusinessException(DeliveryErrorCode.DELIVERY_ROUTE_NOT_ASSIGNABLE);
+        }
+        this.deliveryManagerId = deliveryManagerId;
     }
 
     void updateActualMeasurement(BigDecimal actualDistanceKm, Integer actualDurationMin) {

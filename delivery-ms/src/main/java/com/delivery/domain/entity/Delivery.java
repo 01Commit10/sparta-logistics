@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Entity
@@ -117,8 +118,15 @@ public class Delivery extends BaseEntity {
     }
 
 
-    public void assignDeliveryManager(UUID deliveryManagerId) {
-        this.deliveryManagerId = deliveryManagerId;
+    public void assignDeliveryManager(DeliveryRouteType routeType, UUID deliveryManagerId) {
+        DeliveryRoute route = findRouteByType(routeType)
+                .orElseThrow(() -> new BusinessException(DeliveryErrorCode.DELIVERY_ROUTE_TYPE_NOT_FOUND));
+        route.assignDeliveryManager(deliveryManagerId);
+
+        // 현재 배송 중인 구간일 경우 배송의 배송담당자도 함께 변경
+        if(route.getRouteType() == currentRouteType()) {
+            this.deliveryManagerId = deliveryManagerId;
+        }
     }
 
     public void changeStatus(DeliveryStatus nextStatus) {
@@ -162,10 +170,14 @@ public class Delivery extends BaseEntity {
         }
     }
 
-    private DeliveryRoute routeByType(DeliveryRouteType type) {
+    private Optional<DeliveryRoute> findRouteByType(DeliveryRouteType type) {
         return routes.stream()
                 .filter(route -> route.getRouteType() == type)
-                .findFirst()
+                .findFirst();
+    }
+
+    private DeliveryRoute routeByType(DeliveryRouteType type) {
+        return findRouteByType(type)
                 .orElseThrow(() -> new IllegalStateException("배송에 해당 유형의 구간이 없습니다"));
     }
 
@@ -174,6 +186,14 @@ public class Delivery extends BaseEntity {
                 .filter(route -> route.getId().equals(routeId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("배송에 해당 id의 구간이 없습니다"));
+    }
+
+    private DeliveryRouteType currentRouteType() {
+        return switch (status) {
+            case HUB_WAITING, HUB_MOVING -> DeliveryRouteType.HUB_TO_HUB;
+            case HUB_ARRIVED, DELIVERING -> DeliveryRouteType.HUB_TO_COMPANY;
+            case DELIVERED, CANCELED -> null; // DELIVERED의 경우 논의 필요
+        };
     }
 }
 

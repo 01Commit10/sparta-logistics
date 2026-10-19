@@ -6,6 +6,7 @@ import com.common.exception.DeliveryErrorCode;
 import com.delivery.application.client.HubRouteClient;
 import com.delivery.application.client.UserClient;
 import com.delivery.application.dto.command.DeliveryCreateCommand;
+import com.delivery.application.dto.command.DeliveryManagerAssignCommand;
 import com.delivery.application.dto.command.DeliveryRouteActualMeasurementUpdateCommand;
 import com.delivery.application.dto.result.DeliveryCreateResult;
 import com.delivery.application.dto.result.DeliveryResult;
@@ -13,6 +14,7 @@ import com.delivery.application.dto.result.DeliveryRouteResult;
 import com.delivery.domain.entity.Delivery;
 import com.delivery.domain.entity.DeliveryRoute;
 import com.delivery.domain.repository.DeliveryRepository;
+import com.delivery.domain.vo.DeliveryRouteType;
 import com.delivery.domain.vo.DeliveryStatus;
 import com.delivery.domain.vo.RouteEstimate;
 import lombok.RequiredArgsConstructor;
@@ -49,15 +51,15 @@ public class DeliveryCommandService {
         return DeliveryCreateResult.from(deliveryRepository.save(delivery));
     }
 
-    public DeliveryResult assignDeliveryManager(UUID deliveryId, UUID deliveryManagerId) {
+    public DeliveryResult assignDeliveryManager(UUID deliveryId, DeliveryManagerAssignCommand command) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
                 .orElseThrow(() -> new BusinessException(DeliveryErrorCode.DELIVERY_NOT_FOUND));
 
-        if(!userClient.isDeliveryManager(deliveryManagerId)) {
+        if(!userClient.isDeliveryManager(command.deliveryManagerId())) {
             throw new BusinessException(DeliveryErrorCode.INVALID_DELIVERY_MANAGER);
         }
 
-        delivery.assignDeliveryManager(deliveryManagerId);
+        delivery.assignDeliveryManager(command.routeType(), command.deliveryManagerId());
         return DeliveryResult.from(delivery);
     }
 

@@ -60,7 +60,7 @@ public class DeliveryController {
     @PatchMapping("/{deliveryId}/manager")
     public DeliveryResponse assignDeliveryManager(@PathVariable UUID deliveryId,
                                                   @RequestBody @Valid DeliveryManagerAssignRequest request) {
-        DeliveryResult result = deliveryCommandService.assignDeliveryManager(deliveryId, request.deliveryManagerId());
+        DeliveryResult result = deliveryCommandService.assignDeliveryManager(deliveryId, request.toCommand());
 
         return DeliveryResponse.from(result);
     }
