@@ -47,7 +47,9 @@ class InternalCompanyIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(company.getId().toString()))
                 .andExpect(jsonPath("$.name").value("스파르타상사"))
-                .andExpect(jsonPath("$.hubId").value(company.getHubId().toString()));
+                .andExpect(jsonPath("$.address").value("서울시 강남구 테헤란로 1"))
+                .andExpect(jsonPath("$.hubId").value(company.getHubId().toString()))
+                .andExpect(jsonPath("$.managerUserId").value(company.getManagerUserId().toString()));
 
         UUID newHubId = UUID.randomUUID();
         jdbc.update("update company.p_companies set hub_id = ? where id = ?", newHubId, company.getId());
