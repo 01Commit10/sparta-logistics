@@ -12,6 +12,7 @@ import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
 import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.domain.entity.Product;
+import com.company.product.infrastructure.viewcount.DbProductViewCounter;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,8 @@ class DeleteProductTest {
     private final FakeProductRepository productRepository = new FakeProductRepository();
     private final FakeInventoryClient inventoryClient = new FakeInventoryClient();
     private final ProductService service = new ProductService(productRepository, companyRepository,
-            inventoryClient, TransactionOperations.withoutTransaction());
+            inventoryClient, TransactionOperations.withoutTransaction(),
+            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
 
     private final Company company = companyRepository.save(
             Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), MANAGER_ID));
@@ -101,7 +103,8 @@ class DeleteProductTest {
                 return action.doInTransaction(null);
             }
         };
-        ProductService racing = new ProductService(productRepository, companyRepository, inventoryClient, deleteBeforeWrite);
+        ProductService racing = new ProductService(productRepository, companyRepository, inventoryClient, deleteBeforeWrite,
+                new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
 
         assertError(() -> racing.deleteProduct(new DeleteProductCommand(product.getId(), MANAGER_ID, false)),
                 ProductErrorCode.PRODUCT_NOT_FOUND);

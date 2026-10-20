@@ -10,6 +10,7 @@ import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
 import com.company.product.application.dto.ProductResult;
 import com.company.product.domain.entity.Product;
+import com.company.product.infrastructure.viewcount.DbProductViewCounter;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,8 @@ class ViewProductTest {
     private final FakeCompanyRepository companyRepository = new FakeCompanyRepository();
     private final FakeProductRepository productRepository = new FakeProductRepository();
     private final ProductService service = new ProductService(productRepository, companyRepository,
-            new FakeInventoryClient(), TransactionOperations.withoutTransaction());
+            new FakeInventoryClient(), TransactionOperations.withoutTransaction(),
+            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
 
     private final Company company = companyRepository.save(
             Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), UUID.randomUUID()));
@@ -54,6 +56,19 @@ class ViewProductTest {
         assertThat(second.viewCount()).isEqualTo(2);
         assertThat(second.name()).isEqualTo("생수 2L");
         assertThat(second.companyId()).isEqualTo(company.getId());
+    }
+
+    @Test
+    @DisplayName("응답 조회수는 조회수 카운터가 돌려준 값이다 (Redis에 모으는 단계에서도 정확한 누적값)")
+    void responseUsesCounterValue() {
+        ProductService redisLike = new ProductService(productRepository, companyRepository, new FakeInventoryClient(),
+                TransactionOperations.withoutTransaction(),
+                new ProductQueryService(productRepository, companyRepository), productId -> 1_234L);
+
+        ProductResult result = redisLike.viewProduct(product.getId());
+
+        assertThat(result.viewCount()).isEqualTo(1_234L);
+        assertThat(result.name()).isEqualTo("생수 2L");
     }
 
     @Test

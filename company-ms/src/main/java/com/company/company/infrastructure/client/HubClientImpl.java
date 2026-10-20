@@ -24,7 +24,7 @@ public class HubClientImpl implements HubClient {
             remote.execute(TARGET, () -> hubFeignClient.getHub(hubId));
             return true;
         } catch (RemoteBusinessException e) {
-            // 없는 허브는 404. 그 밖의 실패(5xx·타임아웃·CB OPEN)는 그대로 던진다
+            // 없는 허브는 404. 그 밖의 실패(5xx·타임아웃·연결 실패)는 그대로 던진다
             if (e.getStatus() == HttpStatus.NOT_FOUND.value()) {
                 return false;
             }

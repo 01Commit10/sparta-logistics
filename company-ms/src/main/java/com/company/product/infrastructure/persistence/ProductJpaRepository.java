@@ -20,4 +20,9 @@ public interface ProductJpaRepository extends JpaRepository<Product, UUID>, JpaS
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE Product p SET p.viewCount = p.viewCount + 1 WHERE p.id = :id")
     void increaseViewCount(UUID id);
+
+    // Redis에 모은 누적 조회수 반영 (P01). 늦게 온 작은 값으로 줄어들지 않게 클 때만 바꾼다
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Product p SET p.viewCount = :viewCount WHERE p.id = :id AND p.viewCount < :viewCount")
+    void applyViewCount(UUID id, long viewCount);
 }

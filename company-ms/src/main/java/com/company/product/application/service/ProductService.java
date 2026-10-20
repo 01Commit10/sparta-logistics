@@ -8,6 +8,7 @@ import com.common.page.PageData;
 import com.common.page.PageQuery;
 import com.company.company.domain.entity.Company;
 import com.company.company.domain.repository.CompanyRepository;
+import com.company.product.application.cache.ProductCacheNames;
 import com.company.product.application.dto.CreateProductCommand;
 import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.application.dto.ProductResult;
@@ -16,8 +17,9 @@ import com.company.product.application.dto.UpdateProductCommand;
 import com.company.product.domain.client.InventoryClient;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
-import com.company.product.domain.repository.ProductSearchCondition;
+import com.company.product.domain.service.ProductViewCounter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
@@ -32,6 +34,8 @@ public class ProductService {
     private final CompanyRepository companyRepository;
     private final InventoryClient inventoryClient;
     private final TransactionOperations transactionOperations;
+    private final ProductQueryService productQueryService;
+    private final ProductViewCounter viewCounter;
 
     // 업체 조회와 상품 저장을 한 트랜잭션으로 (원격 호출 없음)
     @Transactional
@@ -57,14 +61,11 @@ public class ProductService {
         return ProductResult.from(product);
     }
 
-    // 사용자 상세 조회: 상품·소속 업체 확인 → 조회수 +1 → 올라간 값으로 응답.
-    // 조회수는 DB에서 바로 올리므로(벌크 UPDATE) 다시 읽어야 응답에 반영된다
-    @Transactional
+    // 사용자 상세 조회: 상품·소속 업체 확인(캐시) → 조회수 +1 → 올라간 값으로 응답.
+    // 조회수는 단계에 따라 DB에서 바로 올리거나 Redis에 모은다 (ProductViewCounter, P01)
     public ProductResult viewProduct(UUID productId) {
-        Product product = findActiveProduct(productId);
-        findActiveCompany(product.getCompany().getId());
-        productRepository.increaseViewCount(productId);
-        return ProductResult.from(findActiveProduct(productId));
+        ProductResult product = productQueryService.getActiveProduct(productId);
+        return product.withViewCount(viewCounter.increase(productId));
     }
 
     @Transactional(readOnly = true)
@@ -75,15 +76,15 @@ public class ProductService {
 
     // 상품 목록·검색으로 로그인 사용자 모두 접근 가능 (07 서비스 정책 4장 권한).
     // companyId는 경로가 아니라 검색 조건이라, 없거나 삭제된 업체면 404가 아니라 빈 목록이다
-    @Transactional(readOnly = true)
+    // 조회는 ProductQueryService(캐시)가 한다
     public PageData<ProductResult> searchProducts(ProductSearchQuery searchQuery, PageQuery query) {
-        ProductSearchCondition condition = new ProductSearchCondition(searchQuery.companyId(), searchQuery.name());
-        return productRepository.search(condition, query).map(ProductResult::from);
+        return productQueryService.searchProducts(searchQuery, query);
     }
 
     // 상품·소속 업체 존재 확인 → 권한 확인 순서.
     // dirty checking만으로는 커밋 때 flush돼 응답의 updatedAt이 수정 전 값이므로 save(flush)로 반영한 뒤 응답한다
     @Transactional
+    @CacheEvict(cacheNames = ProductCacheNames.DETAIL, key = "#command.productId()")
     public ProductResult updateProduct(UpdateProductCommand command) {
         Product product = findActiveProduct(command.productId());
         Company company = findActiveCompany(product.getCompany().getId());
@@ -97,6 +98,7 @@ public class ProductService {
     // 재고 삭제(원격)는 트랜잭션 밖에서 먼저 한다. hub-ms가 멱등이라 원격이 실패해도 상품이 남아 같은 요청으로 다시 시도할 수 있다.
     // 상품을 먼저 지우면 원격 실패 시 다시 시도할 길이 없다(삭제된 상품은 404) — 재고만 남는다.
     // 삭제는 트랜잭션 안에서 상품을 다시 읽어 반영한다. 삭제 시각·삭제자는 dirty checking으로 반영
+    @CacheEvict(cacheNames = ProductCacheNames.DETAIL, key = "#command.productId()")
     public void deleteProduct(DeleteProductCommand command) {
         Product product = findActiveProduct(command.productId());
         Company company = findActiveCompany(product.getCompany().getId());

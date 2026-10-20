@@ -9,6 +9,7 @@ import com.company.fake.FakeProductRepository;
 import com.company.product.application.dto.ProductResult;
 import com.company.product.application.dto.ProductSearchQuery;
 import com.company.product.domain.entity.Product;
+import com.company.product.infrastructure.viewcount.DbProductViewCounter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -29,7 +30,8 @@ class SearchProductsTest {
     private final FakeCompanyRepository companyRepository = new FakeCompanyRepository();
     private final FakeProductRepository productRepository = new FakeProductRepository();
     private final ProductService service = new ProductService(productRepository, companyRepository,
-            new FakeInventoryClient(), TransactionOperations.withoutTransaction());
+            new FakeInventoryClient(), TransactionOperations.withoutTransaction(),
+            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
 
     private final Company company = saveCompany("스파르타상사");
     private final Company otherCompany = saveCompany("다른상사");

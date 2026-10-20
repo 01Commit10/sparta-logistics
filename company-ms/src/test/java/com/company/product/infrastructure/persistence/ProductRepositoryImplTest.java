@@ -86,4 +86,18 @@ class ProductRepositoryImplTest {
     void notFound() {
         assertThat(productRepository.findById(UUID.randomUUID())).isEmpty();
     }
+
+    @Test
+    @DisplayName("조회수 반영(Redis → DB): 지금 값보다 클 때만 바꾼다 (늦게 온 작은 값으로 줄어들지 않는다)")
+    void applyViewCount() {
+        Company company = Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), UUID.randomUUID());
+        em.persist(company);
+        Product saved = productRepository.save(Product.create(company, "생수 2L", "6개입", new BigDecimal("12000.50")));
+
+        productRepository.applyViewCount(saved.getId(), 120);
+        assertThat(productRepository.findById(saved.getId()).orElseThrow().getViewCount()).isEqualTo(120);
+
+        productRepository.applyViewCount(saved.getId(), 100);
+        assertThat(productRepository.findById(saved.getId()).orElseThrow().getViewCount()).isEqualTo(120);
+    }
 }

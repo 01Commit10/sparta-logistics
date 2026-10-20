@@ -12,6 +12,7 @@ import com.company.fake.FakeProductRepository;
 import com.company.product.application.dto.ProductResult;
 import com.company.product.application.dto.UpdateProductCommand;
 import com.company.product.domain.entity.Product;
+import com.company.product.infrastructure.viewcount.DbProductViewCounter;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,8 @@ class UpdateProductTest {
     private final FakeCompanyRepository companyRepository = new FakeCompanyRepository();
     private final FakeProductRepository productRepository = new FakeProductRepository();
     private final ProductService service = new ProductService(productRepository, companyRepository,
-            new FakeInventoryClient(), TransactionOperations.withoutTransaction());
+            new FakeInventoryClient(), TransactionOperations.withoutTransaction(),
+            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
 
     private final Company company = companyRepository.save(
             Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), MANAGER_ID));

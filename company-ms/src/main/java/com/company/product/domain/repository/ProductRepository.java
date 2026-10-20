@@ -13,4 +13,6 @@ public interface ProductRepository {
     PageData<Product> findActiveByCompanyId(UUID companyId, PageQuery query);
     PageData<Product> search(ProductSearchCondition condition, PageQuery query);
     void increaseViewCount(UUID id);
+    // Redis에 모은 조회수를 DB에 반영. 지금 값보다 클 때만 바꿔 줄어들지 않는다
+    void applyViewCount(UUID id, long viewCount);
 }
