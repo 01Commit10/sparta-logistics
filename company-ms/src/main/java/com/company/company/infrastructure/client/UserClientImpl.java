@@ -26,7 +26,7 @@ public class UserClientImpl implements UserClient {
             UserFeignDto user = remote.execute(TARGET, () -> userFeignClient.getUser(userId));
             return Optional.of(new UserInfo(user.id(), user.role()));
         } catch (RemoteBusinessException e) {
-            // 없거나 삭제된 사용자는 404. 그 밖의 실패(5xx·타임아웃·CB OPEN)는 그대로 던진다
+            // 없거나 삭제된 사용자는 404. 그 밖의 실패(5xx·타임아웃·연결 실패)는 그대로 던진다
             if (e.getStatus() == HttpStatus.NOT_FOUND.value()) {
                 return Optional.empty();
             }
