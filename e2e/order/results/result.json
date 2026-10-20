@@ -1,0 +1,844 @@
+[
+ {
+  "id": "S1",
+  "title": "정상 주문",
+  "passed": true,
+  "responses": [
+   "주문: 201 {\"orderId\": \"32127ff0-6f23-41b4-a9a7-5debbf9136d0\", \"orderStatus\": \"COMPLETED\", \"unitPriceSnapshot\": 5000.0, \"totalAmount\": 15000.0} (0.1s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "201",
+    "actual": "201",
+    "ok": true
+   },
+   {
+    "label": "응답 상태",
+    "expected": "COMPLETED",
+    "actual": "COMPLETED",
+    "ok": true
+   },
+   {
+    "label": "주문 행 1건",
+    "expected": "1",
+    "actual": "1",
+    "ok": true
+   },
+   {
+    "label": "주문 상태",
+    "expected": "COMPLETED",
+    "actual": "COMPLETED",
+    "ok": true
+   },
+   {
+    "label": "수량·단가·총액",
+    "expected": "('3', '5000.00', '15000.00')",
+    "actual": "('3', '5000.00', '15000.00')",
+    "ok": true
+   },
+   {
+    "label": "배송 ID 저장",
+    "expected": "True",
+    "actual": "True",
+    "ok": true
+   },
+   {
+    "label": "이력 SUCCEEDED·201·주문 연결",
+    "expected": "('SUCCEEDED', '201', '32127ff0-6f23-41b4-a9a7-5debbf9136d0')",
+    "actual": "('SUCCEEDED', '201', '32127ff0-6f23-41b4-a9a7-5debbf9136d0')",
+    "ok": true
+   },
+   {
+    "label": "재고 100 → 97",
+    "expected": "97",
+    "actual": "97",
+    "ok": true
+   },
+   {
+    "label": "재고 작업 DECREASE 성공 1건",
+    "expected": "[('DECREASE', 'SUCCEEDED', '3', '97')]",
+    "actual": "[('DECREASE', 'SUCCEEDED', '3', '97')]",
+    "ok": true
+   },
+   {
+    "label": "재고 차감 멱등키",
+    "expected": "order-32127ff0-6f23-41b4-a9a7-5debbf9136d0-decrease",
+    "actual": "order-32127ff0-6f23-41b4-a9a7-5debbf9136d0-decrease",
+    "ok": true
+   },
+   {
+    "label": "재고 변경 이력",
+    "expected": "[('DECREASE', '-3', '97')]",
+    "actual": "[('DECREASE', '-3', '97')]",
+    "ok": true
+   },
+   {
+    "label": "배송 1건",
+    "expected": "1",
+    "actual": "1",
+    "ok": true
+   },
+   {
+    "label": "배송 ID = 주문의 배송 ID",
+    "expected": "767f130e-bf6e-46e1-bbde-f5899eccc3b0",
+    "actual": "767f130e-bf6e-46e1-bbde-f5899eccc3b0",
+    "ok": true
+   },
+   {
+    "label": "배송 상태",
+    "expected": "HUB_WAITING",
+    "actual": "HUB_WAITING",
+    "ok": true
+   },
+   {
+    "label": "출발 부산 → 도착 서울",
+    "expected": "('10000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001')",
+    "actual": "('10000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001')",
+    "ok": true
+   },
+   {
+    "label": "배송지 = 요청업체 주소",
+    "expected": "서울 송파구 올림픽로 300",
+    "actual": "서울 송파구 올림픽로 300",
+    "ok": true
+   },
+   {
+    "label": "수령인 = 주문자(comp03)",
+    "expected": "b0000000-0000-4000-8000-000000000003",
+    "actual": "b0000000-0000-4000-8000-000000000003",
+    "ok": true
+   },
+   {
+    "label": "배송 구간 2개",
+    "expected": "['HUB_TO_HUB', 'HUB_TO_COMPANY']",
+    "actual": "['HUB_TO_HUB', 'HUB_TO_COMPANY']",
+    "ok": true
+   },
+   {
+    "label": "1구간 부산→서울 383.78km·241분",
+    "expected": "('10000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', '383.78', '241')",
+    "actual": "('10000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', '383.78', '241')",
+    "ok": true
+   },
+   {
+    "label": "1구간 담당자 = 부산 허브 소속",
+    "expected": "True",
+    "actual": "True",
+    "ok": true
+   },
+   {
+    "label": "2구간 담당자 = 서울 허브 소속",
+    "expected": "True",
+    "actual": "True",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "S8",
+  "title": "같은 키·같은 본문 재요청",
+  "passed": true,
+  "responses": [
+   "재요청: 201 {\"orderId\": \"32127ff0-6f23-41b4-a9a7-5debbf9136d0\", \"orderStatus\": \"COMPLETED\", \"unitPriceSnapshot\": 5000.0, \"totalAmount\": 15000.0} (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "201",
+    "actual": "201",
+    "ok": true
+   },
+   {
+    "label": "같은 주문 ID",
+    "expected": "32127ff0-6f23-41b4-a9a7-5debbf9136d0",
+    "actual": "32127ff0-6f23-41b4-a9a7-5debbf9136d0",
+    "ok": true
+   },
+   {
+    "label": "주문 행 그대로 1건",
+    "expected": "1",
+    "actual": "1",
+    "ok": true
+   },
+   {
+    "label": "재고 그대로 97",
+    "expected": "97",
+    "actual": "97",
+    "ok": true
+   },
+   {
+    "label": "배송 그대로 1건",
+    "expected": "1",
+    "actual": "1",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "S9",
+  "title": "같은 키·다른 본문",
+  "passed": true,
+  "responses": [
+   "재요청: 409 {\"code\": \"IDEMPOTENCY_KEY_CONFLICT\", \"message\": \"같은 멱등키로 다른 내용의 주문 요청이 들어왔습니다.\"} (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "409",
+    "actual": "409",
+    "ok": true
+   },
+   {
+    "label": "오류 코드",
+    "expected": "IDEMPOTENCY_KEY_CONFLICT",
+    "actual": "IDEMPOTENCY_KEY_CONFLICT",
+    "ok": true
+   },
+   {
+    "label": "주문 행 그대로 1건",
+    "expected": "1",
+    "actual": "1",
+    "ok": true
+   },
+   {
+    "label": "재고 그대로 97",
+    "expected": "97",
+    "actual": "97",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "S10",
+  "title": "주문 후 상품 단가 변경",
+  "passed": true,
+  "responses": [
+   "단가 수정: 200 {\"id\": \"44588943-d206-49a9-85d7-b1756c4e5b9a\", \"companyId\": \"62a76f79-e742-4300-9ea3-09020ef88d70\", \"name\": \"고등어 1kg\", \"description\": \"E2E\", \"unitPrice\": 6000,  (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "수정 응답",
+    "expected": "200",
+    "actual": "200",
+    "ok": true
+   },
+   {
+    "label": "기존 주문 금액 그대로",
+    "expected": "('5000.00', '15000.00')",
+    "actual": "('5000.00', '15000.00')",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "V1",
+  "title": "수량 0",
+  "passed": true,
+  "responses": [
+   "주문: 400 {\"code\": \"INVALID_INPUT\", \"message\": \"잘못된 요청입니다.\"} (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "400",
+    "actual": "400",
+    "ok": true
+   },
+   {
+    "label": "주문 행",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "재고 그대로",
+    "expected": "100",
+    "actual": "100",
+    "ok": true
+   },
+   {
+    "label": "재고 작업 기록",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "V2",
+  "title": "Idempotency-Key 없음",
+  "passed": true,
+  "responses": [
+   "주문: 400 {\"code\": \"INVALID_INPUT\", \"message\": \"잘못된 요청입니다.\"} (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "400",
+    "actual": "400",
+    "ok": true
+   },
+   {
+    "label": "주문 행",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "재고 그대로",
+    "expected": "100",
+    "actual": "100",
+    "ok": true
+   },
+   {
+    "label": "재고 작업 기록",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "V3",
+  "title": "로그인 안 함",
+  "passed": true,
+  "responses": [
+   "주문: 401 {\"code\": \"TOKEN_MISSING\", \"message\": \"인증 토큰이 없습니다.\"} (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "401",
+    "actual": "401",
+    "ok": true
+   },
+   {
+    "label": "주문 행",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "재고 그대로",
+    "expected": "100",
+    "actual": "100",
+    "ok": true
+   },
+   {
+    "label": "재고 작업 기록",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "G1",
+  "title": "단가를 요청값으로 조작",
+  "passed": false,
+  "responses": [
+   "주문: 201 {\"orderId\": \"4222e862-cf8c-4794-8096-c12af1d1173f\", \"orderStatus\": \"COMPLETED\", \"unitPriceSnapshot\": 1.0, \"totalAmount\": 3.0} (0.1s)"
+  ],
+  "checks": [
+   {
+    "label": "주문 단가 = 상품 단가 5000 (정책 5.1)",
+    "expected": "5000.00",
+    "actual": "1.00",
+    "ok": false
+   }
+  ],
+  "notes": [
+   "정책: 주문 시점 상품 단가를 Company Service에서 확인해 저장 (07 서비스 정책 5.1, 04 API 명세서)"
+  ]
+ },
+ {
+  "id": "G2",
+  "title": "공급업체 소유가 아닌 상품",
+  "passed": false,
+  "responses": [
+   "주문: 201 {\"orderId\": \"a2812025-89e2-47f9-acef-02e309ec3f05\", \"orderStatus\": \"COMPLETED\", \"unitPriceSnapshot\": 5000.0, \"totalAmount\": 15000.0} (0.1s)"
+  ],
+  "checks": [
+   {
+    "label": "거절 (4xx)",
+    "expected": "4xx",
+    "actual": "2xx",
+    "ok": false
+   },
+   {
+    "label": "주문 행",
+    "expected": "0",
+    "actual": "1",
+    "ok": false
+   },
+   {
+    "label": "재고 그대로",
+    "expected": "100",
+    "actual": "97",
+    "ok": false
+   },
+   {
+    "label": "재고 작업 기록",
+    "expected": "0",
+    "actual": "1",
+    "ok": false
+   }
+  ],
+  "notes": [
+   "정책: 상품이 공급업체 소유인지 검증 (07 서비스 정책 5.1)"
+  ]
+ },
+ {
+  "id": "G3",
+  "title": "없는 상품",
+  "passed": false,
+  "responses": [
+   "주문: 409 {\"code\": \"INSUFFICIENT_STOCK\", \"message\": \"재고가 부족하여 주문할 수 없습니다.\"} (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드 404 (상품 없음)",
+    "expected": "404",
+    "actual": "409",
+    "ok": false
+   },
+   {
+    "label": "주문 행",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "F2",
+  "title": "재고 부족",
+  "passed": true,
+  "responses": [
+   "주문: 409 {\"code\": \"INSUFFICIENT_STOCK\", \"message\": \"재고가 부족하여 주문할 수 없습니다.\"} (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "409",
+    "actual": "409",
+    "ok": true
+   },
+   {
+    "label": "오류 코드",
+    "expected": "INSUFFICIENT_STOCK",
+    "actual": "INSUFFICIENT_STOCK",
+    "ok": true
+   },
+   {
+    "label": "주문 행",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "재고 그대로",
+    "expected": "100",
+    "actual": "100",
+    "ok": true
+   },
+   {
+    "label": "재고 작업 기록",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "이력 FAILED·409",
+    "expected": "('FAILED', '409')",
+    "actual": "('FAILED', '409')",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "F3",
+  "title": "실패한 키로 재요청",
+  "passed": true,
+  "responses": [
+   "재요청: 409 {\"code\": \"PREVIOUS_REQUEST_NOT_SUCCEEDED\", \"message\": \"같은 멱등키의 이전 요청이 처리 중이거나 실패했습니다.\"} (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "409",
+    "actual": "409",
+    "ok": true
+   },
+   {
+    "label": "오류 코드",
+    "expected": "PREVIOUS_REQUEST_NOT_SUCCEEDED",
+    "actual": "PREVIOUS_REQUEST_NOT_SUCCEEDED",
+    "ok": true
+   },
+   {
+    "label": "주문 행",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "재고 그대로",
+    "expected": "100",
+    "actual": "100",
+    "ok": true
+   },
+   {
+    "label": "재고 작업 기록",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "F4",
+  "title": "배송담당자 없음 → 담당자 없이 배송 생성",
+  "passed": true,
+  "responses": [
+   "주문: 201 {\"orderId\": \"eb12ac8c-8b4b-416e-bbf3-2dd22975d6d0\", \"orderStatus\": \"COMPLETED\", \"unitPriceSnapshot\": 5000.0, \"totalAmount\": 15000.0} (0.1s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "201",
+    "actual": "201",
+    "ok": true
+   },
+   {
+    "label": "주문 COMPLETED",
+    "expected": "COMPLETED",
+    "actual": "COMPLETED",
+    "ok": true
+   },
+   {
+    "label": "배송 1건",
+    "expected": "1",
+    "actual": "1",
+    "ok": true
+   },
+   {
+    "label": "배송·1구간 담당자 비어 있음 (나중에 수동 배정)",
+    "expected": "('', '')",
+    "actual": "('', '')",
+    "ok": true
+   }
+  ],
+  "notes": [
+   "delivery-ms 설계: 후보가 없으면(DELIVERY_MANAGER_NOT_FOUND) 담당자 없이 배송을 만든다 (`UserClientImpl.pickDeliveryManagers`). 07 서비스 정책 7장 '후보가 없으면 404'와 다르므로 문서 정리 필요",
+   "부산 담당자 2명 해제 후 되돌림 (현재 2명)"
+  ]
+ },
+ {
+  "id": "F5",
+  "title": "hub-ms 응답 없음",
+  "passed": true,
+  "responses": [
+   "주문: 503 {\"code\": \"INVENTORY_UNAVAILABLE\", \"message\": \"재고 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.\"} (2.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "503",
+    "actual": "503",
+    "ok": true
+   },
+   {
+    "label": "오류 코드",
+    "expected": "INVENTORY_UNAVAILABLE",
+    "actual": "INVENTORY_UNAVAILABLE",
+    "ok": true
+   },
+   {
+    "label": "주문 행",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "재고 그대로",
+    "expected": "100",
+    "actual": "100",
+    "ok": true
+   },
+   {
+    "label": "재고 작업 기록",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "이력 FAILED·503",
+    "expected": "('FAILED', '503')",
+    "actual": "('FAILED', '503')",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "F6",
+  "title": "user-ms 응답 없음 → 재고 복원",
+  "passed": true,
+  "responses": [
+   "주문: 503 {\"code\": \"DELIVERY_FAILED\", \"message\": \"배송 생성에 실패하여 주문이 처리되지 않았습니다. 잠시 후 다시 시도해 주세요.\"} (2.1s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "503",
+    "actual": "503",
+    "ok": true
+   },
+   {
+    "label": "주문 1건, FAILED",
+    "expected": "['FAILED']",
+    "actual": "['FAILED']",
+    "ok": true
+   },
+   {
+    "label": "이력 FAILED",
+    "expected": "FAILED",
+    "actual": "FAILED",
+    "ok": true
+   },
+   {
+    "label": "재고 복원 (주문 전 100)",
+    "expected": "100",
+    "actual": "100",
+    "ok": true
+   },
+   {
+    "label": "재고 작업: 차감 성공 → 복원 성공",
+    "expected": "[('DECREASE', 'SUCCEEDED'), ('RESTORE', 'SUCCEEDED')]",
+    "actual": "[('DECREASE', 'SUCCEEDED'), ('RESTORE', 'SUCCEEDED')]",
+    "ok": true
+   },
+   {
+    "label": "배송 행",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "F7",
+  "title": "delivery-ms 꺼짐 → 재고 복원",
+  "passed": true,
+  "responses": [
+   "주문: 503 {\"code\": \"DELIVERY_FAILED\", \"message\": \"배송 생성에 실패하여 주문이 처리되지 않았습니다. 잠시 후 다시 시도해 주세요.\"} (0.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "503",
+    "actual": "503",
+    "ok": true
+   },
+   {
+    "label": "주문 1건, FAILED",
+    "expected": "['FAILED']",
+    "actual": "['FAILED']",
+    "ok": true
+   },
+   {
+    "label": "이력 FAILED",
+    "expected": "FAILED",
+    "actual": "FAILED",
+    "ok": true
+   },
+   {
+    "label": "재고 복원 (주문 전 100)",
+    "expected": "100",
+    "actual": "100",
+    "ok": true
+   },
+   {
+    "label": "재고 작업: 차감 성공 → 복원 성공",
+    "expected": "[('DECREASE', 'SUCCEEDED'), ('RESTORE', 'SUCCEEDED')]",
+    "actual": "[('DECREASE', 'SUCCEEDED'), ('RESTORE', 'SUCCEEDED')]",
+    "ok": true
+   },
+   {
+    "label": "배송 행",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "F8",
+  "title": "delivery-ms 응답 없음 (결과 모름)",
+  "passed": false,
+  "responses": [
+   "주문: 503 {\"code\": \"DELIVERY_FAILED\", \"message\": \"배송 생성에 실패하여 주문이 처리되지 않았습니다. 잠시 후 다시 시도해 주세요.\"} (2.0s)"
+  ],
+  "checks": [
+   {
+    "label": "응답 코드",
+    "expected": "503",
+    "actual": "503",
+    "ok": true
+   },
+   {
+    "label": "주문 1건, FAILED",
+    "expected": "['FAILED']",
+    "actual": "['FAILED']",
+    "ok": true
+   },
+   {
+    "label": "이력 FAILED",
+    "expected": "FAILED",
+    "actual": "FAILED",
+    "ok": true
+   },
+   {
+    "label": "재고 복원 (주문 전 100)",
+    "expected": "100",
+    "actual": "100",
+    "ok": true
+   },
+   {
+    "label": "재고 작업: 차감 성공 → 복원 성공",
+    "expected": "[('DECREASE', 'SUCCEEDED'), ('RESTORE', 'SUCCEEDED')]",
+    "actual": "[('DECREASE', 'SUCCEEDED'), ('RESTORE', 'SUCCEEDED')]",
+    "ok": true
+   },
+   {
+    "label": "배송 행",
+    "expected": "0",
+    "actual": "1",
+    "ok": false
+   }
+  ],
+  "notes": [
+   "배송 행이 생기면: 주문은 FAILED·재고 복원인데 배송만 남는 고아 배송 (결과 모름 처리 필요)"
+  ]
+ },
+ {
+  "id": "C1",
+  "title": "재고 10개에 동시 주문 30건",
+  "passed": true,
+  "responses": [
+   "응답 코드: 201×10, 409×20"
+  ],
+  "checks": [
+   {
+    "label": "201 성공 10건",
+    "expected": "10",
+    "actual": "10",
+    "ok": true
+   },
+   {
+    "label": "나머지 409",
+    "expected": "20",
+    "actual": "20",
+    "ok": true
+   },
+   {
+    "label": "COMPLETED 주문 10건",
+    "expected": "10",
+    "actual": "10",
+    "ok": true
+   },
+   {
+    "label": "PROCESSING으로 남은 주문",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "재고 0 (음수 아님)",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "배송 10건",
+    "expected": "10",
+    "actual": "10",
+    "ok": true
+   },
+   {
+    "label": "주문 없는 재고 차감",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "주문 없는 배송",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   }
+  ],
+  "notes": []
+ },
+ {
+  "id": "C2",
+  "title": "같은 키로 동시 5건 (따닥)",
+  "passed": true,
+  "responses": [
+   "응답 코드: 201×1, 409×4"
+  ],
+  "checks": [
+   {
+    "label": "5xx 없음",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "주문 1건만",
+    "expected": "1",
+    "actual": "1",
+    "ok": true
+   },
+   {
+    "label": "재고 3개만 차감",
+    "expected": "97",
+    "actual": "97",
+    "ok": true
+   },
+   {
+    "label": "재고 차감 작업 1건만",
+    "expected": "1",
+    "actual": "1",
+    "ok": true
+   },
+   {
+    "label": "주문 없는 재고 차감",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   },
+   {
+    "label": "주문 없는 배송",
+    "expected": "0",
+    "actual": "0",
+    "ok": true
+   }
+  ],
+  "notes": []
+ }
+]
