@@ -86,6 +86,7 @@ flowchart LR
     products -.-> orders
     users -.-> orders
     orders -.-> deliveries
+    companies -.-> deliveries
     hubs -.-> deliveries
     users -.-> deliveries
     hubs -.-> dlv_routes
@@ -210,7 +211,11 @@ erDiagram
         UUID arrival_hub_id "REF p_hubs"
         VARCHAR delivery_address "(255)"
         VARCHAR recipient_name "(100)"
-        UUID recipient_user_id "REF p_users, NULL=비회원"
+        UUID recipient_user_id "REF p_users"
+        UUID requester_company_id "REF p_companies (수령)"
+        UUID requester_company_manager_id "REF p_users, 생성 시점"
+        UUID supplier_company_id "REF p_companies (공급)"
+        UUID supplier_company_manager_id "REF p_users, 생성 시점"
         UUID delivery_manager_id "REF p_users, NULL"
     }
     p_delivery_routes {
@@ -254,7 +259,11 @@ erDiagram
     p_orders ||..o| p_deliveries : "1:1 배송"
     p_hubs ||..o{ p_deliveries : "출발 허브"
     p_hubs ||..o{ p_deliveries : "도착 허브"
-    p_users |o..o{ p_deliveries : "수취인"
+    p_users ||..o{ p_deliveries : "수취인"
+    p_companies ||..o{ p_deliveries : "요청 업체"
+    p_companies ||..o{ p_deliveries : "공급 업체"
+    p_users ||..o{ p_deliveries : "요청 업체 관리자"
+    p_users ||..o{ p_deliveries : "공급 업체 관리자"
     p_users |o..o{ p_deliveries : "배송담당자"
     p_hubs ||..o{ p_delivery_routes : "구간 허브"
     p_users |o..o{ p_delivery_routes : "구간 담당자"
@@ -352,7 +361,11 @@ erDiagram
 | p_deliveries | order_id | p_orders | REF | 1:1 |
 | p_deliveries | departure_hub_id | p_hubs | REF | N:1 |
 | p_deliveries | arrival_hub_id | p_hubs | REF | N:1 |
-| p_deliveries | recipient_user_id | p_users | REF | N:0..1 |
+| p_deliveries | recipient_user_id | p_users | REF | N:1 |
+| p_deliveries | requester_company_id | p_companies | REF | N:1 |
+| p_deliveries | requester_company_manager_id | p_users | REF | N:1 |
+| p_deliveries | supplier_company_id | p_companies | REF | N:1 |
+| p_deliveries | supplier_company_manager_id | p_users | REF | N:1 |
 | p_deliveries | delivery_manager_id | p_users | REF | N:0..1 |
 | p_delivery_routes | delivery_id | p_deliveries | FK | N:1 |
 | p_delivery_routes | departure_hub_id | p_hubs | REF | N:1 |

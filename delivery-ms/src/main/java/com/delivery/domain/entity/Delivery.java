@@ -17,7 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Entity
-@Table(name = "p_delivery",
+@Table(name = "p_deliveries",
         uniqueConstraints = @UniqueConstraint(name = "uk_p_delivery_order_id", columnNames = {"order_id"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -29,7 +29,7 @@ public class Delivery extends BaseEntity {
     @Column(name = "order_id", nullable = false)
     private UUID orderId;
 
-    @Column(nullable = false)
+    @Column(name = "delivery_status", nullable = false, length = 24)
     @Enumerated(EnumType.STRING)
     private DeliveryStatus status;
 

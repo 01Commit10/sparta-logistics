@@ -117,9 +117,8 @@
 | 배송 목록 조회 | GET | `/deliveries` | 관리자·관계자 | 상태·담당자 검색 | 200 |
 | 배송 상세 조회 | GET | `/deliveries/{deliveryId}` | 관리자·관계자 | deliveryId | 200 |
 | 주문별 배송 조회 | GET | `/deliveries/by-order/{orderId}` | 관리자·관계자 | orderId | 200 |
-| 배송담당자 배정 | PATCH | `/deliveries/{deliveryId}/manager` | 관리자·배정권한자 | deliveryManagerId | 200 |
-| 배송 상태 변경 | PATCH | `/deliveries/{deliveryId}/status` | 담당배송자·MASTER | deliveryStatus, Idempotency-Key | 200 |
-| 배송 처리 기록 조회 | GET | `/deliveries/{deliveryId}/histories` | 관리자·관계자 | deliveryId | 200 |
+| 배송담당자 배정 | PATCH | `/deliveries/{deliveryId}/manager` | 관리자·배정권한자 | routeType, deliveryManagerId | 200 |
+| 배송 상태 변경 | PATCH | `/deliveries/{deliveryId}/status` | 담당배송자·MASTER | status | 200 |
 
 *배송 생성은 Order Service가 호출하는 내부 API로 관리합니다.*
 
@@ -128,8 +127,6 @@
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
 | 배송 구간 조회 | GET | `/deliveries/{deliveryId}/routes` | 관리자·관계자 | deliveryId | 200 |
-| 배송 경로 구성 | POST | `/deliveries/{deliveryId}/routes` | 관리자·배정권한자 | 배송 구간 목록 | 201 |
-| 배송 구간 상태 변경 | PATCH | `/delivery-routes/{routeId}/status` | 담당배송자·MASTER | routeStatus, Idempotency-Key | 200 |
 | 배송 구간 실측 정보 수정 | PATCH | `/delivery-routes/{routeId}/metrics` | 담당배송자·MASTER | 실제 거리·소요시간 | 200 |
 
 ---
