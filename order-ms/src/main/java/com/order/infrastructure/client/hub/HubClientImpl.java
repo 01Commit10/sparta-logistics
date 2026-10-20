@@ -1,6 +1,7 @@
 package com.order.infrastructure.client.hub;
 
 import com.common.exception.BusinessException;
+import com.common.exception.InventoryErrorCode;
 import com.common.exception.OrderErrorCode;
 import com.common.remote.RemoteBusinessException;
 import com.common.remote.RemoteCallTemplate;
@@ -46,19 +47,31 @@ public class HubClientImpl implements HubClient {
                                     command.productId(), command.quantity())));
             return new StockOperationResult(response.operationId(), true, null, response.remainingQuantity());
         } catch (RemoteBusinessException e) {
-            // 허브가 4xx로 거절 = 처리 안 된 것이 확실 → "거절" 결과로 변환 (복원 불필요)
-            return new StockOperationResult(null, false, "INSUFFICIENT_STOCK", 0);
+            // 재고 부족 또는 그 허브에 재고 자체가 없음 = 차감 안 된 것이 확실 -> "거절" 결과 (주문 관점에서는 둘 다 재고 부족)
+            if (e.getErrorCode() == InventoryErrorCode.INSUFFICIENT_STOCK
+                    || e.getErrorCode() == InventoryErrorCode.INVENTORY_NOT_FOUND) {
+                return new StockOperationResult(null, false, "INSUFFICIENT_STOCK", 0);
+            }
+            throw e;  // 멱등 충돌/입력 오류는 우리 쪽 버그 신호 -> 숨기지 않고 그대로
         } catch (RemoteServiceException | RemoteTimeoutException e) {
-            throw unavailable(e);  // 결과를 모름 → service가 복원 시도
+            throw unavailable(e);  // 결과를 모름 → service가 같은 키 재전송으로 확인 후 복원
         }
     }
 
     @Override
     public StockOperationResult restoreStock(StockRestoreCommand command) {
-        RestoreFeignResponse response = remoteCallTemplate.execute(TARGET, () ->
-                hubFeignClient.restore("order-" + command.orderId() + "-restore",
-                        new RestoreFeignRequest(command.orderId())));
-        return new StockOperationResult(response.operationId(), true, null, response.remainingQuantity());
+        try {
+            RestoreFeignResponse response = remoteCallTemplate.execute(TARGET, () ->
+                    hubFeignClient.restore("order-" + command.orderId() + "-restore",
+                            new RestoreFeignRequest(command.originalOperationId())));
+            return new StockOperationResult(response.operationId(), true, null, response.remainingQuantity());
+        } catch (RemoteBusinessException e) {
+            // 이미 복원됨 = 되돌리려던 목표가 이미 달성됨
+            if (e.getErrorCode() == InventoryErrorCode.INVENTORY_ALREADY_RESTORED) {
+                return new StockOperationResult(null, true, null, 0);
+            }
+            throw e;
+        }
     }
 
     private BusinessException unavailable(RuntimeException cause) {
