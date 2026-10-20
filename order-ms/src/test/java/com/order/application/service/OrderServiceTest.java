@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
@@ -63,6 +64,7 @@ class OrderServiceTest {
 
     private static final UUID ORDER_ID = UUID.randomUUID();
     private static final UUID DELIVERY_ID = UUID.randomUUID();
+    private static final UUID DECREASE_OPERATION_ID = UUID.randomUUID();
 
     // 테스트마다 반복되는 주문 요청 생성
     private CreateOrderCommand createCommand(int quantity) {
@@ -100,7 +102,7 @@ class OrderServiceTest {
 
         // ④ 재고 차감
         given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
-                .willReturn(new StockOperationResult(UUID.randomUUID(), true, null, 97));
+                .willReturn(new StockOperationResult(DECREASE_OPERATION_ID, true, null, 97));
 
         // ⑤ 배송 생성
         given(deliveryClient.createDelivery(any(CreateDeliveryCommand.class)))
@@ -119,7 +121,7 @@ class OrderServiceTest {
                 new StockDecreaseCommand(ORDER_ID, HUB_ID, PRODUCT_ID, 3));
         then(deliveryClient).should().createDelivery(
                 new CreateDeliveryCommand(ORDER_ID, HUB_ID, SUPPLIER_COMPANY_ID, REQUESTER_COMPANY_ID, USER_ID));
-        then(hubClient).should(never()).restoreStock(any());
+        then(hubClient).should(never()).restoreStock(new StockRestoreCommand(ORDER_ID, DECREASE_OPERATION_ID));
 
         // then: 이력
         ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
@@ -193,22 +195,23 @@ class OrderServiceTest {
         then(orderRepository).shouldHaveNoInteractions();
         then(orderHistoryRepository).should(never()).save(any());
     }
-    
+
     @Test
-    @DisplayName("재고 차감 중 시스템 오류가 나면 재고를 복원하고 503 예외가 발생하며 주문과 이력은 FAILED가 된다")
-    void createOrderRestoresStockWhenDecreaseErrors() {
-        // given: 차감 호출 자체가 실패 (타임아웃 등 → 구현체가 INVENTORY_UNAVAILABLE로 변환)
+    @DisplayName("재고 차감 중 결과를 모르면 같은 키로 다시 보내 차감 작업을 확인하고 복원한다.")
+    void createOrderRestoresStockWhenDecreaseResultUnknown() {
+        // given: 첫 차감은 타임아웃, 같은 키 재전송에서 hub가 이전 차감 결과를 돌려줌
         givenOrderSavedSuccessfully();
         given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
-                .willThrow(new BusinessException(OrderErrorCode.INVENTORY_UNAVAILABLE));
+                .willThrow(new BusinessException(OrderErrorCode.INVENTORY_UNAVAILABLE))
+                .willReturn(new StockOperationResult(DECREASE_OPERATION_ID, true, null, 97));
 
         // when & then
         assertThatThrownBy(() -> orderService.createOrder(createCommand(3)))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.INVENTORY_UNAVAILABLE);
 
-        // then: 빠졌는지 모르므로 orderId 기준 복원
-        then(hubClient).should().restoreStock(new StockRestoreCommand(ORDER_ID));
+        then(hubClient).should(times(2)).decreaseStock(new StockDecreaseCommand(ORDER_ID, HUB_ID, PRODUCT_ID, 3));
+        then(hubClient).should().restoreStock(new StockRestoreCommand(ORDER_ID, DECREASE_OPERATION_ID));
         then(deliveryClient).shouldHaveNoInteractions();
         assertFailed(503);
     }
@@ -274,7 +277,7 @@ class OrderServiceTest {
         // given: 재고 차감까지 성공, 배송 생성 실패
         givenOrderSavedSuccessfully();
         given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
-                .willReturn(new StockOperationResult(UUID.randomUUID(), true, null, 97));
+                .willReturn(new StockOperationResult(DECREASE_OPERATION_ID, true, null, 97));
         given(deliveryClient.createDelivery(any(CreateDeliveryCommand.class)))
                 .willThrow(new BusinessException(OrderErrorCode.DELIVERY_FAILED));
 
@@ -284,7 +287,7 @@ class OrderServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.DELIVERY_FAILED);
 
         // then: 빠진 재고 복원
-        then(hubClient).should().restoreStock(new StockRestoreCommand(ORDER_ID));
+        then(hubClient).should().restoreStock(new StockRestoreCommand(ORDER_ID, DECREASE_OPERATION_ID));
         assertFailed(503);
     }
 
