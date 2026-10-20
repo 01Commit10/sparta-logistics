@@ -17,6 +17,7 @@ import com.delivery.domain.repository.DeliveryRepository;
 import com.delivery.domain.vo.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
@@ -32,6 +33,9 @@ public class DeliveryCommandService {
     private final HubRouteClient hubRouteClient;
 
 
+    // 원격 조회(업체·경로·담당자·이름)는 트랜잭션 밖에서 해서 기다리는 동안 DB 커넥션을 잡지 않는다 (P02).
+    // 저장은 deliveryRepository.save의 짧은 트랜잭션 하나로 끝난다 (배송·구간 함께 저장)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public DeliveryCreateResult createDelivery(DeliveryCreateCommand command) {
         UUID departureHubId = command.departureHubId();
 
