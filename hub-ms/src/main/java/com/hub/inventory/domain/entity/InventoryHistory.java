@@ -86,4 +86,32 @@ public class InventoryHistory extends BaseEntity {
 
         return history;
     }
+
+    // 실제 복원 결과를 바탕으로 수량이 증가한 재고 변경 이력을 생성한다.
+    public static InventoryHistory restore(
+            UUID operationId,
+            UUID inventoryId,
+            UUID orderId,
+            int quantity,
+            int stockAfter
+    ) {
+        if (operationId == null
+                || inventoryId == null
+                || orderId == null
+                || quantity <= 0
+                || stockAfter < 0) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+
+        InventoryHistory history = new InventoryHistory();
+        history.operationId = operationId;
+        history.inventoryId = inventoryId;
+        history.orderId = orderId;
+        history.changeType = InventoryOperationType.RESTORE;
+        history.stockChange = quantity;
+        history.stockAfter = stockAfter;
+
+        return history;
+    }
+
 }

@@ -65,11 +65,13 @@
 |---|---|---|---|---|---|
 | 재고 목록 조회 | GET | `/inventories` | 관리자·허브담당 | hubId, productId | 200 |
 | 재고 상세 조회 | GET | `/inventories/{inventoryId}` | 관리자·허브담당 | inventoryId | 200 |
-| 재고 신규 등록 | POST | `/inventories` | 관리자·허브담당 | hubId, productId, initialQuantity | 201 |
+| 재고 신규 등록 | POST | `/inventories` | MASTER·상품 소유 업체 매니저 | hubId, productId, initialQuantity | 201 |
 | 재고 수량 증가 | POST | `/inventories/{inventoryId}/increase` | 관리자·허브담당 | quantity, Idempotency-Key | 200 |
 | 재고 변동 기록 조회 | GET | `/inventories/{inventoryId}/movements` | 관리자·허브담당 | 페이지·변경 유형 | 200 |
 
 *재고 차감·복원은 주문 Saga에서 호출하는 내부 API로 분리합니다.*
+
+*현재 Hub 구현은 조건 조회·등록, 내부 차감·복원·상품 재고 정리입니다. 상세 조회·수량 증가·변동 기록 조회는 후속 설계입니다. 등록은 상품 소유 업체의 관리 허브에만 가능합니다.*
 
 ## Company
 
@@ -143,8 +145,8 @@
 | 허브 검증 | GET | `/hubs/{hubId}` | 활성 허브면 200(id, name, address), 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
 | 상품 검증 | GET | `/products/{productId}` | 상품·공급업체 확인. 응답: id, companyId, name, unitPrice. 없거나 삭제된 상품은 404 `PRODUCT_NOT_FOUND`, 소속 업체가 삭제됐으면 404 `COMPANY_NOT_FOUND`. 조회수는 올리지 않음 |
 | 업체 검증 | GET | `/companies/{companyId}` | 업체·관리 허브 확인. 응답: id, name, address, hubId, managerUserId. 없거나 삭제된 업체는 404 `COMPANY_NOT_FOUND` |
-| 재고 차감 | POST | `/inventories/decrease` | 주문 시 원자적 재고 차감 |
-| 재고 복원 | POST | `/inventories/restore` | Saga 실패 시 보상 트랜잭션 |
+| 재고 차감 | POST | `/inventories/decrease` | 주문 시 원자적 재고 차감. 성공 200, 수량 부족 409 `INSUFFICIENT_STOCK`, 대상 없음·논리 삭제 404 `INVENTORY_NOT_FOUND`. 업무 거절도 Operation 저장 |
+| 재고 복원 | POST | `/inventories/restore` | Header: Idempotency-Key, JSON: originalOperationId. 성공한 원본 차감 수량으로 한 번만 복원. 같은 키는 결과 재응답, 다른 키로 이미 복원된 원본은 409 INVENTORY_ALREADY_RESTORED |
 | 상품 재고 정리 | DELETE | `/inventories/products/{productId}` | 상품의 모든 허브 재고를 논리 삭제. 없음·이미 삭제도 204, 수량·Operation·History 보존 |
 | 허브 경로 조회 | GET | `/hub-routes?departureHubId={id}&arrivalHubId={id}` | 200(id, departureHubId, arrivalHubId, distanceKm, durationMin). 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
 | 배송 생성 | POST | `/deliveries` | 주문에 연결된 배송 생성 |
