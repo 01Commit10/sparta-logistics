@@ -159,4 +159,26 @@ public class OrderTest {
                 .isEqualTo(OrderErrorCode.ORDER_NOT_CANCELLABLE);
     }
 
+    @Test
+    @DisplayName("실패한 주문을 삭제하면 삭제 시각과 삭제자가 기록된다.")
+    void deleteOrder() {
+        Order order = createOrder(3, UNIT_PRICE);
+        order.fail();
+        UUID actorId = UUID.randomUUID();
+
+        order.delete(actorId);
+
+        assertThat(order.isDeleted()).isTrue();
+        assertThat(order.getDeletedBy()).isEqualTo(actorId);
+    }
+
+    @Test
+    @DisplayName("진행 중이거나 완료된 주문은 삭제할 수 없다.")
+    void deleteOrderFailNotFinished() {
+        Order order = createOrder(3, UNIT_PRICE);
+        assertThatThrownBy(() -> order.delete(UUID.randomUUID()))
+                .asInstanceOf(type(BusinessException.class))
+                .extracting(BusinessException::getErrorCode)
+                .isEqualTo(OrderErrorCode.ORDER_NOT_DELETABLE);
+    }
 }
