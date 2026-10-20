@@ -13,3 +13,17 @@ db:
   schema: company
   username: ${COMPANY_DB_USER}
   password: ${COMPANY_DB_PASSWORD}
+
+# 상품 조회 캐시 단계 (P01 실험). none: 캐시 없음(기본) · redis: 리모트 캐시 · layered: Caffeine(L1) + Redis(L2)
+# 캐시 단계(redis·layered)에서는 상세 조회수를 Redis에 모아 flush-interval마다 DB에 반영한다
+product:
+  cache:
+    mode: ${PRODUCT_CACHE_MODE:none}
+    ttl:
+      product-detail: 5m
+      product-search: 30s
+    local:
+      ttl: 10s
+      maximum-size: 10000
+  view-count:
+    flush-interval: 5s

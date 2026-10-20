@@ -47,4 +47,9 @@ public class ProductRepositoryImpl implements ProductRepository {
     public void increaseViewCount(UUID id) {
         jpa.increaseViewCount(id);
     }
+
+    @Override
+    public void applyViewCount(UUID id, long viewCount) {
+        jpa.applyViewCount(id, viewCount);
+    }
 }

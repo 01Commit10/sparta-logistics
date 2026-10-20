@@ -28,4 +28,9 @@ public record ProductResult(
                 product.getUpdatedAt()
         );
     }
+
+    // 조회수만 바꾼 값 (캐시한 상세에 방금 센 조회수를 담아 응답)
+    public ProductResult withViewCount(long viewCount) {
+        return new ProductResult(id, companyId, name, description, unitPrice, viewCount, createdAt, updatedAt);
+    }
 }

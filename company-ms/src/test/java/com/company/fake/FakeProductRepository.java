@@ -69,6 +69,15 @@ public class FakeProductRepository implements ProductRepository {
         }
     }
 
+    // 실제 구현처럼 지금 값보다 클 때만 바꾼다
+    @Override
+    public void applyViewCount(UUID id, long viewCount) {
+        Product product = store.get(id);
+        if (product != null && product.getViewCount() < viewCount) {
+            ReflectionTestUtils.setField(product, "viewCount", viewCount);
+        }
+    }
+
     public Collection<Product> all() {
         return store.values();
     }
