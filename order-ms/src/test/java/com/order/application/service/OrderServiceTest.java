@@ -8,6 +8,7 @@ import com.order.application.dto.OrderResult;
 import com.order.domain.client.*;
 import com.order.domain.entity.Order;
 import com.order.domain.entity.OrderHistory;
+import com.order.domain.exception.DuplicateOrderRequestException;
 import com.order.domain.repository.OrderHistoryRepository;
 import com.order.domain.repository.OrderRepository;
 import com.order.domain.vo.OrderOperationStatus;
@@ -21,19 +22,27 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -52,6 +61,28 @@ class OrderServiceTest {
     @Mock
     private DeliveryClient deliveryClient;
 
+    // 트랜잭션 시작~커밋/롤백 사이인지 기록하는 가짜 트랜잭션 매니저 (원격 호출이 트랜잭션 밖인지 확인용)
+    private final AtomicBoolean inTransaction = new AtomicBoolean();
+
+    @Spy
+    private TransactionTemplate transactionTemplate = new TransactionTemplate(new PlatformTransactionManager() {
+        @Override
+        public TransactionStatus getTransaction(TransactionDefinition definition) {
+            inTransaction.set(true);
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {
+            inTransaction.set(false);
+        }
+
+        @Override
+        public void rollback(TransactionStatus status) {
+            inTransaction.set(false);
+        }
+    });
+
     @InjectMocks
     private OrderService orderService;
 
@@ -65,6 +96,7 @@ class OrderServiceTest {
     private static final UUID ORDER_ID = UUID.randomUUID();
     private static final UUID DELIVERY_ID = UUID.randomUUID();
     private static final UUID DECREASE_OPERATION_ID = UUID.randomUUID();
+    private static final UUID HISTORY_ID = UUID.randomUUID();
 
     // 테스트마다 반복되는 주문 요청 생성
     private CreateOrderCommand createCommand(int quantity) {
@@ -83,22 +115,8 @@ class OrderServiceTest {
     @Test
     @DisplayName("재고 조회, 차감, 배송 생성이 모두 성공하면 주문은 COMPLETED, 이력은 SUCCEEDED가 도니다")
     void createOrderSuccess() {
-        // given
-        // ① 이력 저장
-        given(orderHistoryRepository.save(any(OrderHistory.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
-
-        // ② 재고 조회
-        given(hubClient.findInventories(PRODUCT_ID))
-                .willReturn(List.of(new InventoryInfo(UUID.randomUUID(), HUB_ID, PRODUCT_ID, 100)));
-
-        // ③ 주문 저장
-        given(orderRepository.save(any(Order.class)))
-                .willAnswer(invocation -> {
-                    Order order = invocation.getArgument(0);
-                    ReflectionTestUtils.setField(order, "id", ORDER_ID);  // DB가 id를 채워주는 것을 흉내
-                    return order;
-                });
+        // given: ① 이력 선점 ② 재고 조회 ③ 주문 저장
+        givenOrderSavedSuccessfully();
 
         // ④ 재고 차감
         given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
@@ -125,7 +143,7 @@ class OrderServiceTest {
 
         // then: 이력
         ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
-        then(orderHistoryRepository).should().save(historyCaptor.capture());
+        then(orderHistoryRepository).should().saveAndFlush(historyCaptor.capture());
 
         OrderHistory history = historyCaptor.getValue();
         assertThat(history.getOperationStatus()).isEqualTo(OrderOperationStatus.SUCCEEDED);
@@ -168,7 +186,7 @@ class OrderServiceTest {
         then(hubClient).shouldHaveNoInteractions();
         then(deliveryClient).shouldHaveNoInteractions();
         then(orderRepository).shouldHaveNoInteractions();
-        then(orderHistoryRepository).should(never()).save(any());
+        then(orderHistoryRepository).should(never()).saveAndFlush(any());
     }
 
     @ParameterizedTest
@@ -193,7 +211,51 @@ class OrderServiceTest {
         then(hubClient).shouldHaveNoInteractions();
         then(deliveryClient).shouldHaveNoInteractions();
         then(orderRepository).shouldHaveNoInteractions();
-        then(orderHistoryRepository).should(never()).save(any());
+        then(orderHistoryRepository).should(never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("같은 키의 동시 요청이 먼저 이력을 저장했으면 재고·배송을 호출하지 않고 앞 요청 상태를 다시 보고 409로 거절한다")
+    void createOrderStopsBeforeRemoteCallsWhenHistoryKeyTaken() {
+        // given: 조회 때는 없었지만, 저장(즉시 반영) 시점에 다른 요청이 같은 키를 먼저 저장함 → 다시 보면 처리 중
+        CreateOrderCommand command = createCommand(3);
+        OrderHistory inProgress = OrderHistory.create(OrderOperationType.CREATE, IDEMPOTENCY_KEY, command.requestHash());
+        given(orderHistoryRepository.findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, IDEMPOTENCY_KEY))
+                .willReturn(Optional.empty(), Optional.of(inProgress));
+        given(orderHistoryRepository.saveAndFlush(any(OrderHistory.class)))
+                .willThrow(new DuplicateOrderRequestException(IDEMPOTENCY_KEY));
+
+        // when & then
+        assertThatThrownBy(() -> orderService.createOrder(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.PREVIOUS_REQUEST_NOT_SUCCEEDED);
+
+        then(hubClient).shouldHaveNoInteractions();
+        then(deliveryClient).shouldHaveNoInteractions();
+        then(orderRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("재고 조회·차감·배송 생성(원격 호출)은 트랜잭션 밖에서 해서 DB 커넥션을 잡고 기다리지 않는다")
+    void createOrderCallsRemoteServicesOutsideTransaction() {
+        givenOrderSavedSuccessfully();
+        given(hubClient.findInventories(PRODUCT_ID)).willAnswer(invocation -> {
+            assertThat(inTransaction).as("재고 조회 중 트랜잭션").isFalse();
+            return List.of(new InventoryInfo(UUID.randomUUID(), HUB_ID, PRODUCT_ID, 100));
+        });
+        given(hubClient.decreaseStock(any(StockDecreaseCommand.class))).willAnswer(invocation -> {
+            assertThat(inTransaction).as("재고 차감 중 트랜잭션").isFalse();
+            return new StockOperationResult(DECREASE_OPERATION_ID, true, null, 97);
+        });
+        given(deliveryClient.createDelivery(any(CreateDeliveryCommand.class))).willAnswer(invocation -> {
+            assertThat(inTransaction).as("배송 생성 중 트랜잭션").isFalse();
+            return new DeliveryResult(DELIVERY_ID);
+        });
+
+        OrderResult result = orderService.createOrder(createCommand(3));
+
+        assertThat(result.orderStatus()).isEqualTo(OrderStatus.COMPLETED);
+        then(transactionTemplate).should(times(3)).execute(any());   // 선점 · 주문 저장 · 확정
     }
 
     @Test
@@ -219,8 +281,7 @@ class OrderServiceTest {
     @Test
     @DisplayName("조회한 재고가 부족하면 공통 재고 부족 코드와 기존 주문 안내 메시지를 반환한다")
     void createOrderFailsWhenNoInventoryHasEnoughStock() {
-        given(orderHistoryRepository.save(any(OrderHistory.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
+        givenHistoryClaimed();
         given(hubClient.findInventories(PRODUCT_ID))
                 .willReturn(List.of(new InventoryInfo(UUID.randomUUID(), HUB_ID, PRODUCT_ID, 2)));
 
@@ -235,7 +296,7 @@ class OrderServiceTest {
         then(hubClient).should(never()).restoreStock(any());
 
         ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
-        then(orderHistoryRepository).should().save(historyCaptor.capture());
+        then(orderHistoryRepository).should().saveAndFlush(historyCaptor.capture());
         assertThat(historyCaptor.getValue().getOperationStatus()).isEqualTo(OrderOperationStatus.FAILED);
         assertThat(historyCaptor.getValue().getResponseCode()).isEqualTo(409);
     }
@@ -261,7 +322,7 @@ class OrderServiceTest {
 
         // then: 이력은 FAILED, 409
         ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
-        then(orderHistoryRepository).should().save(historyCaptor.capture());
+        then(orderHistoryRepository).should().saveAndFlush(historyCaptor.capture());
         OrderHistory history = historyCaptor.getValue();
         assertThat(history.getOperationStatus()).isEqualTo(OrderOperationStatus.FAILED);
         assertThat(history.getResponseCode()).isEqualTo(409);
@@ -291,18 +352,31 @@ class OrderServiceTest {
         assertFailed(503);
     }
 
-    // ①~③ 이력 저장, 재고 조회, 주문 저장 까지는 정상 진행되도록 각본 준비
+    // ① 이력 선점: 저장한 이력을 다음 트랜잭션에서 id로 다시 읽을 수 있게 한다
+    private void givenHistoryClaimed() {
+        OrderHistory[] saved = new OrderHistory[1];
+        given(orderHistoryRepository.saveAndFlush(any(OrderHistory.class)))
+                .willAnswer(invocation -> {
+                    saved[0] = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(saved[0], "id", HISTORY_ID);  // DB가 id를 채워주는 것을 흉내
+                    return saved[0];
+                });
+        lenient().when(orderHistoryRepository.findById(HISTORY_ID)).thenAnswer(invocation -> Optional.of(saved[0]));
+    }
+
+    // ①~③ 이력 선점, 재고 조회, 주문 저장 까지는 정상 진행되도록 각본 준비
     private void givenOrderSavedSuccessfully() {
-        given(orderHistoryRepository.save(any(OrderHistory.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
-        given(hubClient.findInventories(PRODUCT_ID))
-                .willReturn(List.of(new InventoryInfo(UUID.randomUUID(), HUB_ID, PRODUCT_ID, 100)));
+        givenHistoryClaimed();
+        lenient().when(hubClient.findInventories(PRODUCT_ID))
+                .thenReturn(List.of(new InventoryInfo(UUID.randomUUID(), HUB_ID, PRODUCT_ID, 100)));
+        Order[] saved = new Order[1];
         given(orderRepository.save(any(Order.class)))
                 .willAnswer(invocation -> {
-                    Order order = invocation.getArgument(0);
-                    ReflectionTestUtils.setField(order, "id", ORDER_ID);  // DB가 id를 채워주는 것을 흉내
-                    return order;
+                    saved[0] = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(saved[0], "id", ORDER_ID);  // DB가 id를 채워주는 것을 흉내
+                    return saved[0];
                 });
+        lenient().when(orderRepository.findById(ORDER_ID)).thenAnswer(invocation -> Optional.of(saved[0]));
     }
 
     // 주문 FAILED + 이력 FAILED(응답코드) 공통 검증
@@ -312,7 +386,7 @@ class OrderServiceTest {
         assertThat(orderCaptor.getValue().getOrderStatus()).isEqualTo(OrderStatus.FAILED);
 
         ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
-        then(orderHistoryRepository).should().save(historyCaptor.capture());
+        then(orderHistoryRepository).should().saveAndFlush(historyCaptor.capture());
         assertThat(historyCaptor.getValue().getOperationStatus()).isEqualTo(OrderOperationStatus.FAILED);
         assertThat(historyCaptor.getValue().getResponseCode()).isEqualTo(expectedResponseCode);
     }

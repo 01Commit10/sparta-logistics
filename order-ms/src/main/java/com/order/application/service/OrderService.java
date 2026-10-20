@@ -8,13 +8,16 @@ import com.order.application.dto.OrderResult;
 import com.order.domain.client.*;
 import com.order.domain.entity.Order;
 import com.order.domain.entity.OrderHistory;
+import com.order.domain.exception.DuplicateOrderRequestException;
 import com.order.domain.repository.OrderHistoryRepository;
 import com.order.domain.repository.OrderRepository;
 import com.order.domain.vo.OrderOperationType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -28,45 +31,45 @@ public class OrderService {
     private final OrderHistoryRepository orderHistoryRepository;
     private final HubClient hubClient;
     private final DeliveryClient deliveryClient;
+    private final TransactionTemplate transactionTemplate;
 
-    // BusinessException으로 실패하면 롤백하지 않고 FAILED 상태를 커밋한다
-    @Transactional(noRollbackFor = BusinessException.class)
+    /**
+     * 원격 호출(재고 조회·차감, 배송 생성)을 트랜잭션 밖에서 해서, 기다리는 동안 DB 커넥션을 잡지 않는다 (P02).
+     * 짧은 트랜잭션 ① 선점(이력) ② 주문 저장 ③ 확정 또는 실패 기록으로 나눈다.
+     * ①이 바로 커밋되므로 같은 키의 동시 요청은 원격 호출 전에 멈춘다.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OrderResult createOrder(CreateOrderCommand command) {
-        // 0. 멱등성: 같은 키로 처리한 이력이 있으면 이전 결과 반환 또는 거절
-        Optional<OrderHistory> previous = orderHistoryRepository
-                .findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, command.idempotencyKey());
-        if (previous.isPresent()) {
-            return returnPreviousResult(previous.get(), command);
+        // ① 선점: 같은 키 이력이 있으면 이전 결과 반환 또는 거절, 없으면 IN_PROGRESS 이력 커밋
+        Claim claim;
+        try {
+            claim = transactionTemplate.execute(status -> claim(command));
+        } catch (DuplicateOrderRequestException e) {
+            // 같은 키가 동시에 먼저 커밋됨: 이 트랜잭션은 롤백됐으니 새 트랜잭션에서 앞 요청 상태로 판단
+            return transactionTemplate.execute(status -> orderHistoryRepository
+                    .findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, command.idempotencyKey())
+                    .map(previous -> returnPreviousResult(previous, command))
+                    .orElseThrow(() -> e));
         }
+        if (claim.previous() != null) {
+            return claim.previous();
+        }
+        UUID historyId = claim.historyId();
 
-        // 1. 이력 IN_PROCESSING 저장 ← 번호표: 중복 차단 + 이후 모든 성공/실패를 기록할 자리 확보
-        OrderHistory history = OrderHistory.create(
-                OrderOperationType.CREATE, command.idempotencyKey(), command.requestHash());
-        orderHistoryRepository.save(history);
-
-        Order order = null;
+        UUID orderId = null;
         boolean stockMayBeDecreased = false;            // 재고가 빠졌을 "가능성"이 있으면 true -> 실패 시 복원 대상
         StockDecreaseCommand decreaseCommand = null;    // 결과를 모를 때 같은 키로 다시 보내기 위해 보관
         UUID decreaseOperationId = null;                // 차감 성공 시 hub 작업 ID -> 복원에 필요
         try {
-            // 2. 재고 조회 (차감 할 허브 선택)
+            // 재고 조회 (원격, 차감할 허브 선택)
             InventoryInfo inventoryInfo = selectInventory(command);
 
-            // 3. 주문 PROCESSING 저장 + 이력에 연결
-            order = orderRepository.save(Order.create(
-                    command.requesterCompanyId(),
-                    command.supplierCompanyId(),
-                    command.productId(),
-                    command.quantity(),
-                    command.unitPrice(),
-                    command.requestNote(),
-                    command.orderedBy()
-            ));
-            history.linkOrder(order);
+            // ② 주문 PROCESSING 저장 + 이력에 연결
+            orderId = transactionTemplate.execute(status -> saveOrder(command, historyId));
 
-            // 4. 재고 차감
+            // 재고 차감 (원격)
             decreaseCommand = new StockDecreaseCommand(
-                    order.getId(), inventoryInfo.hubId(), command.productId(), command.quantity());
+                    orderId, inventoryInfo.hubId(), command.productId(), command.quantity());
             stockMayBeDecreased = true;
             StockOperationResult stock = hubClient.decreaseStock(decreaseCommand);
             if (!stock.succeeded()) {
@@ -78,30 +81,84 @@ public class OrderService {
             }
             decreaseOperationId = stock.operationId();
 
-            // 5. 배송 생성
+            // 배송 생성 (원격)
             DeliveryResult delivery = deliveryClient.createDelivery(new CreateDeliveryCommand(
-                    order.getId(),
+                    orderId,
                     inventoryInfo.hubId(),
                     command.supplierCompanyId(),
                     command.requesterCompanyId(),
                     command.orderedBy()
             ));
 
-            // 6. 주문 COMPLETED + 이력 SUCCEEDED
-            order.complete(delivery.deliveryId());
-            history.succeed(201);
-            return OrderResult.from(order);
+            // ③ 주문 COMPLETED + 이력 SUCCEEDED
+            UUID completedOrderId = orderId;
+            return transactionTemplate.execute(status -> complete(completedOrderId, historyId, delivery.deliveryId()));
         } catch (RuntimeException e) {
-            // 보상: 재고가 빠졌을 수 있으면 복원 → 주문·이력 FAILED → 원래 예외 그대로 던짐
+            // 보상: 재고가 빠졌을 수 있으면 복원(원격) → ③ 주문·이력 FAILED → 원래 예외 그대로 던짐
             if (stockMayBeDecreased) {
                 restoreStockSafely(decreaseCommand, decreaseOperationId);
             }
-            if (order != null) {
-                order.fail();
-            }
-            history.fail(responseCodeOf(e), e.getMessage());
+            recordFailureSafely(orderId, historyId, e);
             throw e;
         }
+    }
+
+    // ① 선점 트랜잭션
+    private Claim claim(CreateOrderCommand command) {
+        Optional<OrderHistory> previous = orderHistoryRepository
+                .findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, command.idempotencyKey());
+        if (previous.isPresent()) {
+            return new Claim(null, returnPreviousResult(previous.get(), command));
+        }
+        // 바로 반영해 같은 키의 동시 요청을 원격 호출 전에 막는다 (중복이면 DuplicateOrderRequestException → 롤백)
+        OrderHistory history = orderHistoryRepository.saveAndFlush(OrderHistory.create(
+                OrderOperationType.CREATE, command.idempotencyKey(), command.requestHash()));
+        return new Claim(history.getId(), null);
+    }
+
+    // ② 주문 저장 트랜잭션
+    private UUID saveOrder(CreateOrderCommand command, UUID historyId) {
+        Order order = orderRepository.save(Order.create(
+                command.requesterCompanyId(),
+                command.supplierCompanyId(),
+                command.productId(),
+                command.quantity(),
+                command.unitPrice(),
+                command.requestNote(),
+                command.orderedBy()
+        ));
+        findHistory(historyId).linkOrder(order);
+        return order.getId();
+    }
+
+    // ③ 확정 트랜잭션
+    private OrderResult complete(UUID orderId, UUID historyId, UUID deliveryId) {
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        order.complete(deliveryId);
+        findHistory(historyId).succeed(201);
+        return OrderResult.from(order);
+    }
+
+    // ③ 실패 기록 트랜잭션. 기록 실패가 원래 예외를 덮어쓰지 않도록 로그만 남긴다 (이력은 IN_PROGRESS로 남음)
+    private void recordFailureSafely(UUID orderId, UUID historyId, RuntimeException cause) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                if (orderId != null) {
+                    orderRepository.findById(orderId).orElseThrow().fail();
+                }
+                findHistory(historyId).fail(responseCodeOf(cause), cause.getMessage());
+            });
+        } catch (RuntimeException recordError) {
+            log.error("[주문 실패 기록 실패] historyId={} orderId={}", historyId, orderId, recordError);
+        }
+    }
+
+    private OrderHistory findHistory(UUID historyId) {
+        return orderHistoryRepository.findById(historyId).orElseThrow();
+    }
+
+    // 선점 결과: 새로 선점한 이력 ID 또는 같은 키의 이전 결과
+    private record Claim(UUID historyId, OrderResult previous) {
     }
 
     private int responseCodeOf(RuntimeException e) {
