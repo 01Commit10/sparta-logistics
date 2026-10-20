@@ -1,6 +1,7 @@
 package com.order.application.service;
 
 import com.common.exception.BusinessException;
+import com.common.exception.InventoryErrorCode;
 import com.common.exception.OrderErrorCode;
 import com.order.application.dto.CreateOrderCommand;
 import com.order.application.dto.OrderResult;
@@ -213,6 +214,30 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("조회한 재고가 부족하면 공통 재고 부족 코드와 기존 주문 안내 메시지를 반환한다")
+    void createOrderFailsWhenNoInventoryHasEnoughStock() {
+        given(orderHistoryRepository.save(any(OrderHistory.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        given(hubClient.findInventories(PRODUCT_ID))
+                .willReturn(List.of(new InventoryInfo(UUID.randomUUID(), HUB_ID, PRODUCT_ID, 2)));
+
+        assertThatThrownBy(() -> orderService.createOrder(createCommand(3)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", InventoryErrorCode.INSUFFICIENT_STOCK)
+                .hasMessage("재고가 부족하여 주문할 수 없습니다.");
+
+        then(orderRepository).shouldHaveNoInteractions();
+        then(deliveryClient).shouldHaveNoInteractions();
+        then(hubClient).should(never()).decreaseStock(any());
+        then(hubClient).should(never()).restoreStock(any());
+
+        ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
+        then(orderHistoryRepository).should().save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getOperationStatus()).isEqualTo(OrderOperationStatus.FAILED);
+        assertThat(historyCaptor.getValue().getResponseCode()).isEqualTo(409);
+    }
+
+    @Test
     @DisplayName("재고 차감이 재고 부족으로 거절되면 409 예외가 발생하고 주문과 이력은 FAILED가 된다")
     void createOrderFailsWhenStockDecreaseRejected() {
         // given: 주문 저장까지는 성공, 차감 단계에서 재고 부족으로 거절
@@ -223,7 +248,8 @@ class OrderServiceTest {
         // when & then
         assertThatThrownBy(() -> orderService.createOrder(createCommand(3)))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.INSUFFICIENT_STOCK);
+                .hasFieldOrPropertyWithValue("errorCode", InventoryErrorCode.INSUFFICIENT_STOCK)
+                .hasMessage("재고가 부족하여 주문할 수 없습니다.");
 
         // then: 주문은 FAILED
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);

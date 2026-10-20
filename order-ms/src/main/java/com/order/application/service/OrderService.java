@@ -1,6 +1,7 @@
 package com.order.application.service;
 
 import com.common.exception.BusinessException;
+import com.common.exception.InventoryErrorCode;
 import com.common.exception.OrderErrorCode;
 import com.order.application.dto.CreateOrderCommand;
 import com.order.application.dto.OrderResult;
@@ -67,9 +68,10 @@ public class OrderService {
                     order.getId(), inventoryInfo.hubId(), command.productId(), command.quantity()));
             if (!stock.succeeded()) {
                 stockMayBeDecreased = false;
-                throw new BusinessException(stock.isInsufficientStock()
-                        ? OrderErrorCode.INSUFFICIENT_STOCK
-                        : OrderErrorCode.INVENTORY_UNAVAILABLE);
+                if (stock.isInsufficientStock()) {
+                    throw insufficientStockException();
+                }
+                throw new BusinessException(OrderErrorCode.INVENTORY_UNAVAILABLE);
             }
 
             // 5. 배송 생성
@@ -134,8 +136,15 @@ public class OrderService {
         return hubClient.findInventories(command.productId()).stream()
                 .filter(inventoryInfo -> inventoryInfo.hasEnough(command.quantity()))
                 .findFirst()
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.INSUFFICIENT_STOCK));
+                .orElseThrow(OrderService::insufficientStockException);
     }
 
+    // 재고 부족 코드는 공통으로 사용하고, 주문 API의 기존 안내 메시지는 유지한다.
+    private static BusinessException insufficientStockException() {
+        return new BusinessException(
+                InventoryErrorCode.INSUFFICIENT_STOCK,
+                "재고가 부족하여 주문할 수 없습니다."
+        );
+    }
 
 }

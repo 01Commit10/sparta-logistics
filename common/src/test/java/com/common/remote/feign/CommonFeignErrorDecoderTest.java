@@ -68,11 +68,11 @@ class CommonFeignErrorDecoderTest {
     @DisplayName("4xx + 모르는 code → RemoteErrorCode에 원격 상태·code·메시지를 그대로 담는다")
     void unknownCode() {
         Exception e = decode(409, """
-                {"code":"INSUFFICIENT_STOCK","message":"재고가 부족합니다."}""");
+                {"code":"UNREGISTERED_TEST_ERROR","message":"등록되지 않은 업무 오류입니다."}""");
 
         assertThat(e).isInstanceOfSatisfying(RemoteBusinessException.class, r ->
                 assertThat(r.getErrorCode()).isEqualTo(
-                        new RemoteErrorCode(HttpStatus.CONFLICT, "INSUFFICIENT_STOCK", "재고가 부족합니다.")));
+                        new RemoteErrorCode(HttpStatus.CONFLICT, "UNREGISTERED_TEST_ERROR", "등록되지 않은 업무 오류입니다.")));
     }
 
     @Test

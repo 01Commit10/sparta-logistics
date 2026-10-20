@@ -20,6 +20,10 @@ class ErrorCodeRegistryTest {
         assertThat(ErrorCodeRegistry.find("TOKEN_EXPIRED")).containsSame(AuthErrorCode.TOKEN_EXPIRED);
         assertThat(ErrorCodeRegistry.find("COMPANY_HUB_NOT_FOUND")).containsSame(CompanyErrorCode.COMPANY_HUB_NOT_FOUND);
         assertThat(ErrorCodeRegistry.find("RESOURCE_NOT_FOUND")).containsSame(CommonErrorCode.RESOURCE_NOT_FOUND);
+        assertThat(ErrorCodeRegistry.find("ORDER_NOT_PROCESSING")).containsSame(OrderErrorCode.ORDER_NOT_PROCESSING);
+        assertThat(ErrorCodeRegistry.find("DELIVERY_NOT_FOUND")).containsSame(DeliveryErrorCode.DELIVERY_NOT_FOUND);
+        assertThat(ErrorCodeRegistry.find("INVENTORY_NOT_FOUND")).containsSame(InventoryErrorCode.INVENTORY_NOT_FOUND);
+        assertThat(ErrorCodeRegistry.find("INSUFFICIENT_STOCK")).containsSame(InventoryErrorCode.INSUFFICIENT_STOCK);
     }
 
     @ParameterizedTest
@@ -34,8 +38,11 @@ class ErrorCodeRegistryTest {
     @DisplayName("all()은 등록된 모든 enum 상수를 담는다")
     void all() {
         assertThat(ErrorCodeRegistry.all())
-                .contains(CommonErrorCode.INVALID_INPUT, AuthErrorCode.AUTH_UNAVAILABLE, UserErrorCode.LAST_MASTER)
+                .contains(CommonErrorCode.INVALID_INPUT, AuthErrorCode.AUTH_UNAVAILABLE, UserErrorCode.LAST_MASTER,
+                        InventoryErrorCode.INVENTORY_NOT_FOUND, InventoryErrorCode.INSUFFICIENT_STOCK)
                 .hasSize(CommonErrorCode.values().length + AuthErrorCode.values().length + UserErrorCode.values().length
-                        + CompanyErrorCode.values().length + ProductErrorCode.values().length);
+                        + CompanyErrorCode.values().length + ProductErrorCode.values().length
+                        + OrderErrorCode.values().length + DeliveryErrorCode.values().length
+                        + InventoryErrorCode.values().length);
     }
 }
