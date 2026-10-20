@@ -4,6 +4,8 @@ package com.order.infrastructure.persistence;
 import com.order.domain.entity.Order;
 import com.order.domain.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -23,5 +25,20 @@ public class OrderRepositoryImpl implements OrderRepository {
     @Override
     public Optional<Order> findById(UUID id) {
         return orderJpaRepository.findById(id);
+    }
+
+    @Override
+    public Optional<Order> findActiveById(UUID uuid) {
+        return orderJpaRepository.findByIdAndDeletedAtIsNull(uuid);
+    }
+
+    @Override
+    public Page<Order> findAllActive(Pageable pageable) {
+        return orderJpaRepository.findAllByDeletedAtIsNull(pageable);
+    }
+
+    @Override
+    public Page<Order> findALLByOrderedByAndDeletedAtIsNull(UUID orderedBy, Pageable pageable) {
+        return orderJpaRepository.findAllByOrderedByAndDeletedAtIsNull(orderedBy, pageable);
     }
 }
