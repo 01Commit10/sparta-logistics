@@ -1,6 +1,5 @@
 package com.delivery.application.service;
 
-import com.common.auth.AuthUser;
 import com.common.exception.BusinessException;
 import com.common.exception.DeliveryErrorCode;
 import com.delivery.application.client.CompanyClient;
@@ -20,7 +19,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
@@ -37,8 +35,12 @@ public class DeliveryCommandService {
     public DeliveryCreateResult createDelivery(DeliveryCreateCommand command) {
         UUID departureHubId = command.departureHubId();
 
-        DeliveryDestination deliveryDestination = companyClient.getDeliveryDestination(command.requesterCompanyId());
-        UUID arrivalHubId = deliveryDestination.arrivalHubId();
+        CompanyInfo supplier = companyClient.findCompany(command.supplierCompanyId())
+                .orElseThrow(() -> new BusinessException(DeliveryErrorCode.DELIVERY_INVALID_SUPPLIER_COMPANY));
+        CompanyInfo requester = companyClient.findCompany(command.requesterCompanyId())
+                .orElseThrow(() -> new BusinessException(DeliveryErrorCode.DELIVERY_INVALID_REQUESTER_COMPANY));
+
+        UUID arrivalHubId = requester.hubId();
 
         RouteEstimate hubRouteEstimate = departureHubId.equals(arrivalHubId)
                 ? null
@@ -46,16 +48,21 @@ public class DeliveryCommandService {
 
         DeliveryManagers deliveryManagers = userClient.pickDeliveryManagers(departureHubId, arrivalHubId);
         String recipientName = userClient.getUserName(command.recipientUserId());
+        DeliveryCompanies companies = new DeliveryCompanies(
+                command.supplierCompanyId(), supplier.managerUserId(),
+                command.requesterCompanyId(), requester.managerUserId()
+        );
 
         Delivery delivery = Delivery.create(
                 command.orderId(),
                 departureHubId,
                 arrivalHubId,
-                deliveryDestination.deliveryAddress(),
+                requester.address(),
                 recipientName,
                 command.recipientUserId(),
                 hubRouteEstimate,
-                deliveryManagers
+                deliveryManagers,
+                companies
         );
         return DeliveryCreateResult.from(deliveryRepository.save(delivery));
     }

@@ -6,7 +6,7 @@ public record CompanyResponse(
         UUID id,
 //        String name,
         String address,
-        UUID hubId
-//        UUID managerUserId
+        UUID hubId,
+        UUID managerUserId
 ) {
 }

@@ -13,6 +13,5 @@ public interface DeliveryRepository {
     Optional<Delivery> findById(UUID deliveryId);
     Optional<Delivery> findByOrderId(UUID orderId);
     Optional<Delivery> findByRouteId(UUID routeId);
-    Page<Delivery> findAll(Pageable pageable);
-    Page<Delivery> findAllByDeliveryManagerId(UUID deliveryManagerId, Pageable pageable);
+    Page<Delivery> search(DeliverySearchCondition condition, Pageable pageable);
 }

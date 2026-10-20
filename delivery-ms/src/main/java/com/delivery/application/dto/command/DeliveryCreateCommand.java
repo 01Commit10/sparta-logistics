@@ -7,6 +7,7 @@ public record DeliveryCreateCommand(
         UUID orderId,
         UUID departureHubId,
         UUID requesterCompanyId,
+        UUID supplierCompanyId,
         UUID recipientUserId
 ) {
 
