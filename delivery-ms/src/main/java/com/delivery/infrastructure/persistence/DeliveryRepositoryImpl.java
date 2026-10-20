@@ -4,6 +4,7 @@ import com.common.exception.BusinessException;
 import com.common.exception.DeliveryErrorCode;
 import com.delivery.domain.entity.Delivery;
 import com.delivery.domain.repository.DeliveryRepository;
+import com.delivery.domain.repository.DeliverySearchCondition;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -53,13 +54,8 @@ public class DeliveryRepositoryImpl implements DeliveryRepository {
 
 
     @Override
-    public Page<Delivery> findAll(Pageable pageable) {
-        return jpaRepository.findAllByDeletedAtIsNull(pageable);
-    }
-
-    @Override
-    public Page<Delivery> findAllByDeliveryManagerId(UUID deliveryManagerId, Pageable pageable) {
-        return jpaRepository.findAllByDeliveryManagerIdAndDeletedAtIsNull(deliveryManagerId, pageable);
+    public Page<Delivery> search(DeliverySearchCondition condition, Pageable pageable) {
+        return jpaRepository.findAll(DeliverySpecifications.of(condition), pageable);
     }
 
 

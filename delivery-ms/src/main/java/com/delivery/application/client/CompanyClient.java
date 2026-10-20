@@ -1,10 +1,11 @@
 package com.delivery.application.client;
 
-import com.delivery.domain.vo.DeliveryDestination;
+import com.delivery.domain.vo.CompanyInfo;
 
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CompanyClient {
 
-    DeliveryDestination getDeliveryDestination(UUID companyId);
+    Optional<CompanyInfo> findCompany(UUID companyId);
 }

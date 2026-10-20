@@ -3,10 +3,7 @@ package com.delivery.domain.entity;
 import com.common.entity.BaseEntity;
 import com.common.exception.BusinessException;
 import com.common.exception.DeliveryErrorCode;
-import com.delivery.domain.vo.DeliveryManagers;
-import com.delivery.domain.vo.DeliveryRouteType;
-import com.delivery.domain.vo.DeliveryStatus;
-import com.delivery.domain.vo.RouteEstimate;
+import com.delivery.domain.vo.*;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -20,7 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Entity
-@Table(name = "p_delivery",
+@Table(name = "p_deliveries",
         uniqueConstraints = @UniqueConstraint(name = "uk_p_delivery_order_id", columnNames = {"order_id"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -32,7 +29,7 @@ public class Delivery extends BaseEntity {
     @Column(name = "order_id", nullable = false)
     private UUID orderId;
 
-    @Column(nullable = false)
+    @Column(name = "delivery_status", nullable = false, length = 24)
     @Enumerated(EnumType.STRING)
     private DeliveryStatus status;
 
@@ -45,11 +42,23 @@ public class Delivery extends BaseEntity {
     @Column(name = "delivery_address", nullable = false)
     private String deliveryAddress;
 
-    @Column(name = "recipient_name", length = 100)
+    @Column(name = "recipient_name", nullable = false, length = 100)
     private String recipientName;
 
     @Column(name = "recipient_user_id", nullable = false)
     private UUID recipientUserId;
+
+    @Column(name = "supplier_company_id", nullable = false)
+    private UUID supplierCompanyId;
+
+    @Column(name = "supplier_company_manager_id", nullable = false)
+    private UUID supplierCompanyManagerId;
+
+    @Column(name = "requester_company_id", nullable = false)
+    private UUID requesterCompanyId;
+
+    @Column(name = "requester_company_manager_id", nullable = false)
+    private UUID requesterCompanyManagerId;
 
     @Column(name = "delivery_manager_id")
     private UUID deliveryManagerId;
@@ -59,7 +68,17 @@ public class Delivery extends BaseEntity {
 
 
     @Builder
-    private Delivery(UUID orderId, DeliveryStatus status, UUID departureHubId, UUID arrivalHubId, String deliveryAddress, String recipientName, UUID recipientUserId) {
+    private Delivery(UUID orderId,
+                     DeliveryStatus status,
+                     UUID departureHubId,
+                     UUID arrivalHubId,
+                     String deliveryAddress,
+                     String recipientName,
+                     UUID recipientUserId,
+                     UUID supplierCompanyId,
+                     UUID supplierCompanyManagerId,
+                     UUID requesterCompanyId,
+                     UUID requesterCompanyManagerId) {
         this.orderId = orderId;
         this.status = status;
         this.departureHubId = departureHubId;
@@ -67,6 +86,10 @@ public class Delivery extends BaseEntity {
         this.deliveryAddress = deliveryAddress;
         this.recipientName = recipientName;
         this.recipientUserId = recipientUserId;
+        this.supplierCompanyId = supplierCompanyId;
+        this.supplierCompanyManagerId = supplierCompanyManagerId;
+        this.requesterCompanyId = requesterCompanyId;
+        this.requesterCompanyManagerId = requesterCompanyManagerId;
     }
 
 
@@ -77,7 +100,8 @@ public class Delivery extends BaseEntity {
                                   String recipientName,
                                   UUID recipientUserId,
                                   RouteEstimate hubRouteEstimate,
-                                  DeliveryManagers deliveryManagers) {
+                                  DeliveryManagers deliveryManagers,
+                                  DeliveryCompanies companies) {
         Delivery delivery = Delivery.builder()
                 .orderId(orderId)
                 .status(determineInitialStatus(departureHubId, arrivalHubId))
@@ -86,6 +110,10 @@ public class Delivery extends BaseEntity {
                 .deliveryAddress(deliveryAddress)
                 .recipientName(recipientName)
                 .recipientUserId(recipientUserId)
+                .supplierCompanyId(companies.supplierCompanyId())
+                .supplierCompanyManagerId(companies.supplierCompanyManagerId())
+                .requesterCompanyId(companies.requesterCompanyId())
+                .requesterCompanyManagerId(companies.requesterCompanyManagerId())
                 .build();
 
         delivery.deliveryManagerId = departureHubId.equals(arrivalHubId)
@@ -123,6 +151,17 @@ public class Delivery extends BaseEntity {
         return departureHubId.equals(arrivalHubId)
                 ? DeliveryStatus.HUB_ARRIVED
                 : DeliveryStatus.HUB_WAITING;
+    }
+
+    public boolean isRelatedTo(UUID userId) {
+        return userId.equals(recipientUserId)
+                || userId.equals(requesterCompanyManagerId)
+                || userId.equals(supplierCompanyManagerId)
+                || isManagedBy(userId);
+    }
+
+    public boolean isManagedBy(UUID userId) {
+        return routes.stream().anyMatch(route -> userId.equals(route.getDeliveryManagerId()));
     }
 
 

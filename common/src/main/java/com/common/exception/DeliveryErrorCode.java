@@ -18,6 +18,7 @@ public enum DeliveryErrorCode implements ErrorCode{
     DELIVERY_ROUTE_TYPE_NOT_FOUND(HttpStatus.BAD_REQUEST, "해당 배송에 없는 구간 유형입니다."),
     DELIVERY_ROUTE_NOT_ASSIGNABLE(HttpStatus.CONFLICT, "완료되거나 취소된 구간에는 담당자를 배정할 수 없습니다."),
     DELIVERY_INVALID_REQUESTER_COMPANY(HttpStatus.BAD_REQUEST, "요청 업체를 찾을 수 없습니다."),
+    DELIVERY_INVALID_SUPPLIER_COMPANY(HttpStatus.BAD_REQUEST, "공급 업체를 찾을 수 없습니다."),
     DELIVERY_INVALID_RECIPIENT(HttpStatus.BAD_REQUEST, "수령인 정보를 찾을 수 없습니다."),
 
     // user-ms 호출 관련

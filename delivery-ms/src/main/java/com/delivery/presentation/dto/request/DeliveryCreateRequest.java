@@ -11,6 +11,7 @@ public record DeliveryCreateRequest(
         @NotNull UUID orderId,
         @NotNull UUID departureHubId,
         @NotNull UUID requesterCompanyId,
+        @NotNull UUID supplierCompanyId,
         @NotNull UUID recipientUserId
 ) {
 
@@ -20,6 +21,7 @@ public record DeliveryCreateRequest(
                 orderId,
                 departureHubId,
                 requesterCompanyId,
+                supplierCompanyId,
                 recipientUserId);
     }
 }

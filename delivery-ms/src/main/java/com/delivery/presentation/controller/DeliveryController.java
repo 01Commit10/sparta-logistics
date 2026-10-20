@@ -1,6 +1,5 @@
 package com.delivery.presentation.controller;
 
-import com.common.auth.AuthContract;
 import com.common.auth.AuthUser;
 import com.common.auth.web.CurrentUser;
 import com.common.page.PagePolicy;
@@ -9,15 +8,17 @@ import com.delivery.application.dto.result.DeliveryResult;
 import com.delivery.application.service.DeliveryCommandService;
 import com.delivery.application.service.DeliveryQueryService;
 import com.delivery.presentation.dto.request.DeliveryManagerAssignRequest;
+import com.delivery.presentation.dto.request.DeliverySearchRequest;
 import com.delivery.presentation.dto.request.DeliveryStatusChangeRequest;
 import com.delivery.presentation.dto.response.DeliveryResponse;
+import com.delivery.presentation.dto.response.DeliveryRouteResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -34,26 +35,25 @@ public class DeliveryController {
 
     @GetMapping("/{deliveryId}")
     public DeliveryResponse getDelivery(@PathVariable UUID deliveryId,
-                                        @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId) {
-        DeliveryResult result = deliveryQueryService.getDelivery(deliveryId, userId);
-
+                                        @CurrentUser AuthUser user) {
+        DeliveryResult result = deliveryQueryService.getDelivery(deliveryId, user.id(), user.isMaster());
         return DeliveryResponse.from(result);
     }
 
     @GetMapping
-    public PageResponse<DeliveryResponse> getDeliveries(@RequestHeader(AuthContract.HEADER_USER_ID) UUID userId,
-                                                        Pageable pageable) {
+    public PageResponse<DeliveryResponse> searchDeliveries(@CurrentUser AuthUser user,
+                                                           @ModelAttribute DeliverySearchRequest request,
+                                                           Pageable pageable) {
         Pageable normalized = PAGE_POLICY.apply(pageable);
-        Page<DeliveryResult> deliveries = deliveryQueryService.getDeliveries(userId, normalized);
-
+        Page<DeliveryResult> deliveries = deliveryQueryService.searchDeliveries(
+                request.toQuery(), user.id(), user.isMaster(), normalized);
         return PageResponse.from(deliveries, DeliveryResponse::from);
     }
 
     @GetMapping("/by-order/{orderId}")
     public DeliveryResponse getDeliveryByOrderId(@PathVariable UUID orderId,
-                                                 @RequestHeader(AuthContract.HEADER_USER_ID) UUID userId) {
-        DeliveryResult result = deliveryQueryService.getDeliveryByOrderId(orderId, userId);
-
+                                                 @CurrentUser AuthUser user) {
+        DeliveryResult result = deliveryQueryService.getDeliveryByOrderId(orderId, user.id(), user.isMaster());
         return DeliveryResponse.from(result);
     }
 
@@ -61,7 +61,6 @@ public class DeliveryController {
     public DeliveryResponse assignDeliveryManager(@PathVariable UUID deliveryId,
                                                   @RequestBody @Valid DeliveryManagerAssignRequest request) {
         DeliveryResult result = deliveryCommandService.assignDeliveryManager(deliveryId, request.toCommand());
-
         return DeliveryResponse.from(result);
     }
 
@@ -70,7 +69,14 @@ public class DeliveryController {
                                                  @CurrentUser AuthUser user,
                                                  @RequestBody @Valid DeliveryStatusChangeRequest request) {
         DeliveryResult result = deliveryCommandService.changeDeliveryStatus(deliveryId, request.status(), user.id(), user.isMaster());
-
         return DeliveryResponse.from(result);
+    }
+
+    @GetMapping("/{deliveryId}/routes")
+    public List<DeliveryRouteResponse> getDeliveryRoutes(@PathVariable UUID deliveryId,
+                                                         @CurrentUser AuthUser user) {
+        return deliveryQueryService.getDeliveryRoutes(deliveryId, user.id(), user.isMaster()).stream()
+                .map(DeliveryRouteResponse::from)
+                .toList();
     }
 }

@@ -126,6 +126,7 @@ gateway:
       - "PATCH,DELETE /api/v1/hub-routes/*"
       - "POST /api/v1/companies"
       - "DELETE /api/v1/companies/*"
+      - "PATCH /api/v1/deliveries/*/manager"
     # 관리자가 비밀번호를 정한 사용자(사용자 생성·비밀번호 초기화, 토큰 pcr=true)가 호출할 수 있는 요청 (GW-07). 그 밖은 403 PASSWORD_CHANGE_REQUIRED
     password-change-allowed:
       - "GET /api/v1/users/me"
