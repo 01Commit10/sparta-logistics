@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -44,8 +45,9 @@ public class OrderService {
         orderHistoryRepository.save(history);
 
         Order order = null;
-        // 재고가 빠졌을 "가능성"이 있으면 true -> 실패 시 복원 대상
-        boolean stockMayBeDecreased = false;
+        boolean stockMayBeDecreased = false;            // 재고가 빠졌을 "가능성"이 있으면 true -> 실패 시 복원 대상
+        StockDecreaseCommand decreaseCommand = null;    // 결과를 모를 때 같은 키로 다시 보내기 위해 보관
+        UUID decreaseOperationId = null;                // 차감 성공 시 hub 작업 ID -> 복원에 필요
         try {
             // 2. 재고 조회 (차감 할 허브 선택)
             InventoryInfo inventoryInfo = selectInventory(command);
@@ -63,9 +65,10 @@ public class OrderService {
             history.linkOrder(order);
 
             // 4. 재고 차감
+            decreaseCommand = new StockDecreaseCommand(
+                    order.getId(), inventoryInfo.hubId(), command.productId(), command.quantity());
             stockMayBeDecreased = true;
-            StockOperationResult stock = hubClient.decreaseStock(new StockDecreaseCommand(
-                    order.getId(), inventoryInfo.hubId(), command.productId(), command.quantity()));
+            StockOperationResult stock = hubClient.decreaseStock(decreaseCommand);
             if (!stock.succeeded()) {
                 stockMayBeDecreased = false;
                 if (stock.isInsufficientStock()) {
@@ -73,6 +76,7 @@ public class OrderService {
                 }
                 throw new BusinessException(OrderErrorCode.INVENTORY_UNAVAILABLE);
             }
+            decreaseOperationId = stock.operationId();
 
             // 5. 배송 생성
             DeliveryResult delivery = deliveryClient.createDelivery(new CreateDeliveryCommand(
@@ -90,7 +94,7 @@ public class OrderService {
         } catch (RuntimeException e) {
             // 보상: 재고가 빠졌을 수 있으면 복원 → 주문·이력 FAILED → 원래 예외 그대로 던짐
             if (stockMayBeDecreased) {
-                restoreStockSafely(order);
+                restoreStockSafely(decreaseCommand, decreaseOperationId);
             }
             if (order != null) {
                 order.fail();
@@ -109,14 +113,25 @@ public class OrderService {
 
     /**
      * 복원 실패가 원래 예외를 덮어쓰지 않도록 로그만 남긴다.
+     * 차감 작업 ID를 모르면 (타임아웃 등) 같은 멱등 키로 차감을 다시 보내서 hub에 기록된 결과를 확인한다.
      */
-    private void restoreStockSafely(Order order) {
+    private void restoreStockSafely(StockDecreaseCommand decreaseCommand, UUID decreaseOperationId) {
+        UUID orderId = decreaseCommand.orderId();
         try {
-            hubClient.restoreStock(new StockRestoreCommand(order.getId()));
+            UUID operationId = (decreaseOperationId != null)
+                    ? decreaseOperationId : confirmDecreaseOperationId(decreaseCommand);
+            if (operationId == null) {
+                log.info("[주문 보상] 차감되지 않아 복원 불필요 orderId={}", orderId);
+            }
+            hubClient.restoreStock(new StockRestoreCommand(orderId, operationId));
         } catch (RuntimeException restoreError) {
-            log.error("[주문 보상 실패] 재고 복원 실패 orderId={}", order.getId(), restoreError);
+            log.error("[주문 보상 실패] 재고 복원 실패 orderId={}", orderId, restoreError);
         }
+    }
 
+    private UUID confirmDecreaseOperationId(StockDecreaseCommand decreaseCommand) {
+        StockOperationResult replay = hubClient.decreaseStock(decreaseCommand);
+        return replay.succeeded() ? replay.operationId() : null;
     }
 
     /**
