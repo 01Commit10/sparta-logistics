@@ -14,7 +14,7 @@
 | 공통 컬럼 | Audit 6개 (`created_at/by`, `updated_at/by`, `deleted_at/by`) |
 | 삭제 방식 | Soft Delete (조회 시 삭제 제외는 각 Repository에서 처리)         |
 
-> **Hub 반영 기준:** `feature/inventory-stock`의 엔티티와 PostgreSQL 통합 테스트 생성 DDL(2026-10-19). Hub는 5개 테이블·59개 컬럼(Audit 포함)이며, 다른 서비스의 설계는 유지했습니다. 원본 draw.io·이미지는 이번 Markdown 변경과 별개입니다.
+> **Hub 반영 기준:** `feature/inventory-rejection` 작업본의 엔티티와 PostgreSQL 통합 테스트 생성 DDL(2026-10-20). Hub는 5개 테이블·61개 컬럼(Audit 포함)이며, 다른 서비스의 설계는 유지했습니다. 원본 draw.io·이미지는 이번 Markdown 변경과 별개입니다.
 
 ### 표기 규칙
 
@@ -137,11 +137,13 @@ erDiagram
     p_inventory_operations {
         UUID id PK
         VARCHAR idempotency_key UK "(120)"
+        UUID original_operation_id UK "원본 차감 Operation 논리 참조, NULL"
         UUID order_id "REF p_orders, NULL"
         UUID hub_id "REF p_hubs"
         UUID product_id "REF p_products"
         VARCHAR operation_type "(20) CK INCREASE/DECREASE/RESTORE"
         VARCHAR operation_status "(20) CK SUCCEEDED/REJECTED"
+        VARCHAR rejection_reason "(40) NULL, CK INSUFFICIENT_STOCK/INVENTORY_NOT_FOUND"
         INTEGER requested_quantity
         UUID inventory_id "REF p_inventories, NULL"
         INTEGER remaining_quantity "NULL"
@@ -280,13 +282,17 @@ erDiagram
 | `p_hubs` | 전국 17개 허브 (초기 적재, 변경 API 없음) | `name` UNIQUE |
 | `p_hub_routes` | 방향 있는 P2P 허브 간 경로 | UNIQUE(`from_hub_id`, `to_hub_id`) |
 | `p_inventories` | 허브별 상품 현재 재고 | UNIQUE(`hub_id`, `product_id`) · `quantity >= 0` |
-| `p_inventory_operations` | 어떤 재고를 얼마나 변경하도록 요청했고, 어떤 결과가 났는지 기록 | `idempotency_key` UNIQUE(120자) · 유형/상태 CHECK |
+| `p_inventory_operations` | 재고 변경 요청·처리 결과·거절 사유·복원 원본 기록 | `idempotency_key` UNIQUE(120자) · `original_operation_id` UNIQUE(NULL 허용) · 유형/상태/사유 값 CHECK |
 | `p_inventory_histories` | 실제 반영된 수량 변경을 작업·주문과 연결 | `operation_id` UNIQUE · `stock_change <> 0` · `stock_after >= 0` |
 
-- 현재 차감 흐름: **조건부 UPDATE → 변경 후 재고 조회 → Operation 저장 → History 저장 → 커밋**. 세 테이블의 변경은 하나의 응용 서비스 트랜잭션으로 묶이며 이력 저장 실패 시 모두 롤백됩니다.
-- Inventory는 현재 값, Operation은 요청·결과, History는 실제 증감 내역을 담당합니다. 정상 차감은 Operation 1건·History 1건을 남깁니다. Operation의 DB상 이력 관계는 0..1건입니다.
-- **구현 범위:** 재고 등록·조건 조회 및 정상 차감·기록·롤백 검증. `REJECTED`와 `INCREASE/RESTORE`는 enum에만 정의되어 있으며, 거절 결과 저장·멱등성 재응답·복원·작업 결과 조회는 후속 구현입니다. 키 UNIQUE만으로 기존 결과를 재응답하는 멱등성이 완성되지는 않습니다.
-- Hub 내부 참조도 현재는 UUID 논리 참조이며 물리적 FK가 없습니다. 두 UNIQUE 제약(허브·상품 조합, 멱등성 키)은 논리 삭제된 행도 포함합니다.
+- 정상 차감 흐름: **조건부 UPDATE → 변경 후 재고 조회 → SUCCEEDED Operation 저장 → History 저장 → 커밋**. 세 테이블의 변경은 하나의 응용 서비스 트랜잭션으로 묶이며 이력 저장 실패 시 모두 롤백됩니다.
+- 차감 업무 거절은 **REJECTED Operation만 저장·커밋**하고 History를 만들지 않습니다. 수량 부족은 `INSUFFICIENT_STOCK`으로 409, 대상 없음·논리 삭제는 `INVENTORY_NOT_FOUND`로 404를 반환합니다. HTTP 오류 변환은 서비스 트랜잭션 커밋 후 컨트롤러에서 수행합니다.
+- Inventory는 현재 값, Operation은 요청·결과·거절 사유, History는 실제 증감 내역을 담당합니다. 정상 차감은 Operation 1건·History 1건, 업무 거절은 Operation 1건·History 0건을 남깁니다.
+- 성공의 거절 사유는 NULL입니다. 수량 부족은 재고 ID·수량을 기록하고, 대상 없음은 두 값을 NULL로 기록합니다. 이 조합은 엔티티 팩토리에서 검증하며 DB의 컬럼 간 CHECK로 구현한 것은 아닙니다.
+- **구현 범위:** 재고 등록·조건 조회, 차감 성공·거절 저장, 같은 키의 결과 재응답·내용 충돌, 원본 차감 기준 복원과 중복 복원 방지. 증가·작업 결과 조회 API는 후속 구현입니다. 같은 주문을 다른 키로 차감하는 업무 중복 방지는 아직 없습니다.
+- 복원은 성공한 DECREASE의 재고 ID·수량을 사용하고, 복원 Operation에 원본 ID를 기록합니다. 재고 증가·RESTORE Operation·History는 함께 커밋됩니다. 복원 거절은 현재 별도 REJECTED Operation으로 저장하지 않습니다.
+- 중복 충돌은 롤백 후 새 트랜잭션에서 같은 키를 먼저 확인합니다. 복원의 재고 없음·정수 범위 초과도 기존 결과를 재확인하며, 키가 없으면 원본의 기존 복원을 확인한 후 원래 오류를 유지합니다.
+- Hub 내부 참조도 현재는 UUID 논리 참조이며 물리적 FK가 없습니다. 허브·상품 조합, 멱등성 키, 원본 차감 ID의 UNIQUE는 논리 삭제된 행도 포함합니다. 원본 차감 ID의 NULL은 여러 행에 허용됩니다.
 - **명칭 차이:** 최근 통합 설계의 `departure_hub_id/arrival_hub_id`와 달리 현재 Hub 코드·초기 데이터는 `from_hub_id/to_hub_id`입니다. 이 문서는 구현명을 사용하며, 명칭 통일 시 코드·SQL·API 계약의 영향 범위를 함께 검토해야 합니다.
 - 경로의 출발≠도착·거리/시간 비음수 CHECK는 현재 엔티티와 생성 DDL에 없으므로 구현된 DB 제약으로 표시하지 않았습니다.
 - Order·Delivery의 현재 호출 경로·필드와 소비자 Feign 예시는 [Hub-MS Feign 연동 사용법](<../guide/사용법/Hub-MS Feign 연동 사용법.md>)을 참고합니다.

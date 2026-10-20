@@ -13,8 +13,10 @@ import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
 import com.company.fake.FakeUserClient;
 import com.company.product.application.dto.ProductSearchQuery;
+import com.company.product.application.service.ProductQueryService;
 import com.company.product.application.service.ProductService;
 import com.company.product.domain.entity.Product;
+import com.company.product.infrastructure.viewcount.DbProductViewCounter;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -93,7 +95,8 @@ class DeleteCompanyTest {
     @DisplayName("소속 상품은 지우지 않지만, 상품 조회·검색에서는 함께 제외된다")
     void productsHidden() {
         ProductService productService = new ProductService(productRepository, companyRepository,
-            new FakeInventoryClient(), TransactionOperations.withoutTransaction());
+            new FakeInventoryClient(), TransactionOperations.withoutTransaction(),
+            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
         Product product = productRepository.save(
                 Product.create(company, "생수 2L", "6개입", new BigDecimal("12000.00")));
 
