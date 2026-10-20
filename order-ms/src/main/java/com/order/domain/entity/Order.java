@@ -139,4 +139,14 @@ public class Order extends BaseEntity {
         validateCancellable();
         this.orderStatus = OrderStatus.CANCELED;
     }
+
+    /**
+     * 논리 삭제. BaseEntity.softDelete가 deleted_at, deleted_by를 기록한다.
+     */
+    public void delete(UUID actorId) {
+        if (orderStatus != OrderStatus.CANCELED && orderStatus != OrderStatus.FAILED) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_DELETABLE);
+        }
+        softDelete(actorId);
+    }
 }

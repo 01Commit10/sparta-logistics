@@ -6,6 +6,7 @@ import com.common.page.PagePolicy;
 import com.common.page.PageResponse;
 import com.order.application.dto.OrderResult;
 import com.order.application.service.OrderCancelService;
+import com.order.application.service.OrderDeleteService;
 import com.order.application.service.OrderQueryService;
 import com.order.application.service.OrderService;
 import com.order.presentation.dto.CreateOrderRequest;
@@ -28,7 +29,8 @@ import java.util.UUID;
 public class OrderController {
     private final OrderService orderService;
     private final OrderQueryService orderQueryService;
-    private final OrderCancelService orderCancelService;   // 필드 추가
+    private final OrderCancelService orderCancelService;
+    private final OrderDeleteService orderDeleteService;
 
     // cratedAt은 PagePolicy가 기본으로 허용, 추가로 총액 정렬만 허용
     private static final PagePolicy PAGE_POLICY = PagePolicy.of("totalAmount");
@@ -62,5 +64,11 @@ public class OrderController {
         return OrderResponse.from(result);
     }
 
+    @DeleteMapping("/{orderId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteOrder(@CurrentUser AuthUser authUser, @PathVariable UUID orderId) {
+        authUser.requireMaster();   // MASTER가 아니면 403 (common)
+        orderDeleteService.deleteOrder(orderId, authUser.id());
+    }
 
 }
