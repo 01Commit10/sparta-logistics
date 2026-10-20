@@ -17,6 +17,7 @@ import com.delivery.domain.repository.DeliveryRepository;
 import com.delivery.domain.vo.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
@@ -32,6 +33,7 @@ public class DeliveryCommandService {
     private final HubRouteClient hubRouteClient;
 
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public DeliveryCreateResult createDelivery(DeliveryCreateCommand command) {
         UUID departureHubId = command.departureHubId();
 
