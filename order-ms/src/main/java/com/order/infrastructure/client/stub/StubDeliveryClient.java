@@ -16,4 +16,9 @@ public class StubDeliveryClient implements DeliveryClient {
     public DeliveryResult createDelivery(CreateDeliveryCommand command) {
         return new DeliveryResult(UUID.randomUUID());
     }
+
+    @Override
+    public void cancelDelivery(UUID deliveryId) {
+        // stub: 항상 취소 성공
+    }
 }

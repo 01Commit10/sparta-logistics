@@ -137,4 +137,26 @@ public class OrderTest {
         assertThat(order.isOrderedBy(UUID.randomUUID())).isFalse();
     }
 
+    @Test
+    @DisplayName("완료된 주문을 취소하면 상태는 CANCELLED이다")
+    void cancelOrder() {
+        Order order = createOrder(3, UNIT_PRICE);
+        order.complete(UUID.randomUUID(), UUID.randomUUID());
+
+        order.cancel();
+
+        assertThat(order.getOrderStatus()).isEqualTo(OrderStatus.CANCELED);
+    }
+
+    @Test
+    @DisplayName("완료되지 않은 주문은 취소할 수 없다")
+    void cancelOrderFailNotCompleted() {
+        Order order = createOrder(3, UNIT_PRICE);   // PROCESSING
+
+        assertThatThrownBy(order::cancel)
+                .asInstanceOf(type(BusinessException.class))
+                .extracting(BusinessException::getErrorCode)
+                .isEqualTo(OrderErrorCode.ORDER_NOT_CANCELLABLE);
+    }
+
 }
