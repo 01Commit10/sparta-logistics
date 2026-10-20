@@ -105,8 +105,13 @@ public class Order extends BaseEntity {
     }
 
     private void validateProcessing() {
-        if(orderStatus != OrderStatus.PROCESSING){
+        if (orderStatus != OrderStatus.PROCESSING) {
             throw new BusinessException(OrderErrorCode.ORDER_NOT_PROCESSING);
         }
+    }
+
+    /** 이 주문을 주문한 사용자인지 확인 (조회, 삭제 권한 판단에 사용) */
+    public boolean isOrderedBy(UUID userId) {
+        return this.orderedBy.equals(userId);
     }
 }

@@ -118,4 +118,23 @@ public class OrderTest {
                 .isEqualTo(OrderErrorCode.ORDER_NOT_PROCESSING);
     }
 
+    @Test
+    @DisplayName("주문한 사용자면 isOrderedBy가 true를 반환한다.")
+    void isOrderedByOwner() {
+        UUID orderedId = UUID.randomUUID();
+        Order order = Order.create(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                3, new BigDecimal("1000"), null, orderedId);
+
+        assertThat(order.isOrderedBy(orderedId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("다른 사용자면 isOrderedBy가 false를 반환한단.")
+    void isOrderedByOther() {
+        Order order = Order.create(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                3, new BigDecimal("1000"), null, UUID.randomUUID());
+
+        assertThat(order.isOrderedBy(UUID.randomUUID())).isFalse();
+    }
+
 }

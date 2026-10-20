@@ -28,7 +28,6 @@ public class OrderController {
 
         OrderResult result = orderService.createOrder(request.toCommand(authUser.id(), idempotencyKey));
         return ResponseEntity.status(HttpStatus.CREATED).body(OrderResponse.from(result));
-
-
     }
+
 }
