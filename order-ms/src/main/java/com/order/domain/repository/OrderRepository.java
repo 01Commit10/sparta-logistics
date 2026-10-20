@@ -18,6 +18,6 @@ public interface OrderRepository {
 
     Page<Order> findAllActive(Pageable pageable);
 
-    Page<Order> findALLByOrderedByAndDeletedAtIsNull(UUID orderedBy, Pageable pageable);
+    Page<Order> findAllActiveByOrderedBy(UUID orderedBy, Pageable pageable);
 
 }

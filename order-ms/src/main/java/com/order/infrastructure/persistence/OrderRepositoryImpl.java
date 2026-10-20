@@ -38,7 +38,7 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
-    public Page<Order> findALLByOrderedByAndDeletedAtIsNull(UUID orderedBy, Pageable pageable) {
+    public Page<Order> findAllActiveByOrderedBy(UUID orderedBy, Pageable pageable) {
         return orderJpaRepository.findAllByOrderedByAndDeletedAtIsNull(orderedBy, pageable);
     }
 }
