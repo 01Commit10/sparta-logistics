@@ -1,0 +1,620 @@
+{
+  "S1-top": {
+    "rps": 24.148300681269486,
+    "avg": 2009.8752820181112,
+    "med": 2027.395,
+    "p95": 2400.9739999999997,
+    "p99": 2501.53744,
+    "failed": 0,
+    "count": 773,
+    "db": {
+      "seq_scan": 3134,
+      "seq_tup_read": 1549814023,
+      "idx_scan": 0,
+      "idx_tup_fetch": 0,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    }
+  },
+  "S1-detail": {
+    "rps": 3811.1957506726612,
+    "avg": 13.072967917336742,
+    "med": 9.2585,
+    "p95": 30.823449999999998,
+    "p99": 46.819359999999996,
+    "failed": 0,
+    "count": 114392,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 341583,
+      "idx_tup_fetch": 341583,
+      "n_tup_upd": 113865
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    }
+  },
+  "S1-search": {
+    "rps": 19.168787740284376,
+    "avg": 2514.211691318328,
+    "med": 2530.817,
+    "p95": 3009.84395,
+    "p99": 3090.28116,
+    "failed": 0,
+    "count": 622,
+    "db": {
+      "seq_scan": 2482,
+      "seq_tup_read": 1241521964,
+      "idx_scan": 0,
+      "idx_tup_fetch": 0,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    }
+  },
+  "S2-top": {
+    "rps": 51.48559400072125,
+    "avg": 958.0004915147692,
+    "med": 953.709,
+    "p95": 1149.822,
+    "p99": 1236.0238,
+    "failed": 0,
+    "count": 1591,
+    "db": {
+      "seq_scan": 3237,
+      "seq_tup_read": 1595859497,
+      "idx_scan": 1596,
+      "idx_tup_fetch": 15960,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    }
+  },
+  "S2-detail": {
+    "rps": 3614.387738231082,
+    "avg": 13.784630796319817,
+    "med": 10.028500000000001,
+    "p95": 31.891349999999992,
+    "p99": 48.23254,
+    "failed": 0,
+    "count": 108474,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 323170,
+      "idx_tup_fetch": 323170,
+      "n_tup_upd": 107723
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    }
+  },
+  "S2-search": {
+    "rps": 19.792520821931987,
+    "avg": 2428.0706391912922,
+    "med": 2604.432,
+    "p95": 3400.8417,
+    "p99": 3579.88032,
+    "failed": 0,
+    "count": 643,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 1286,
+      "idx_tup_fetch": 710753012,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    }
+  },
+  "S3-top": {
+    "rps": 39586.25270115652,
+    "avg": 1.231207116255964,
+    "med": 1.158,
+    "p95": 1.625,
+    "p99": 2.226,
+    "failed": 0,
+    "count": 1187647,
+    "db": {
+      "seq_scan": 101,
+      "seq_tup_read": 53864897,
+      "idx_scan": 55,
+      "idx_tup_fetch": 550,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 1187597,
+      "misses": 50
+    }
+  },
+  "S3-detail": {
+    "rps": 28597.453527388134,
+    "avg": 1.7146165493367724,
+    "med": 1.662,
+    "p95": 2.226,
+    "p99": 2.976,
+    "failed": 0,
+    "count": 857980,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 29037,
+      "idx_tup_fetch": 29037,
+      "n_tup_upd": 28447
+    },
+    "redis": {
+      "hits": 1744496,
+      "misses": 4
+    }
+  },
+  "S3-search": {
+    "rps": 19539.890974507987,
+    "avg": 2.3878189518207193,
+    "med": 1.208,
+    "p95": 1.808,
+    "p99": 2.454,
+    "failed": 0,
+    "count": 657731,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 3499,
+      "idx_tup_fetch": 328553439,
+      "n_tup_upd": 2925
+    },
+    "redis": {
+      "hits": 658363,
+      "misses": 219
+    }
+  },
+  "S4-top": {
+    "rps": 92704.64540857618,
+    "avg": 0.4976830616437918,
+    "med": 0.452,
+    "p95": 0.876,
+    "p99": 1.3996299999999753,
+    "failed": 0,
+    "count": 2781238,
+    "db": {
+      "seq_scan": 3,
+      "seq_tup_read": 2391315,
+      "idx_scan": 3,
+      "idx_tup_fetch": 30,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 150,
+      "misses": 0
+    }
+  },
+  "S4-detail": {
+    "rps": 42078.07315337477,
+    "avg": 1.1503014363920976,
+    "med": 1.086,
+    "p95": 1.721,
+    "p99": 2.472,
+    "failed": 0,
+    "count": 1262399,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 24047,
+      "idx_tup_fetch": 24047,
+      "n_tup_upd": 23762
+    },
+    "redis": {
+      "hits": 1317028,
+      "misses": 0
+    }
+  },
+  "S4-search": {
+    "rps": 53832.75647832844,
+    "avg": 0.8229877353248246,
+    "med": 0.459,
+    "p95": 0.867,
+    "p99": 1.332,
+    "failed": 0,
+    "count": 1839266,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 4104,
+      "idx_tup_fetch": 273303804,
+      "n_tup_upd": 3586
+    },
+    "redis": {
+      "hits": 3626,
+      "misses": 161
+    }
+  },
+  "S1-top-vu10": {
+    "rps": 24.024015303297748,
+    "avg": 414.029431318681,
+    "med": 359,
+    "p95": 677.0661,
+    "p99": 731.17591,
+    "failed": 0,
+    "count": 728,
+    "db": {
+      "seq_scan": 2931,
+      "seq_tup_read": 1455838848,
+      "idx_scan": 0,
+      "idx_tup_fetch": 0,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    },
+    "vus": 10
+  },
+  "S1-top-vu100": {
+    "rps": 23.504182953277727,
+    "avg": 4007.291786783043,
+    "med": 4204.3625,
+    "p95": 4616.679,
+    "p99": 4800.61384,
+    "failed": 0,
+    "count": 802,
+    "db": {
+      "seq_scan": 3242,
+      "seq_tup_read": 1599464564,
+      "idx_scan": 0,
+      "idx_tup_fetch": 0,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    },
+    "vus": 100
+  },
+  "S1-top-vu200": {
+    "rps": 23.732912368510636,
+    "avg": 7533.935702315326,
+    "med": 8330.495,
+    "p95": 8784.887299999999,
+    "p99": 8878.21192,
+    "failed": 0,
+    "count": 907,
+    "db": {
+      "seq_scan": 3700,
+      "seq_tup_read": 1822226567,
+      "idx_scan": 0,
+      "idx_tup_fetch": 0,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    },
+    "vus": 200
+  },
+  "S1-detail-vu10": {
+    "rps": 3762.9030758733743,
+    "avg": 2.617166027440966,
+    "med": 2.534,
+    "p95": 3.305,
+    "p99": 4.227,
+    "failed": 0,
+    "count": 112897,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 337002,
+      "idx_tup_fetch": 337002,
+      "n_tup_upd": 112333
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    },
+    "vus": 10
+  },
+  "S1-detail-vu100": {
+    "rps": 3611.718524908777,
+    "avg": 27.62757129287221,
+    "med": 25.473,
+    "p95": 63.85379999999999,
+    "p99": 89.74763999999998,
+    "failed": 0,
+    "count": 108433,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 321249,
+      "idx_tup_fetch": 321249,
+      "n_tup_upd": 107084
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    },
+    "vus": 100
+  },
+  "S1-detail-vu200": {
+    "rps": 3651.150627127694,
+    "avg": 54.66053060368807,
+    "med": 49.711,
+    "p95": 131.7498,
+    "p99": 190.51307999999997,
+    "failed": 0,
+    "count": 109709,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 337697,
+      "idx_tup_fetch": 337697,
+      "n_tup_upd": 112568
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    },
+    "vus": 200
+  },
+  "S1-search-vu10": {
+    "rps": 18.269312177184545,
+    "avg": 544.7290306306309,
+    "med": 457.642,
+    "p95": 925.8616,
+    "p99": 972.82094,
+    "failed": 0,
+    "count": 555,
+    "db": {
+      "seq_scan": 2257,
+      "seq_tup_read": 1111317420,
+      "idx_scan": 0,
+      "idx_tup_fetch": 0,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    },
+    "vus": 10
+  },
+  "S1-search-vu100": {
+    "rps": 17.93943142614437,
+    "avg": 5139.929796557116,
+    "med": 5422.731,
+    "p95": 5991.6217,
+    "p99": 6152.87166,
+    "failed": 0,
+    "count": 639,
+    "db": {
+      "seq_scan": 2611,
+      "seq_tup_read": 1277933266,
+      "idx_scan": 0,
+      "idx_tup_fetch": 0,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    },
+    "vus": 100
+  },
+  "S1-search-vu200": {
+    "rps": 17.374565090645795,
+    "avg": 9979.558772663873,
+    "med": 11316.012,
+    "p95": 11891.4932,
+    "p99": 12040.0368,
+    "failed": 0,
+    "count": 717,
+    "db": {
+      "seq_scan": 2910,
+      "seq_tup_read": 1433841491,
+      "idx_scan": 0,
+      "idx_tup_fetch": 0,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 0,
+      "misses": 0
+    },
+    "vus": 200
+  },
+  "S4-top-vu10": {
+    "rps": 62317.01140417878,
+    "avg": 0.13790011516061085,
+    "med": 0.129,
+    "p95": 0.192,
+    "p99": 0.259,
+    "failed": 0,
+    "count": 1869563,
+    "db": {
+      "seq_scan": 17,
+      "seq_tup_read": 10000000,
+      "idx_scan": 10,
+      "idx_tup_fetch": 100,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 20,
+      "misses": 10
+    },
+    "vus": 10
+  },
+  "S4-top-vu100": {
+    "rps": 94829.60451266321,
+    "avg": 0.9936531204833161,
+    "med": 0.846,
+    "p95": 1.681,
+    "p99": 2.488,
+    "failed": 0,
+    "count": 2845008,
+    "db": {
+      "seq_scan": 201,
+      "seq_tup_read": 100000000,
+      "idx_scan": 100,
+      "idx_tup_fetch": 1000,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 200,
+      "misses": 100
+    },
+    "vus": 100
+  },
+  "S4-top-vu200": {
+    "rps": 88721.28114101526,
+    "avg": 2.064781295070045,
+    "med": 1.507,
+    "p95": 3.346,
+    "p99": 5.471,
+    "failed": 0,
+    "count": 2661833,
+    "db": {
+      "seq_scan": 408,
+      "seq_tup_read": 199000000,
+      "idx_scan": 199,
+      "idx_tup_fetch": 1990,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 119,
+      "misses": 200
+    },
+    "vus": 200
+  },
+  "S4-detail-vu10": {
+    "rps": 16984.060267063272,
+    "avg": 0.5611304527015417,
+    "med": 0.52,
+    "p95": 0.894,
+    "p99": 1.184,
+    "failed": 0,
+    "count": 509541,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 44287,
+      "idx_tup_fetch": 44287,
+      "n_tup_upd": 42687
+    },
+    "redis": {
+      "hits": 581311,
+      "misses": 150
+    },
+    "vus": 10
+  },
+  "S4-detail-vu100": {
+    "rps": 52937.864545339464,
+    "avg": 1.844418235324805,
+    "med": 1.718,
+    "p95": 2.97,
+    "p99": 4.122,
+    "failed": 0,
+    "count": 1588247,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 19000,
+      "idx_tup_fetch": 19000,
+      "n_tup_upd": 18859
+    },
+    "redis": {
+      "hits": 1637957,
+      "misses": 0
+    },
+    "vus": 100
+  },
+  "S4-detail-vu200": {
+    "rps": 63558.53665519674,
+    "avg": 3.07747438925517,
+    "med": 2.849,
+    "p95": 4.919,
+    "p99": 7.106,
+    "failed": 0,
+    "count": 1906934,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 15000,
+      "idx_tup_fetch": 15000,
+      "n_tup_upd": 14932
+    },
+    "redis": {
+      "hits": 1951762,
+      "misses": 0
+    },
+    "vus": 200
+  },
+  "S4-search-vu10": {
+    "rps": 44005.36987022814,
+    "avg": 0.2028200134374412,
+    "med": 0.137,
+    "p95": 0.232,
+    "p99": 0.343,
+    "failed": 0,
+    "count": 1320193,
+    "db": {
+      "seq_scan": 30,
+      "seq_tup_read": 10000000,
+      "idx_scan": 1148,
+      "idx_tup_fetch": 125601030,
+      "n_tup_upd": 896
+    },
+    "redis": {
+      "hits": 152,
+      "misses": 108
+    },
+    "vus": 10
+  },
+  "S4-search-vu100": {
+    "rps": 31171.58500299195,
+    "avg": 2.7766420493402286,
+    "med": 0.908,
+    "p95": 2.118,
+    "p99": 3.04,
+    "failed": 0,
+    "count": 1225370,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 986,
+      "idx_tup_fetch": 557000306,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 202,
+      "misses": 494
+    },
+    "vus": 100
+  },
+  "S4-search-vu200": {
+    "rps": 277.6146414808578,
+    "avg": 605.1539867636814,
+    "med": 0.12,
+    "p95": 3.52369999999999,
+    "p99": 18509.76062,
+    "failed": 0.00015481074386562428,
+    "count": 12919,
+    "db": {
+      "seq_scan": 0,
+      "seq_tup_read": 0,
+      "idx_scan": 1284,
+      "idx_tup_fetch": 977850566,
+      "n_tup_upd": 0
+    },
+    "redis": {
+      "hits": 64,
+      "misses": 643
+    },
+    "vus": 200
+  }
+}
