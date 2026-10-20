@@ -88,7 +88,7 @@ public class OrderService {
             ));
 
             // 6. 주문 COMPLETED + 이력 SUCCEEDED
-            order.complete(delivery.deliveryId());
+            order.complete(delivery.deliveryId(), decreaseOperationId);
             history.succeed(201);
             return OrderResult.from(order);
         } catch (RuntimeException e) {

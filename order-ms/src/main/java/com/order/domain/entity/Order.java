@@ -110,8 +110,33 @@ public class Order extends BaseEntity {
         }
     }
 
-    /** 이 주문을 주문한 사용자인지 확인 (조회, 삭제 권한 판단에 사용) */
+    /**
+     * 이 주문을 주문한 사용자인지 확인 (조회, 삭제 권한 판단에 사용)
+     */
     public boolean isOrderedBy(UUID userId) {
         return this.orderedBy.equals(userId);
+    }
+
+    // 재고 차감 작업 ID (취소 시 재고 복원에 사용)
+    private UUID stockOperationId;
+
+    // 기존 complete(UUID deliveryId)를 교체
+    public void complete(UUID deliveryId, UUID stockOperationId) {
+        validateProcessing();
+        this.deliveryId = deliveryId;
+        this.stockOperationId = stockOperationId;
+        this.orderStatus = OrderStatus.COMPLETED;
+    }
+
+    // 외부 호출 전에 먼저 확인하려고 따로 연다
+    public void validateCancellable() {
+        if (orderStatus != OrderStatus.COMPLETED || stockOperationId == null) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_CANCELLABLE);
+        }
+    }
+
+    public void cancel() {
+        validateCancellable();
+        this.orderStatus = OrderStatus.CANCELED;
     }
 }
