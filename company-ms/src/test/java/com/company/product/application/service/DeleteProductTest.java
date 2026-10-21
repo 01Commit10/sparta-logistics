@@ -10,6 +10,7 @@ import com.company.company.domain.entity.Company;
 import com.company.fake.FakeCompanyRepository;
 import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
+import com.company.fake.HotProductCaches;
 import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.domain.entity.Product;
 import com.company.product.infrastructure.viewcount.DbProductViewCounter;
@@ -40,7 +41,7 @@ class DeleteProductTest {
     private final FakeInventoryClient inventoryClient = new FakeInventoryClient();
     private final ProductService service = new ProductService(productRepository, companyRepository,
             inventoryClient, TransactionOperations.withoutTransaction(),
-            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
+            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository), HotProductCaches.empty());
 
     private final Company company = companyRepository.save(
             Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), MANAGER_ID));
@@ -104,7 +105,7 @@ class DeleteProductTest {
             }
         };
         ProductService racing = new ProductService(productRepository, companyRepository, inventoryClient, deleteBeforeWrite,
-                new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
+                new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository), HotProductCaches.empty());
 
         assertError(() -> racing.deleteProduct(new DeleteProductCommand(product.getId(), MANAGER_ID, false)),
                 ProductErrorCode.PRODUCT_NOT_FOUND);

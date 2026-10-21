@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * product.cache.mode에 따라 CacheManager를 고른다 (P01 실험 단계 전환).
+ * product.cache.mode에 따라 CacheManager를 고른다 (P01 실험 단계 전환, P03 hot).
  * 이 빈이 있으면 Boot의 기본 RedisCacheManager는 만들어지지 않는다. Redis 직렬화·키 prefix는 common 설정을 그대로 쓴다.
  */
 @Configuration
@@ -33,6 +33,9 @@ public class ProductCacheConfig {
                     redisCacheConfiguration.getObject());
             case LAYERED -> new LayeredCacheManager(caffeineCacheManager(properties),
                     redisCacheManager(properties, connectionFactory.getObject(), redisCacheConfiguration.getObject()));
+            // 인기 상품은 L1 스냅샷(HotProductCache)이 따로 맡아, 상세·검색은 Redis만 쓰고 키 단위로 스탬피드를 막는다
+            case HOT -> new SingleFlightCacheManager(redisCacheManager(properties, connectionFactory.getObject(),
+                    redisCacheConfiguration.getObject()));
         };
     }
 

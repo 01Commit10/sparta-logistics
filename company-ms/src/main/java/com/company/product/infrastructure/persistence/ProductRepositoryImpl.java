@@ -6,9 +6,12 @@ import com.common.page.SpringDataPages;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
 import com.company.product.domain.repository.ProductSearchCondition;
+import com.company.product.domain.service.RankedProduct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -51,5 +54,10 @@ public class ProductRepositoryImpl implements ProductRepository {
     @Override
     public void applyViewCount(UUID id, long viewCount) {
         jpa.applyViewCount(id, viewCount);
+    }
+
+    @Override
+    public List<RankedProduct> findTopByViewCount(int limit) {
+        return jpa.findTopByViewCount(PageRequest.of(0, limit));
     }
 }

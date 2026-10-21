@@ -15,15 +15,22 @@ db:
   password: ${COMPANY_DB_PASSWORD}
 
 # 상품 조회 캐시 단계 (P01 실험). none: 캐시 없음(기본) · redis: 리모트 캐시 · layered: Caffeine(L1) + Redis(L2)
-# 캐시 단계(redis·layered)에서는 상세 조회수를 Redis에 모아 flush-interval마다 DB에 반영한다
+# hot (P03): 인기 상품 TOP N만 L1 스냅샷(덮어쓰기 갱신) + 순위 Redis Sorted Set, 상세·검색은 Redis + 키 단위 single-flight
+# 캐시 단계(redis·layered·hot)에서는 상세 조회수를 Redis에 모아 flush-interval마다 DB에 반영한다
 product:
   cache:
     mode: ${PRODUCT_CACHE_MODE:none}
     ttl:
       product-detail: 5m
       product-search: 30s
-    local:
+    local:                  # layered 모드 전용
       ttl: 10s
       maximum-size: 10000
+  hot:                      # hot 모드 전용
+    size: 10                # 스냅샷에 담을 인기 상품 수 (= 인기 상품 요청으로 볼 최대 size)
+    candidate-size: 30      # 순위에서 읽을 후보 수 (삭제된 상품 거르기용)
+    refresh-interval: 5s    # 스냅샷 덮어쓰기 주기
+    local-ttl: 1m           # 스케줄러가 멈췄을 때 옛 스냅샷을 버리는 안전 TTL
+    warmup-size: 1000       # 기동 시 순위가 비었으면 DB에서 넣을 상위 상품 수
   view-count:
     flush-interval: 5s

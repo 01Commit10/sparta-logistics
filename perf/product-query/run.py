@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""P01 상품 조회 최적화 실험: 단계(S1~S4)마다 인덱스·캐시를 바꿔 company-ms를 다시 띄우고 k6로 잰다.
+"""P01 상품 조회 최적화 실험: 단계(S1~S5)마다 인덱스·캐시를 바꿔 company-ms를 다시 띄우고 k6로 잰다.
 
     python3 perf/product-query/run.py seed                 # 실험 데이터 100만 건 (한 번)
-    python3 perf/product-query/run.py run                  # S1~S4 × top·detail·search
+    python3 perf/product-query/run.py run                  # S1~S4 × top·detail·search (S5는 --stages로)
     python3 perf/product-query/run.py run --stages S3,S4 --apis top --vus 100
+    python3 perf/product-query/run.py run --stages S4,S5 --vus 50,200 --results results/p03   # P03 재측정
     python3 perf/product-query/run.py cleanup              # 실험 데이터·인덱스 지우기
 
 - 저장소 루트에서 실행한다. postgres·redis 컨테이너가 떠 있어야 한다. 다른 서비스(eureka 등)는 필요 없다.
@@ -31,6 +32,7 @@ STAGES = {
     "S2": {"index": "on", "cache": "none", "label": "인덱스 O"},
     "S3": {"index": "on", "cache": "redis", "label": "인덱스 O + Redis 캐시"},
     "S4": {"index": "on", "cache": "layered", "label": "인덱스 O + Caffeine·Redis 레이어드 캐시"},
+    "S5": {"index": "on", "cache": "hot", "label": "인덱스 O + hot (TOP N L1 스냅샷 · 순위 ZSET · single-flight)"},
 }
 APIS = {"top": "인기 상품 TOP 10", "detail": "상품 상세 (+조회수)", "search": "이름 검색"}
 
@@ -167,7 +169,9 @@ def summarize(path):
 
 
 def cmd_run(args):
-    RESULTS.mkdir(exist_ok=True)
+    global RESULTS
+    RESULTS = HERE / args.results
+    RESULTS.mkdir(parents=True, exist_ok=True)
     if not (DATA / "ids.json").exists():
         export_ids()
     stages = args.stages.split(",")
@@ -234,6 +238,8 @@ def main():
                      help="쉼표로 여러 개 (예: 10,50,100,200). 50이 기본 결과, 나머지는 -vuN 파일")
     run.add_argument("--duration", default="30s")
     run.add_argument("--warmup", default="10s")
+    run.add_argument("--results", default="results",
+                     help="결과 폴더 (perf/product-query 기준). 기존 결과를 덮지 않고 따로 잴 때 (예: results/p03)")
     run.set_defaults(func=cmd_run)
     args = parser.parse_args()
     args.func(args)

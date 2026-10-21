@@ -8,6 +8,7 @@ import com.company.company.domain.entity.Company;
 import com.company.fake.FakeCompanyRepository;
 import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
+import com.company.fake.HotProductCaches;
 import com.company.product.application.dto.DeleteProductCommand;
 import com.company.product.application.dto.ProductResult;
 import com.company.product.application.dto.ProductSearchQuery;
@@ -92,7 +93,7 @@ class ProductQueryCachingTest {
                                       ProductQueryService productQueryService) {
             return new ProductService(productRepository, companyRepository, new FakeInventoryClient(),
                     TransactionOperations.withoutTransaction(), productQueryService,
-                    new DbProductViewCounter(productRepository));
+                    new DbProductViewCounter(productRepository), HotProductCaches.empty());
         }
     }
 
