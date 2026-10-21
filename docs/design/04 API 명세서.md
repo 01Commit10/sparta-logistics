@@ -102,13 +102,13 @@
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 주문 생성 | POST | `/orders` | 로그인·소속확인 | 업체, 상품, 수량, 요청사항, Idempotency-Key | 202 |
+| 주문 생성 | POST | `/orders` | 로그인·소속확인 | 업체, 상품, 수량, 단가(`unitPrice`), 요청사항, Idempotency-Key | 201 (동기 처리, COMPLETED). 단가 변경 409 `PRICE_CHANGED`, 재고 부족 409, 같은 키 다른 내용 409 `IDEMPOTENCY_KEY_CONFLICT`, 같은 키 처리 중·실패 409 `PREVIOUS_REQUEST_NOT_SUCCEEDED`, 배송 실패 503 |
 | 주문 목록 조회 | GET | `/orders` | 로그인 | status, companyId | 200 |
 | 주문 상세 조회 | GET | `/orders/{orderId}` | 주문 관계자 | orderId | 200 |
 | 주문 취소 | POST | `/orders/{orderId}/cancel` | 주문권한자·MASTER | 사유, Idempotency-Key | 202 |
 | 주문 처리 기록 조회 | GET | `/orders/{orderId}/histories` | 주문 관계자 | orderId | 200 |
 
-*주문 생성 시 Company Service에서 상품 단가를 확인하여* *`unit_price_snapshot`**에 저장하고, 주문 수량을 기준으로* *`total_amount`**를 계산합니다. 주문 조회 응답에는 주문 당시 단가와 총금액을 포함합니다. 주문 생성은 Saga를 시작하며, 재고 차감과 배송 생성이 완료될 때까지* *`PROCESSING`* *상태를 유지합니다.*
+*주문 생성 시 Company Service에서 상품 단가를 확인하여* *`unit_price_snapshot`**에 저장하고, 주문 수량을 기준으로* *`total_amount`**를 계산합니다. 주문 조회 응답에는 주문 당시 단가와 총금액을 포함합니다. 주문 생성은 Saga를 시작하며, 재고 차감과 배송 생성이 완료될 때까지* *`PROCESSING`* *상태를 유지합니다. 처리는 동기로 끝나므로 응답 시점의 주문은* *`COMPLETED`**입니다(실패하면 오류 응답, 주문은* *`FAILED`**). 흐름은 [[07 서비스 정책]] 7장을 봅니다.*
 
 ## Delivery
 
