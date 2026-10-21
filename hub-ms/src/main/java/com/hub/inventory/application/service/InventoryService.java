@@ -24,19 +24,22 @@ public class InventoryService {
     private final HubRepository hubRepository;
     private final ProductClient productClient;
     private final TransactionTemplate transactionTemplate;
+    private final InventoryLiveState liveState;
 
-    public InventoryService(InventoryRepository inventoryRepository, HubRepository hubRepository, ProductClient productClient, TransactionTemplate transactionTemplate) {
+    public InventoryService(InventoryRepository inventoryRepository, HubRepository hubRepository, ProductClient productClient, TransactionTemplate transactionTemplate, InventoryLiveState liveState) {
         this.inventoryRepository = inventoryRepository;
         this.hubRepository = hubRepository;
         this.productClient = productClient;
         this.transactionTemplate = transactionTemplate;
+        this.liveState = liveState;
     }
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<InventoryResult> getInventories(UUID hubId, UUID productId){
-        return inventoryRepository.findAll(hubId, productId)
+        List<InventoryResult> values = transactionTemplate.execute(status -> inventoryRepository.findAll(hubId, productId)
                 .stream()
                 .map(InventoryResult:: fromEntity)
-                .toList();
+                .toList());
+        return liveState.refresh(values);
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -63,7 +66,7 @@ public class InventoryService {
             );
         }
 
-        return transactionTemplate.execute(status -> {
+        InventoryResult result = transactionTemplate.execute(status -> {
             hubRepository.findById(command.hubId())
                     .orElseThrow(() -> new BusinessException(
                             CommonErrorCode.RESOURCE_NOT_FOUND,
@@ -90,16 +93,19 @@ public class InventoryService {
 
             return InventoryResult.fromEntity(savedInventory);
         });
+        liveState.registered(result);
+        return result;
     }
 
     // 상품 삭제에 따른 재고 정리. 대상이 없거나 이미 삭제되었어도 성공으로 처리한다.
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void deleteInventoriesByProductId(UUID productId, UUID actorId) {
         if (productId == null || actorId == null) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT);
         }
 
-        inventoryRepository.softDeleteByProductId(productId, actorId, LocalDateTime.now());
+        liveState.beforeDelete(productId);
+        transactionTemplate.executeWithoutResult(status -> inventoryRepository.softDeleteByProductId(productId, actorId, LocalDateTime.now()));
     }
 
     //재고 등록 명령의 필수 값 누락과 초기 수량의 유효성 검증

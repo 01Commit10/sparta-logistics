@@ -1,6 +1,6 @@
 # Hub-MS Feign 연동 사용법
 
-> 기준: `feature/inventory-rejection` 작업본의 Controller·DTO · 확인: 2026-10-20
+> 기준: `experiment/inventory-redis-streams` 작업본의 Controller·DTO·추가 대기 없는 Consumer · 확인: 2026-10-21
 > 대상: Order·Delivery 등에서 Hub를 호출하는 개발자. 아래 코드는 소비자 서비스에 작성할 예시이며, 서비스 간 실제 Feign 통신 검증과 구분합니다.
 
 ## 1. 현재 호출 계약
@@ -15,6 +15,15 @@
 | 상품 삭제에 따른 재고 정리 | `DELETE /internal/v1/inventories/products/{productId}` | Path: `productId`, 사용자 헤더는 아래 감사 규칙 참고 | 204, 본문 없음. 재고 없음·이미 삭제도 동일 |
 
 재고 조회는 두 조건을 모두 주면 AND 검색하며, 두 조건이 없으면 전체 조회합니다. 조회 결과가 없으면 빈 배열 `[]`입니다. 조회 수량은 참고값이며, 이후 차감 성공을 보장하지 않습니다. Order는 차감 성공 응답을 확인한 뒤 Delivery 생성을 요청합니다. Delivery가 별도로 재고 차감 여부를 조회하는 API는 현재 없습니다.
+
+경로·DTO는 아래 두 모드가 같지만, **재고 차감·복원 응답의 DB 반영 시점은 다릅니다.**
+
+| 실행 모드 | 응답 시점 | 현재 수량 조회 |
+|---|---|---|
+| `postgres` 또는 설정 생략 | PostgreSQL 커밋 후 | PostgreSQL |
+| `redis-streams` | Redis의 재고·작업 결과·Stream 기록 후. PostgreSQL은 Consumer가 비동기로 반영 | 조회 API가 Redis 수량 반영 |
+
+Redis 모드의 200을 받은 직후 PostgreSQL을 직접 조회하면 이전 수량이 보일 수 있습니다. **DB 커밋 완료가 필요한 연동에서는 이 차이를 고려해야 합니다.**
 
 ## 2. Feign에 어떻게 적나
 
@@ -110,6 +119,8 @@ DB·응용 DTO의 `fromHubId/toHubId`를 내부 응답 DTO에서만 `departureHu
 
 상품 삭제용 DELETE는 **그 상품의 모든 허브에 있는 활성 재고**에 삭제·수정 시각과 작업자를 기록하며, 수량·Operation·History를 보존합니다. 이미 삭제된 행은 수정하지 않으므로 재호출 시 최초 삭제 정보가 유지됩니다. 사용자 헤더가 있으면 해당 사용자를, 없으면 `AuthContract.SYSTEM_USER_ID`를 삭제자로 기록합니다. 이 UUID는 감사 기록용이며 호출자 인증 수단이 아닙니다.
 
+Redis 모드는 먼저 상품 삭제 표식을 기록해 새 차감·복원을 막습니다. 삭제 전에 수용한 이벤트는 이후에도 DB에 반영하며, 이때 삭제 감사 정보는 보존합니다.
+
 이 DELETE는 Company-MS의 상품 삭제에 따른 정리 명령입니다. MASTER·업체 매니저가 재고를 직접 삭제하는 사용자용 API와 구분합니다. Company-MS의 상품 삭제(`DELETE /api/v1/products/{productId}`)는 권한 검증 후 **이 API를 먼저 호출하고, 성공하면 상품을 논리 삭제**합니다. 호출이 실패하면(4xx·5xx·타임아웃) 상품은 삭제되지 않고 그 오류가 그대로 응답되며, 같은 요청을 다시 보내면 됩니다(이 API가 멱등이라 재호출해도 안전). 자세한 흐름은 [Company 사용법](<Company 사용법.md>) 3장을 참고합니다. 상품 삭제와 재고 등록이 동시에 진행되는 경우의 전체 서비스 정합성은 아직 검토 과제입니다.
 
 현재 공통 정책상 `/internal/**`는 Gateway에서 차단하지만, Hub의 별도 서비스 호출자 인증은 아직 구현되어 있지 않습니다. 이 경로만으로 접근 통제가 완성되는 것은 아니며, 내부 API는 허가된 서비스만 접근 가능한 환경을 전제로 합니다.
@@ -129,10 +140,11 @@ DB·응용 DTO의 `fromHubId/toHubId`를 내부 응답 DTO에서만 `departureHu
 }
 ```
 
-- 200은 재고 변경·Operation·History가 함께 커밋된 정상 차감 결과입니다. `remainingQuantity`는 해당 작업 직후의 값이며, 이후 다른 주문으로 바뀔 수 있습니다.
-- 수량 부족은 409 `INSUFFICIENT_STOCK`, 대상 없음·논리 삭제는 404 `INVENTORY_NOT_FOUND`입니다. 모두 `REJECTED` Operation과 거절 사유를 커밋한 뒤 오류 응답을 반환하며, History는 생성하지 않습니다. 대상 없음은 Operation의 재고 ID·남은 수량을 NULL로 기록합니다.
+- 200은 정상 차감 결과입니다. PostgreSQL 모드는 재고·Operation·History 커밋 후, Redis 모드는 결과·Stream 기록 후 응답합니다. `remainingQuantity`는 해당 작업 직후의 기록이며, 재요청 시점의 현재 수량이 아닙니다.
+- 수량 부족은 409 `INSUFFICIENT_STOCK`, 대상 없음·논리 삭제는 404 `INVENTORY_NOT_FOUND`입니다. 두 경우 모두 REJECTED Operation과 거절 사유를 보존하고 History는 만들지 않습니다. PostgreSQL 모드는 커밋 후 오류 응답을 반환하며, Redis 모드의 DB 저장은 Consumer가 수행합니다. 대상 없음은 Operation의 재고 ID·남은 수량이 NULL입니다.
 - 이 작업본의 common에는 `InventoryErrorCode`가 등록되어 있습니다. 같은 버전의 common을 사용하는 소비자는 원격 code를 해당 enum으로 복원할 수 있으며, `getErrorCode().getCode()` 문자열 비교도 가능합니다.
 - 같은 키·같은 요청은 저장된 성공·거절 결과를 반환하고, 같은 키·다른 내용은 409 `IDEMPOTENCY_CONFLICT`입니다. 타임아웃 후 재요청할 때는 최초 키와 본문을 유지합니다. 별도 작업 결과 조회 API는 아직 없습니다. 5xx라는 이유만으로 미처리를 단정하지 않습니다.
+- Redis 미준비·데이터 이상·과부하 보호 등으로 새 작업을 수용할 수 없으면 503 `SERVICE_UNAVAILABLE`입니다.
 - 작업 결과 조회·재고 증가 API와 내부 서비스 호출자 검증은 후속 구현입니다. 이 문서는 현재 HTTP 연결 계약이며 주문 Saga 연동 전체가 완료되었다는 의미는 아닙니다.
 
 ### 원본 차감 복원
@@ -155,7 +167,7 @@ Content-Type: application/json
 - 아직 복원되지 않은 원본의 대상 재고가 없거나 삭제됨: 404 `INVENTORY_NOT_FOUND`. 복원 합계가 int 최대값을 초과함: 409 `INVENTORY_QUANTITY_LIMIT_EXCEEDED`.
 - 복원 거절은 현재 별도 Operation으로 저장하지 않습니다. 요청 키의 보존은 성공한 복원 기록에 적용되며, 실패한 복원 키가 영구 예약되는 계약은 아닙니다.
 
-## 4. 왜 재고 테이블을 세 개로 나누나
+## 4. 재고 업무 테이블 세 개의 역할
 
 | 테이블 | 답하는 질문 | 30개 차감 예시 |
 |---|---|---|
@@ -169,7 +181,39 @@ History만 추가해도 성공한 변경의 추적과 중복 판단 근거를 �
 
 세 테이블이 유일한 정답은 아닙니다. 성공 변경만 추적하면 두 테이블로도 설계할 수 있습니다. 이 프로젝트는 Order 재시도·응답 유실·Saga 보상까지 다루므로 요청·결과 저장을 분리합니다. 저장량과 INSERT가 늘어나는 비용은 있으며, 지금 구조는 성능 향상이 아니라 정합성과 복구 근거 확보를 위한 선택입니다.
 
-## 5. 구현 확인 위치
+Redis 모드는 여기에 기술용 `p_inventory_stream_checkpoints`를 추가합니다. 재고 업무 기록을 대체하는 테이블이 아니라, **어느 이벤트까지 DB에 커밋했는지** 기록해 재전달 시 중복 반영을 막는 기준입니다. Operation의 `event_payload_hash`는 같은 작업 ID로 내용이 바뀐 이벤트가 들어오는지도 검사합니다.
+
+## 5. Redis Streams 모드 실행과 처리 흐름
+
+Hub 설정에서 명시적으로 선택합니다. 설정을 생략하면 기존 PostgreSQL 모드입니다.
+
+```yaml
+inventory:
+  stock:
+    mode: redis-streams
+  streams:
+    consumer-enabled: true
+    batch-size: 500
+```
+
+- Redis는 `appendonly yes`, `appendfsync always`, `maxmemory-policy noeviction`이 필요하며 기동 시 검사합니다. 테스트는 전용 Redis에서 확인했습니다.
+- Consumer는 Hub 준비 완료 후 전용 스레드 하나로 시작합니다. 읽은 최대 500건을 **추가 수집 대기 없이 저장**하고 커밋·ACK 후 다음 묶음을 바로 읽습니다. `batch-millis`·`poll-millis` 설정은 현재 사용하지 않습니다.
+- Stream이 비어 있을 때만 첫 메시지를 최대 250ms 기다립니다. 메시지가 도착하면 바로 처리하므로 250ms 동안 모으는 배치가 아닙니다. 이 읽기는 HTTP 요청용 공유 Redis 연결을 막지 않습니다.
+
+```text
+요청 → Lua: 수량 검사·변경 + 작업 결과·Stream 이벤트 기록 → HTTP 응답
+Consumer → 현재 읽은 묶음 처리
+         → 재고·Operation·History·체크포인트 함께 DB 커밋
+         → Redis 확인·ACK·처리한 Stream 메시지 정리 → 다음 묶음
+```
+
+DB 반영 실패 시 ACK하지 않고 재처리합니다. DB 커밋 후 ACK가 실패한 경우에는 체크포인트와 기존 결과를 검증해 추가 반영을 막습니다. 이벤트에는 요청 당시 감사 값을 보존하며 Consumer 스레드의 작업자로 바꾸지 않습니다.
+
+응답 후 DB 반영 전 데이터는 Redis에 남아 있습니다. **이 구간에 Redis와 AOF 저장소를 함께 잃으면 미반영 요청이 유실될 수 있습니다.** 이 구현이 저장소 손실까지 해결한 것은 아닙니다. 기존 파이프라인이 Redis 데이터를 잃으면 오래된 DB 값으로 자동 재시작하지 않으며, 불완전 변경은 기동 시 `inventory.streams.recover=true`를 통한 복구 경로를 제공합니다. Redis 로그 자체가 없어진 경우에는 이 복구만으로 복원할 수 없습니다.
+
+검증 범위는 동일 파이프라인에 Hub 인스턴스·Consumer 하나입니다. Redis 모드와 PostgreSQL 모드의 동시 쓰기나 실행 중 단순 모드 전환은 별도 검토가 필요합니다.
+
+## 6. 구현 확인 위치
 
 - 재고 조회·등록: [InventoryController](../../../hub-ms/src/main/java/com/hub/inventory/presentation/controller/InventoryController.java)
 - 내부 차감 계약: [DecreaseInventoryController](../../../hub-ms/src/main/java/com/hub/inventory/presentation/controller/DecreaseInventoryController.java), [요청 DTO](../../../hub-ms/src/main/java/com/hub/inventory/presentation/dto/DecreaseInventoryRequestDto.java), [응답 DTO](../../../hub-ms/src/main/java/com/hub/inventory/presentation/dto/DecreaseInventoryResponseDto.java)
@@ -177,4 +221,7 @@ History만 추가해도 성공한 변경의 추적과 중복 판단 근거를 �
 - 내부 API: [HubInternalController](../../../hub-ms/src/main/java/com/hub/hub/presentation/controller/HubInternalController.java), [HubRouteInternalController](../../../hub-ms/src/main/java/com/hub/hubroute/presentation/controller/HubRouteInternalController.java), [InventoryInternalController](../../../hub-ms/src/main/java/com/hub/inventory/presentation/controller/InventoryInternalController.java)
 - 테이블·제약조건: [ERD](<../../design/05 ERD.md>), [테이블 명세서](<../../design/06 테이블 명세서.md>)
 - 실제 DB 차감·기록·롤백 검증: [InventoryStockIntegrationTest](../../../hub-ms/src/test/java/com/hub/inventory/InventoryStockIntegrationTest.java). Order·Delivery에서 이 Feign 예시를 호출하는 통합 테스트는 별도 확인 대상입니다.
+- 모드별 차감·복원: [PostgresInventoryStockService](../../../hub-ms/src/main/java/com/hub/inventory/application/service/PostgresInventoryStockService.java), [RedisInventoryStockService](../../../hub-ms/src/main/java/com/hub/inventory/application/service/RedisInventoryStockService.java)
+- 추가 대기 없는 저장·재처리: [InventoryStreamConsumer](../../../hub-ms/src/main/java/com/hub/inventory/application/service/InventoryStreamConsumer.java), [PostgresInventoryBatchRepository](../../../hub-ms/src/main/java/com/hub/inventory/infrastructure/persistence/PostgresInventoryBatchRepository.java)
+- Redis·PostgreSQL 정합성·복구: [InventoryRedisStreamsIntegrationTest](../../../hub-ms/src/test/java/com/hub/inventory/InventoryRedisStreamsIntegrationTest.java). Consumer 자동 시작·종료·재시작은 [InventoryStreamConsumerIntegrationTest](../../../hub-ms/src/test/java/com/hub/inventory/InventoryStreamConsumerIntegrationTest.java)로 확인합니다.
 - 내부 3종 API의 HTTP·PostgreSQL 동작: [HubInternalApiIntegrationTest](../../../hub-ms/src/test/java/com/hub/HubInternalApiIntegrationTest.java). 실제 Company·Delivery 서비스 간 Feign 호출은 별도 검증 대상입니다.

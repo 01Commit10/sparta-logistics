@@ -153,7 +153,9 @@
 
 *내부 API는 일반 사용자에게 공개하지 않으며 서비스 간 인증이 필요합니다.*
 
-**Hub 구현 참고(2026-10-19):** 위 허브 검증·경로 조회·상품 재고 정리 API를 제공합니다. 상세 필드·감사 작업자·현재 접근 통제와 Company 연동 범위는 [Hub-MS Feign 연동 사용법](<../guide/사용법/Hub-MS Feign 연동 사용법.md>)을 참고합니다. Company의 상품 삭제는 이 상품 재고 정리 API를 먼저 호출한 뒤 상품을 논리 삭제합니다. Hub의 별도 서비스 호출자 인증은 아직 연결되어 있지 않습니다.
+**Hub 구현 참고(2026-10-21):** 위 허브 검증·경로 조회·재고 차감·복원·상품 재고 정리 API를 제공합니다. 상세 필드·감사 작업자·현재 접근 통제와 Company 연동 범위는 [Hub-MS Feign 연동 사용법](<../guide/사용법/Hub-MS Feign 연동 사용법.md>)을 참고합니다. Company의 상품 삭제는 이 상품 재고 정리 API를 먼저 호출한 뒤 상품을 논리 삭제합니다. Hub의 별도 서비스 호출자 인증은 아직 연결되어 있지 않습니다.
+
+**Hub 재고 처리 모드:** 기본값(`inventory.stock.mode=postgres` 또는 생략)은 PostgreSQL 커밋 후 응답합니다. `redis-streams`를 선택하면 Lua로 재고·작업 결과·Stream 이벤트를 기록한 뒤 응답하고, 전용 Consumer가 추가 수집 대기 없이 최대 500건씩 PostgreSQL에 반영합니다. **Redis 모드의 200은 PostgreSQL 반영 완료를 뜻하지 않습니다.** 거절 Operation도 비동기로 저장하며, 파이프라인 미준비·과부하 등은 503 `SERVICE_UNAVAILABLE`로 응답할 수 있습니다. 경로·요청·응답 필드는 두 모드가 같습니다.
 
 *주문 완료·실패 처리 API는 비동기 Saga에서만 필요합니다. Order Service가 동기로 오케스트레이션하는 초기 구현에서는 생략할 수 있습니다.*
 
@@ -170,7 +172,7 @@
 | PK | UUID |
 | 데이터 삭제 | Soft Delete |
 | 중복 요청 방지 | Idempotency-Key |
-| 재고 동시성 | 조건부 UPDATE 또는 잠금 |
+| 재고 동시성 | 기본 PostgreSQL 모드는 조건부 UPDATE, Hub Redis 모드는 Lua + Streams + 비동기 DB 반영 |
 | 분산 트랜잭션 | Saga 패턴 |
 | 서비스 간 통신 | OpenFeign / HTTP |
 | 외부 API 진입점 | API Gateway |
