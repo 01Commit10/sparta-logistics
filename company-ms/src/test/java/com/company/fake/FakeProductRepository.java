@@ -5,9 +5,11 @@ import com.common.page.PageQuery;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
 import com.company.product.domain.repository.ProductSearchCondition;
+import com.company.product.domain.service.RankedProduct;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -76,6 +78,17 @@ public class FakeProductRepository implements ProductRepository {
         if (product != null && product.getViewCount() < viewCount) {
             ReflectionTestUtils.setField(product, "viewCount", viewCount);
         }
+    }
+
+    // 실제 구현처럼 삭제된 상품은 빼고 조회수 내림차순
+    @Override
+    public List<RankedProduct> findTopByViewCount(int limit) {
+        return store.values().stream()
+                .filter(product -> !product.isDeleted())
+                .sorted(Comparator.comparing(Product::getViewCount).reversed())
+                .limit(limit)
+                .map(product -> new RankedProduct(product.getId(), product.getViewCount()))
+                .toList();
     }
 
     public Collection<Product> all() {

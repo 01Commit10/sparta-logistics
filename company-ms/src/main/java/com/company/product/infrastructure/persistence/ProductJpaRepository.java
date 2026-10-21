@@ -1,6 +1,7 @@
 package com.company.product.infrastructure.persistence;
 
 import com.company.product.domain.entity.Product;
+import com.company.product.domain.service.RankedProduct;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface ProductJpaRepository extends JpaRepository<Product, UUID>, JpaSpecificationExecutor<Product> {
@@ -25,4 +27,9 @@ public interface ProductJpaRepository extends JpaRepository<Product, UUID>, JpaS
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE Product p SET p.viewCount = :viewCount WHERE p.id = :id AND p.viewCount < :viewCount")
     void applyViewCount(UUID id, long viewCount);
+
+    // 순위 초기화용 (P03). P01 부분 인덱스 (view_count DESC, id) WHERE deleted_at IS NULL 을 탄다
+    @Query("SELECT new com.company.product.domain.service.RankedProduct(p.id, p.viewCount) FROM Product p "
+            + "WHERE p.deletedAt IS NULL ORDER BY p.viewCount DESC, p.id")
+    List<RankedProduct> findTopByViewCount(Pageable limit);
 }

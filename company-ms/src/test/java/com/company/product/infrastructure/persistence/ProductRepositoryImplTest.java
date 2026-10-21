@@ -3,6 +3,7 @@ package com.company.product.infrastructure.persistence;
 import com.company.company.domain.entity.Company;
 import com.company.product.domain.entity.Product;
 import com.company.product.domain.repository.ProductRepository;
+import com.company.product.domain.service.RankedProduct;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -99,5 +100,30 @@ class ProductRepositoryImplTest {
 
         productRepository.applyViewCount(saved.getId(), 100);
         assertThat(productRepository.findById(saved.getId()).orElseThrow().getViewCount()).isEqualTo(120);
+    }
+
+    @Test
+    @DisplayName("조회수 상위: 삭제된 상품은 빼고 조회수 내림차순으로 limit개 (순위 초기화용, P03)")
+    void findTopByViewCount() {
+        Company company = Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), UUID.randomUUID());
+        em.persist(company);
+        Product low = saveWithViews(company, "적음", 3);
+        Product high = saveWithViews(company, "많음", 500);
+        Product middle = saveWithViews(company, "중간", 40);
+        Product deleted = saveWithViews(company, "삭제", 9999);
+        ReflectionTestUtils.setField(deleted, "deletedAt", LocalDateTime.now());
+        em.flush();
+        em.clear();
+
+        assertThat(productRepository.findTopByViewCount(2)).containsExactly(
+                new RankedProduct(high.getId(), 500), new RankedProduct(middle.getId(), 40));
+        assertThat(productRepository.findTopByViewCount(10)).extracting(RankedProduct::productId)
+                .containsExactly(high.getId(), middle.getId(), low.getId());
+    }
+
+    private Product saveWithViews(Company company, String name, long viewCount) {
+        Product product = Product.create(company, name, null, new BigDecimal("1000"));
+        ReflectionTestUtils.setField(product, "viewCount", viewCount);
+        return productRepository.save(product);
     }
 }

@@ -6,6 +6,7 @@ import com.company.company.domain.entity.Company;
 import com.company.fake.FakeCompanyRepository;
 import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
+import com.company.fake.HotProductCaches;
 import com.company.product.application.dto.ProductResult;
 import com.company.product.application.dto.ProductSearchQuery;
 import com.company.product.domain.entity.Product;
@@ -31,7 +32,7 @@ class SearchProductsTest {
     private final FakeProductRepository productRepository = new FakeProductRepository();
     private final ProductService service = new ProductService(productRepository, companyRepository,
             new FakeInventoryClient(), TransactionOperations.withoutTransaction(),
-            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
+            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository), HotProductCaches.empty());
 
     private final Company company = saveCompany("스파르타상사");
     private final Company otherCompany = saveCompany("다른상사");
