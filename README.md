@@ -334,60 +334,7 @@ docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
 
 실선은 같은 스키마 안의 외래키(FK), 점선은 UUID 논리 참조(DB FK 없음)입니다.
 
-```mermaid
-flowchart LR
-    subgraph AUTH["auth · user-ms"]
-        users[p_users]
-    end
-
-    subgraph HUB["hub · hub-ms"]
-        hubs[p_hubs]
-        hub_routes[p_hub_routes]
-        inventories[p_inventories]
-        inv_op[p_inventory_operations]
-        inv_hist[p_inventory_histories]
-    end
-
-    subgraph COMPANY["company · company-ms"]
-        companies[p_companies]
-        products[p_products]
-    end
-
-    subgraph ORDERS["orders · order-ms"]
-        orders[p_orders]
-        order_hist[p_order_histories]
-    end
-
-    subgraph DELIVERY["delivery · delivery-ms"]
-        deliveries[p_deliveries]
-        dlv_routes[p_delivery_routes]
-    end
-
-    companies --> products
-    orders --> order_hist
-    deliveries --> dlv_routes
-
-    hubs -.-> hub_routes & inventories
-    inventories -.-> inv_op -.-> inv_hist
-
-    products -.-> inventories
-    hubs -.-> companies
-    users -.-> companies
-    companies -.-> orders
-    products -.-> orders
-    orders -.-> inv_op
-    orders -.-> deliveries
-    hubs -.-> deliveries
-    users -.-> deliveries
-
-    classDef t fill:#F8FAFC,stroke:#64748B,color:#1E293B
-    class users,hubs,hub_routes,inventories,inv_op,inv_hist,companies,products,orders,order_hist,deliveries,dlv_routes t
-    style AUTH fill:transparent,stroke:#6366F1,stroke-width:2px
-    style HUB fill:transparent,stroke:#14B8A6,stroke-width:2px
-    style COMPANY fill:transparent,stroke:#0EA5E9,stroke-width:2px
-    style ORDERS fill:transparent,stroke:#F59E0B,stroke-width:2px
-    style DELIVERY fill:transparent,stroke:#EC4899,stroke-width:2px
-```
+![전체 ERD](<docs/assets/logistics_msa_erd·전체_ERD.drawio.png>)
 
 | 스키마 | 테이블 | 설명 |
 |---|---|---|
