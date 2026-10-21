@@ -14,7 +14,7 @@
 | 공통 컬럼 | 업무 테이블 Audit 6개 (`created_at/by`, `updated_at/by`, `deleted_at/by`), 체크포인트는 제외 |
 | 삭제 방식 | 업무 데이터 Soft Delete (조회 시 삭제 제외는 각 Repository에서 처리), 체크포인트는 제외 |
 
-> **반영 기준:** 각 서비스의 JPA 엔티티 코드(`dev`, 2026-10-21)에 Hub의 Redis Streams 작업본을 반영했습니다. 전체 13개 테이블·177개 컬럼(Audit 포함)이며, Hub는 6개 테이블·67개 컬럼입니다. enum 컬럼의 허용값 CHECK는 Hibernate가 자동으로 생성합니다. 아래 [원본 ERD 이미지](#5-원본-erd-이미지)는 Redis 확장 전 기준이며, 최신 Hub 스키마는 이 문서의 Mermaid와 테이블 명세서를 참고합니다.
+> **반영 기준:** 각 서비스의 JPA 엔티티 코드(`dev`, 2026-10-21)에 Hub의 Redis Streams 변경(a175c10)까지 반영했습니다. 전체 13개 테이블·177개 컬럼(Audit 포함)이며, Hub는 6개 테이블·67개 컬럼입니다. enum 컬럼의 허용값 CHECK는 Hibernate가 자동으로 생성합니다. 아래 [원본 ERD 이미지](#5-원본-erd-이미지)도 같은 기준입니다.
 
 ### 표기 규칙
 
@@ -258,6 +258,7 @@ erDiagram
     p_inventories |o..o{ p_inventory_operations : "처리 대상 재고"
     p_inventories ||..o{ p_inventory_histories : "실제 변경 기록"
     p_inventory_operations ||..o| p_inventory_histories : "작업별 최대 한 이력"
+    p_inventory_operations |o..o| p_inventory_operations : "복원 원본 original_operation_id"
     p_orders |o..o{ p_inventory_operations : "order_id"
     p_orders |o..o{ p_inventory_histories : "order_id"
     p_inventory_operations |o..o{ p_orders : "stock_operation_id"
@@ -365,6 +366,7 @@ erDiagram
 | p_inventory_operations | product_id | p_products | REF | N:1 |
 | p_inventory_operations | inventory_id | p_inventories | REF | N:0..1 |
 | p_inventory_operations | order_id | p_orders | REF | N:0..1 |
+| p_inventory_operations | original_operation_id | p_inventory_operations | REF, UQ | 0..1:0..1 |
 | p_inventory_histories | operation_id | p_inventory_operations | REF, UQ | 0..1:1 |
 | p_inventory_histories | inventory_id | p_inventories | REF | N:1 |
 | p_inventory_histories | order_id | p_orders | REF | N:0..1 |
@@ -397,4 +399,4 @@ erDiagram
 
 ## 5. 원본 ERD 이미지
 
-![ERD](../assets/logistics_msa_erd·전체_ERD.drawio.png)
+![ERD](<../assets/logistics_msa_erd전체 ERD.drawio.png>)
