@@ -14,7 +14,7 @@ public interface CompanyFeignClient {
             @PathVariable("productId") UUID productId
     );
 
-    @GetMapping("/api/v1/companies/{companyId}")
+    @GetMapping("/internal/v1/companies/{companyId}")
     CompanyFeignDto getCompany(
             @PathVariable("companyId") UUID companyId
     );
