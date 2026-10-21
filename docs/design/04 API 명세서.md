@@ -94,7 +94,7 @@
 | 업체별 상품 조회 | GET | `/companies/{companyId}/products` | 로그인 | companyId, 페이지. 정렬: createdAt·name·unitPrice·viewCount | 200 |
 | 상품 등록 | POST | `/companies/{companyId}/products` | MASTER·업체관리자 | name, description, unitPrice | 201 |
 | 상품 수정 | PATCH | `/products/{productId}` | MASTER·업체관리자 | name, description, unitPrice 중 보낸 필드만 | 200 |
-| 상품 삭제 | DELETE | `/products/{productId}` | MASTER·업체관리자 | productId | 204 |
+| 상품 삭제 | DELETE | `/products/{productId}` | MASTER·업체관리자 | productId. Hub의 해당 상품 재고도 함께 정리(논리 삭제) | 204 |
 
 *상품 응답에는 조회수(`viewCount`)가 포함됩니다. 인기 상품은 `sort=viewCount,desc`로 조회합니다. 삭제된 상품과 삭제된 업체의 상품은 조회·검색에서 제외합니다.*
 
@@ -153,7 +153,7 @@
 
 *내부 API는 일반 사용자에게 공개하지 않으며 서비스 간 인증이 필요합니다.*
 
-**Hub 구현 참고(2026-10-19):** 위 허브 검증·경로 조회·상품 재고 정리 API를 제공합니다. 상세 필드·감사 작업자·현재 접근 통제와 Company 연동 범위는 [Hub-MS Feign 연동 사용법](<../guide/사용법/Hub-MS Feign 연동 사용법.md>)을 참고합니다. Hub의 별도 서비스 호출자 인증과 Company의 상품 삭제 후 Hub 호출은 아직 연결되어 있지 않습니다.
+**Hub 구현 참고(2026-10-19):** 위 허브 검증·경로 조회·상품 재고 정리 API를 제공합니다. 상세 필드·감사 작업자·현재 접근 통제와 Company 연동 범위는 [Hub-MS Feign 연동 사용법](<../guide/사용법/Hub-MS Feign 연동 사용법.md>)을 참고합니다. Company의 상품 삭제는 이 상품 재고 정리 API를 먼저 호출한 뒤 상품을 논리 삭제합니다. Hub의 별도 서비스 호출자 인증은 아직 연결되어 있지 않습니다.
 
 *주문 완료·실패 처리 API는 비동기 Saga에서만 필요합니다. Order Service가 동기로 오케스트레이션하는 초기 구현에서는 생략할 수 있습니다.*
 

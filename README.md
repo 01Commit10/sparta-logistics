@@ -78,41 +78,8 @@
 
 ### 4.1 아키텍처
 
-```mermaid
-flowchart LR
-    client([Client])
-    gateway["Gateway<br/>인증 · 인가 · 라우팅"]
+<img src="docs/assets/흐름도.png" alt="아키텍처" width="1350">
 
-    subgraph services["Domain Services"]
-        direction TB
-        user["<b>User</b><br/>회원 · 인증"]
-        company["<b>Company</b><br/>업체 · 상품"]
-        hub["<b>Hub</b><br/>허브 · 경로 · 재고"]
-        order["<b>Order</b><br/>주문"]
-        delivery["<b>Delivery</b><br/>배송 · 구간"]
-    end
-
-    eureka["Eureka"]
-    redis[("Redis")]
-    db[("PostgreSQL<br/>서비스별 스키마")]
-
-    client --> gateway --> services
-    order -- Feign --> hub & delivery
-    services -.-> eureka
-    services --- db
-    gateway & services -.-> redis
-
-    classDef edge fill:#6366F1,stroke:#4F46E5,stroke-width:2px,color:#fff
-    classDef svc fill:#14B8A6,stroke:#0D9488,stroke-width:2px,color:#fff
-    classDef core fill:#F59E0B,stroke:#D97706,stroke-width:2px,color:#fff
-    classDef infra fill:#64748B,stroke:#475569,stroke-width:2px,color:#fff
-    class client,gateway edge
-    class user,company,hub,delivery svc
-    class order core
-    class eureka,redis,db infra
-    style services fill:transparent,stroke:#14B8A6,stroke-width:2px,stroke-dasharray:5 5
-    linkStyle default stroke:#94A3B8,stroke-width:2px
-```
 
 - 외부 요청은 모두 Gateway를 거쳐 서비스로 갑니다.
 - 서비스끼리는 Feign으로 호출합니다. 그림에는 주문 흐름(Order → Hub 재고 차감, Order → Delivery 배송 생성)만 그렸고, 전체 호출 관계는 아래 4.2 표에 있습니다.
