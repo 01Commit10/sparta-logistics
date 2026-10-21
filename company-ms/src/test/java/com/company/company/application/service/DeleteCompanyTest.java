@@ -11,6 +11,7 @@ import com.company.fake.FakeCompanyRepository;
 import com.company.fake.FakeHubClient;
 import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
+import com.company.fake.HotProductCaches;
 import com.company.fake.FakeUserClient;
 import com.company.product.application.dto.ProductSearchQuery;
 import com.company.product.application.service.ProductQueryService;
@@ -96,7 +97,7 @@ class DeleteCompanyTest {
     void productsHidden() {
         ProductService productService = new ProductService(productRepository, companyRepository,
             new FakeInventoryClient(), TransactionOperations.withoutTransaction(),
-            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
+            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository), HotProductCaches.empty());
         Product product = productRepository.save(
                 Product.create(company, "생수 2L", "6개입", new BigDecimal("12000.00")));
 

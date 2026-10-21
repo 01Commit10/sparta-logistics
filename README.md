@@ -77,7 +77,7 @@
 
 ### 4.1 아키텍처
 
-<img src="docs/assets/흐름도.png" alt="아키텍처" width="1350">
+<img src="docs/assets/흐름도.png" alt="아키텍처" width="100%">
 
 
 - 외부 요청은 모두 Gateway를 거쳐 서비스로 갑니다.
@@ -129,8 +129,9 @@
 
 **순서**: 사전 준비 → `.env` 작성 → 인프라 기동 → Eureka → 도메인 서비스 → Gateway → 기동 확인
 
-### 5.1 사전 준비
-
+<details>
+  <summary>5-1. 사전 준비</summary>
+  
 | 항목 | 버전 | 확인 |
 |---|---|---|
 | Docker Desktop | Compose v2 포함 | `docker info` |
@@ -147,7 +148,10 @@ git switch dev
 chmod +x gradlew docker/postgres/init/01-init-service-accounts.sh
 ```
 
-### 5.2 환경 변수 (`.env`)
+</details>
+
+<details>
+  <summary>5-2. 환경 변수</summary>
 
 ```bash
 cp .env.example .env
@@ -197,9 +201,12 @@ SLACK_WEBHOOK_URL=
 - 모든 애플리케이션이 `.env`와 `../.env`를 **파일로** 읽습니다. 루트 `.env` 하나면 됩니다.
 - `.env`를 **환경 변수로 주입하지 마세요**(IntelliJ EnvFile, `set -a; . ./.env` 등). `DB_PASSWORD`가 서비스 DB 비밀번호를 덮어써 접속에 실패합니다.
 - `DB_*` 값을 바꿨다면 `./pgdata`를 지우고 다시 기동합니다. DB 초기화 스크립트는 처음 한 번만 실행됩니다.
+  
+</details>
 
-### 5.3 인프라 기동
-
+<details>
+  <summary>5-3. 인프라 기동</summary>
+  
 ```bash
 docker compose up -d
 docker compose ps        # postgres, redis 모두 (healthy)
@@ -209,8 +216,11 @@ docker compose ps        # postgres, redis 모두 (healthy)
 - 테이블은 각 서비스가 기동할 때 JPA(`DDL=update`)로 만듭니다.
 - 데이터는 `./pgdata`, `./redisdata`에 남습니다.
 
-### 5.4 애플리케이션 기동
+</details>
 
+<details>
+  <summary>5-4. 애플리케이션 기동</summary>
+  
 **Eureka → 도메인 서비스 → Gateway** 순서로, 터미널을 나눠 실행합니다.
 
 ```bash
@@ -238,7 +248,10 @@ docker compose ps        # postgres, redis 모두 (healthy)
 - 초기 데이터는 이미 있으면 건너뜁니다. 시연용 사용자를 넣지 않으려면 `.env`에 `USER_SEED_MODE=never`를 둡니다.
 - **Redis는 필수입니다.** Gateway가 요청마다 Redis로 로그아웃 여부를 확인하므로, Redis가 없으면 503 `AUTH_UNAVAILABLE`입니다.
 
-### 5.5 기동 확인
+</details>
+
+<details>
+  <summary>5-5. 기동 확인</summary>
 
 | 확인 | 주소 | 기대 결과 |
 |---|---|---|
@@ -259,7 +272,10 @@ curl -s localhost:19090/api/v1/hubs     -H "Authorization: Bearer $TOKEN"
 
 서비스를 띄운 직후 5~30초는 Gateway가 Eureka에서 서비스를 아직 못 받아 503이 날 수 있습니다. Postman 컬렉션은 `docs/postman/`에 있고, 사용법은 [Postman Gateway 테스트 가이드](<docs/Common/Postman Gateway 테스트 가이드.md>)를 참고합니다.
 
-### 5.6 종료 · 초기화
+</details>
+
+<details>
+  <summary>5-6. 종료 · 초기화</summary>
 
 ```bash
 # bootRun 터미널은 Ctrl+C
@@ -267,8 +283,11 @@ docker compose stop                              # 컨테이너만 멈춤 (데�
 docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
 ```
 
-### 5.7 자주 만나는 문제
+</details>
 
+<details>
+  <summary>5-7. 자주 만나는 문제</summary>
+  
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | Postgres 컨테이너가 바로 종료 (`Permission denied`) | init 스크립트 실행 권한 없음 | 5.1의 `chmod` 후 `rm -rf pgdata && docker compose up -d` |
@@ -279,8 +298,11 @@ docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
 
 자세한 내용은 [로컬 실행·라우팅 확인 가이드](<docs/Common/로컬 실행·라우팅 확인 가이드.md>)에 있습니다.
 
-### 5.8 테스트
+</details>
 
+<details>
+  <summary>5-8. 테스트</summary>
+  
 ```bash
 ./gradlew :user-ms:test                       # 모듈별 실행 권장
 ./gradlew :user-ms:test -PincludeContainer    # Docker가 필요한 테스트 포함 (Testcontainers)
@@ -288,19 +310,25 @@ docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
 
 테스트는 `test` 프로필로 동작하므로 Gradle로 실행합니다. IntelliJ 기본 실행기로 돌리면 프로필이 빠져 실패할 수 있습니다.
 
+</details>
+
 ## 6. ERD
 
-| 항목 | 내용 |
-|---|---|
+<details>
+  <summary>ERD 이미지</summary>
+   <br>
+  <img src="docs/assets/logistics_msa_erd전체ERD.drawio.png" alt="전체 ERD" width="100%"> 
+</details>
+
+| 항목 | 내용                                                                              |
+|---|---------------------------------------------------------------------------------|
 | DBMS | PostgreSQL 단일 컨테이너, 서비스별 스키마 5개(`auth`, `hub`, `company`, `orders`, `delivery`) |
-| 테이블 | 13개 (Hub 6개, Redis 모드용 체크포인트 포함) |
-| 기본키 | 모든 테이블 `UUID` |
-| 공통 컬럼 | Audit 6개(`created/updated/deleted_at·by`), Soft Delete |
-| 서비스 간 참조 | DB 외래키 없이 UUID만 저장하고, Feign API로 존재를 확인 |
+| 테이블 | 13개 (Hub 6개, Redis 모드용 체크포인트 포함)                                                                             |
+| 기본키 | 모든 테이블 `UUID`                                                                   |
+| 공통 컬럼 | Audit 6개(`created/updated/deleted_at·by`), Soft Delete                          |
+| 서비스 간 참조 | DB 외래키 없이 UUID만 저장하고, Feign API로 존재를 확인                                         |
 
 실선은 같은 스키마 안의 외래키(FK), 점선은 UUID 논리 참조(DB FK 없음)입니다.
-
-![전체 ERD](<docs/assets/logistics_msa_erd전체 ERD.drawio.png>)
 
 | 스키마 | 테이블 | 설명 |
 |---|---|---|

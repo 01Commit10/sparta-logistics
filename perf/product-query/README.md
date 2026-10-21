@@ -14,6 +14,7 @@
 python3 perf/product-query/run.py seed      # 업체 100 + 상품 100만 (약 10초, 다시 해도 중복 없음)
 python3 perf/product-query/run.py run       # S1~S4 × top·detail·search, VU 50, 워밍업 10초 + 측정 30초 (약 10분)
 python3 perf/product-query/run.py run --stages S3,S4 --apis detail --vus 100 --duration 60s
+python3 perf/product-query/run.py run --stages S4,S5 --vus 50,200 --results results/p03   # P03 재측정 (기존 결과는 그대로)
 python3 perf/product-query/run.py cleanup   # 실험 데이터·인덱스·캐시 키 지우기
 ```
 
@@ -23,6 +24,7 @@ python3 perf/product-query/run.py cleanup   # 실험 데이터·인덱스·캐�
 | S2 | O | none | DB UPDATE |
 | S3 | O | redis | Redis 누적 + 5초마다 DB 반영 |
 | S4 | O | layered | Redis 누적 + 5초마다 DB 반영 |
+| S5 | O | hot (P03) | Redis 누적(+ 순위 ZSET) + 5초마다 DB 반영 |
 
 - 단계마다 company-ms를 다시 띄우고, 실험 캐시 키(`company-ms::product-*`)만 지운 뒤 잽니다.
 - 측정 전후 `pg_stat_user_tables`(p_products)와 Redis `INFO stats`의 차이를 함께 남깁니다.

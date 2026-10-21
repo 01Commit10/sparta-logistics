@@ -4,11 +4,13 @@ import com.common.config.CommonRedisAutoConfiguration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.support.NoOpCacheManager;
 import org.springframework.data.redis.cache.RedisCache;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.cache.RedisCacheWriter;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 
@@ -55,6 +57,21 @@ class ProductCacheConfigTest {
                     CacheManager manager = context.getBean(CacheManager.class);
                     assertThat(manager).isInstanceOf(LayeredCacheManager.class);
                     assertThat(manager.getCache("product-detail")).isInstanceOf(LayeredCache.class);
+                });
+    }
+
+    @Test
+    @DisplayName("hot: Redis 캐시(상세·검색)를 키 단위 single-flight로 감싸고, Caffeine L1 캐시는 만들지 않는다")
+    void hot() {
+        runner.withPropertyValues("product.cache.mode=hot", "product.cache.ttl.product-search=30s")
+                .run(context -> {
+                    CacheManager manager = context.getBean(CacheManager.class);
+                    assertThat(manager).isInstanceOf(SingleFlightCacheManager.class);
+                    assertThat(manager.getCache("product-detail")).isInstanceOf(SingleFlightCache.class);
+                    Cache search = manager.getCache("product-search");
+                    assertThat(search).isInstanceOf(SingleFlightCache.class);
+                    assertThat(search.getNativeCache()).isInstanceOf(RedisCacheWriter.class);
+                    assertThat(manager.getCache("product-search")).isSameAs(search);
                 });
     }
 }

@@ -9,6 +9,7 @@ import com.company.company.domain.entity.Company;
 import com.company.fake.FakeCompanyRepository;
 import com.company.fake.FakeInventoryClient;
 import com.company.fake.FakeProductRepository;
+import com.company.fake.HotProductCaches;
 import com.company.product.application.dto.ProductResult;
 import com.company.product.application.dto.UpdateProductCommand;
 import com.company.product.domain.entity.Product;
@@ -39,7 +40,7 @@ class UpdateProductTest {
     private final FakeProductRepository productRepository = new FakeProductRepository();
     private final ProductService service = new ProductService(productRepository, companyRepository,
             new FakeInventoryClient(), TransactionOperations.withoutTransaction(),
-            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository));
+            new ProductQueryService(productRepository, companyRepository), new DbProductViewCounter(productRepository), HotProductCaches.empty());
 
     private final Company company = companyRepository.save(
             Company.create("스파르타상사", "서울시 강남구 테헤란로 1", UUID.randomUUID(), MANAGER_ID));

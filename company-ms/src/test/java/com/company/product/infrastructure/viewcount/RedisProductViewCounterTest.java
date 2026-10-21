@@ -3,6 +3,7 @@ package com.company.product.infrastructure.viewcount;
 import com.company.company.domain.entity.Company;
 import com.company.fake.FakeProductRepository;
 import com.company.product.domain.entity.Product;
+import com.company.product.infrastructure.ranking.RedisProductRanking;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,6 +76,20 @@ class RedisProductViewCounterTest {
     }
 
     @Test
+    @DisplayName("셀 때 인기 순위 점수도 같은 누적값으로 덮는다 (응답 조회수 = 순위 점수 = 카운터 값)")
+    void updatesRankScore() {
+        counter.increase(product.getId());
+        long count = counter.increase(product.getId());
+
+        assertThat(rankScore()).isEqualTo(count).isEqualTo(12);
+        assertThat(redis.opsForValue().get(RedisProductViewCounter.KEY_PREFIX + product.getId())).isEqualTo("12");
+    }
+
+    private Double rankScore() {
+        return redis.opsForZSet().score(RedisProductRanking.KEY, product.getId().toString());
+    }
+
+    @Test
     @DisplayName("flush: 바뀐 상품의 누적값을 DB에 반영하고, 반영할 게 없으면 0")
     void flush() {
         counter.increase(product.getId());
@@ -120,5 +135,6 @@ class RedisProductViewCounterTest {
         pool.shutdown();
 
         assertThat(counter.increase(product.getId())).isEqualTo(10 + threads * perThread + 1);
+        assertThat(rankScore()).isEqualTo(10 + threads * perThread + 1);
     }
 }
