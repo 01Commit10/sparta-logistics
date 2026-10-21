@@ -1,6 +1,6 @@
 # Order 도메인 구현 설명
 
-> 작성자: 다울 · 기준: `dev` 4a15e7a · 모듈: `order-ms` (스키마 `orders`, 테이블 `p_orders`·`p_order_histories`)
+> 작성자: 다울 · 기준: `dev` 186ae33 · 모듈: `order-ms` (스키마 `orders`, 테이블 `p_orders`·`p_order_histories`)
 > 1부는 **무엇을 왜 이렇게 만들었는지**(설계 결정·대안·트러블슈팅), 2부는 **요청이 어떻게 흐르는지**, 3부는 **코드를 어디서 찾는지**(계층·API·오류 코드·설정·테스트)입니다.
 > 알림 발송 라이브러리는 [[NTF 주문 알림 설계]], 원격 호출 실패 분류는 [[SYS-13 장애 대응 설계]], 재고 API 계약은 [[Hub-MS Feign 연동 사용법]]을 봅니다.
 
@@ -23,11 +23,11 @@
 
 | 항목 | 내용 |
 |---|---|
-| Saga | Order가 조정하는 **동기 Orchestration Saga**. 상품 조회(공급업체·가격 확인) → 재고 조회 → 주문 저장 → 재고 차감 → 배송 생성 → 완료. 실패하면 재고 복원 후 `FAILED` |
-| 멱등성 | 클라이언트 `Idempotency-Key` + 요청 해시(SHA-256)로 중복 주문 차단. 하위 호출도 `order-{orderId}-decrease·-restore·-delivery` 키를 보냄 |
+| Saga | Order가 조정하는 **동기 Orchestration Saga**. 상품 조회(공급업체·가격 확인) → 재고 조회 → 주문 저장 → 재고 차감 → 배송 생성 → 완료. 실패하면 보상(배송 취소·재고 복원) 후 `FAILED`. 원격 호출은 **DB 트랜잭션 밖**, DB 작업만 짧은 트랜잭션 |
+| 멱등성 | 클라이언트 `Idempotency-Key` + 요청 해시(SHA-256)로 중복 주문 차단. 키는 원격 호출 전에 **선점(즉시 커밋)**해 동시 요청도 막음. 하위 호출도 `order-{orderId}-decrease·-restore·-delivery` 키를 보냄 |
 | 구조 | 4계층 + DIP. 원격 호출은 domain 인터페이스(`HubClient`·`DeliveryClient`·`ProductClient`·`UserClient`), Feign 구현은 infrastructure. `stub` 프로필로 다른 서비스 없이 단독 실행 |
 | 알림 | 주문 `COMPLETED` **커밋 후** 비동기 발송. Slack·user-ms 장애가 주문에 영향 없음 |
-| 테스트 | 테스트 클래스 8개, 테스트 메서드 42개(파라미터 테스트 포함). Mockito 단위 테스트 중심 |
+| 테스트 | 테스트 클래스 11개, 테스트 메서드 60개(파라미터 테스트 포함). Mockito 단위 테스트 + 트랜잭션 경계·유니크 제약 확인용 `@SpringBootTest`(H2) |
 
 ---
 
@@ -57,16 +57,17 @@
 
 | 결정 | 내용 | 이유 |
 |---|---|---|
-| Orchestration (Order가 조정) | 각 서비스는 자기 로컬 트랜잭션만. 흐름과 보상은 `OrderService.createOrder` 한 곳 | 메시지 브로커가 없고, 흐름이 한 메서드에 보여 디버깅·발표가 쉬움 |
-| `@Transactional(noRollbackFor = BusinessException.class)` | 업무 실패(재고 부족·배송 실패)여도 **`FAILED` 주문과 이력을 커밋** | 기본 설정이면 예외 시 전부 롤백돼 "실패한 주문"이 DB에 남지 않음. 실패 원인 추적과 멱등 재요청 판단에 필요 |
-| 원래 예외를 그대로 던짐 | 보상·상태 기록 후 `throw e` | 클라이언트는 실제 원인(409 재고 부족, 503 배송 실패)을 받음 |
-| 보상 실패는 원래 예외를 덮지 않음 | 재고 복원 실패는 ERROR 로그만 (`restoreStockSafely`) | 사용자에게 의미 있는 건 주문 실패 원인. 복원 실패는 운영자가 로그로 처리 |
+| Orchestration (Order가 조정) | 각 서비스는 자기 로컬 트랜잭션만. 흐름과 보상은 `OrderCreateFacade.createOrder` 한 곳 | 메시지 브로커가 없고, 흐름이 한 메서드에 보여 디버깅·발표가 쉬움 |
+| **Facade + TxService로 분리** (#78) | `OrderCreateFacade`: 원격 호출·보상만, `@Transactional` 없음. `OrderCreateTxService`: 저장소만 쓰는 짧은 트랜잭션 ① 이력 선점 → ② 주문 `PROCESSING` 저장 → ③ 확정(`COMPLETED`) 또는 실패(`FAILED`) 기록 | 원격 응답(최대 수 초)을 기다리는 동안 DB 커넥션을 잡지 않음. 동시 주문이 몰려도 Hikari 풀(기본 10)이 원격 대기로 고갈되지 않음 |
+| 실패도 커밋 | 실패 기록(③)은 별도 트랜잭션이라 업무 실패여도 **`FAILED` 주문과 이력이 남음** | 실패 원인 추적과 멱등 재요청 판단(`PREVIOUS_REQUEST_NOT_SUCCEEDED`)에 필요 |
+| 원래 예외를 그대로 던짐 | 보상·실패 기록 후 `throw e` | 클라이언트는 실제 원인(409 재고 부족, 503 배송 실패)을 받음 |
+| 보상·기록 실패는 원래 예외를 덮지 않음 | 배송 취소·재고 복원·실패 기록이 실패해도 ERROR 로그만 (`*Safely`) | 사용자에게 의미 있는 건 주문 실패 원인. 보상 실패는 운영자가 로그로 처리 |
 
 | 대안 | 채택하지 않은 이유 |
 |---|---|
 | 비동기 Saga(202 + 상태 조회) | 메시지 브로커가 없음. 완료·실패 내부 API(`/orders/{id}/complete`·`/fail`)도 필요해짐 |
-| 기본 `@Transactional` (예외 시 롤백) | FAILED 기록이 사라짐. 재고는 이미 빠졌는데 주문 흔적이 없는 상태가 됨 |
-| 원격 호출을 트랜잭션 밖으로 분리 | 커넥션 점유를 줄이는 방향은 맞지만 상태 저장이 여러 트랜잭션으로 나뉘어 복잡해짐. 팀원이 `perf/order-create-tx`에서 측정 중이며 dev에는 미반영(1.10) |
+| 메서드 전체를 `@Transactional(noRollbackFor = BusinessException.class)` 하나로 (초기 구현) | FAILED는 남지만 원격 호출 내내 커넥션을 점유하고, 이력 INSERT가 커밋 시점으로 미뤄져 같은 키의 동시 요청을 원격 호출 전에 막지 못함 (트러블슈팅 ①·⑤) |
+| 같은 빈 안에서 `@Transactional` 메서드 호출 | 자기 호출(self-invocation)은 프록시를 거치지 않아 트랜잭션이 적용되지 않음. 그래서 TxService를 별도 빈으로 둠 |
 
 ## 1.3 멱등성: 같은 주문이 두 번 만들어지지 않게
 
@@ -77,10 +78,11 @@
 | 결정 | 내용 | 이유 |
 |---|---|---|
 | `Idempotency-Key` 헤더 필수 | 120자 이하. `p_order_histories`에 `UNIQUE(operation_type, idempotency_key)` | 같은 키의 두 번째 요청을 DB 수준에서 구분 |
+| **원격 호출 전에 키 선점** | `claim()`이 `IN_PROGRESS` 이력을 `saveAndFlush`로 바로 INSERT·커밋. 유니크 위반은 `DuplicateOrderRequestException`으로 바꾸고, 새 트랜잭션에서 앞 요청 상태를 다시 봐서 성공이면 그 결과, 아니면 409 `PREVIOUS_REQUEST_NOT_SUCCEEDED` | 같은 키로 동시에 두 번 눌러도 먼저 선점한 요청만 재고·배송을 건드림. 실서비스 검증: 같은 키 동시 20건 → 201 1건, 409 19건, 재고 1회만 차감 |
 | 요청 해시 비교 | 본문 + 주문자를 이어 붙여 SHA-256. 키는 해시에서 제외. 단가는 `stripTrailingZeros()`로 `1000`과 `1000.00`을 같게 | 같은 키로 **다른 내용**이 오면 실수이므로 409 `IDEMPOTENCY_KEY_CONFLICT`. 주문자를 넣어 다른 사용자가 같은 키를 써도 남의 주문 결과를 받아 가지 않음 |
 | 이전 요청이 성공했을 때만 결과 재응답 | 같은 키 + 같은 내용 + `SUCCEEDED` → 원격 호출 없이 이전 주문 반환 (201) | 응답만 유실된 재요청에 같은 결과를 줌 |
 | 진행 중·실패한 키는 409 | `PREVIOUS_REQUEST_NOT_SUCCEEDED`. 다시 주문하려면 새 키 | 실패한 키를 재사용해 자동 재시도하면 실패 원인이 남은 상태에서 또 재고를 건드림 |
-| **검증은 이력 저장 전** | 상품 조회·공급업체·가격 확인에서 거절되면 이력·주문을 남기지 않음 | `@Valid` 400처럼 "처리 전 거절"로 취급. 가격만 고쳐 **같은 키로 다시 주문**할 수 있음 |
+| **검증은 이력 선점 전** | 상품 조회·공급업체·가격 확인에서 거절되면 이력·주문을 남기지 않음 | `@Valid` 400처럼 "처리 전 거절"로 취급. 가격만 고쳐 **같은 키로 다시 주문**할 수 있음 |
 
 **Order → 하위 서비스**
 
@@ -99,19 +101,21 @@
 | 상황 | 판단 | 보상 |
 |---|---|---|
 | 차감 성공 후 배송 실패 | 작업 ID를 알고 있음 | 그 ID로 복원 |
+| 배송까지 만든 뒤 확정(`COMPLETED`) 커밋 실패 | 배송·재고 모두 바뀜 | **배송 취소 → 재고 복원** 후 `FAILED` |
 | 차감 거절 (`INSUFFICIENT_STOCK`, `INVENTORY_NOT_FOUND`) | 확실히 안 빠짐 | 복원 안 함, 409 |
-| 차감 결과 모름 (5xx·타임아웃 → 503 `INVENTORY_UNAVAILABLE`) | 빠졌을 수도 있음 | **같은 키로 차감을 다시 보내** hub에 기록된 결과를 확인 → 성공 기록이 있으면 그 작업 ID로 복원 |
+| 차감 결과 모름 (5xx·타임아웃 → 503 `INVENTORY_UNAVAILABLE`) | 빠졌을 수도 있음 | **같은 키로 차감을 다시 보내** hub에 기록된 결과를 확인 → 성공 기록이 있으면 그 작업 ID로 복원, 없으면 복원 호출 안 함 |
 
 - `stockMayBeDecreased` 플래그: 차감 요청을 보내기 직전에 `true`, 거절이 확실하면 `false`. `catch`에서 이 값으로 복원 여부를 정합니다.
 - 결과 확인 재전송이 안전한 이유: hub-ms가 같은 키에 처음 결과를 돌려주기 때문입니다(새로 차감하지 않음).
-- 주문 상태는 보상 후 `FAILED`, 이력은 `FAILED` + 응답 코드 + 오류 메시지(`last_error`).
+- 주문 상태는 보상 후 `FAILED`, 이력은 `FAILED` + 응답 코드 + 오류 메시지(`last_error`). 실패 기록마저 실패하면 이력은 `IN_PROGRESS`로 남고 ERROR 로그로 추적합니다.
+- 배송 생성 호출 자체가 실패(타임아웃 포함)하면 재고만 복원하고 배송 취소는 하지 않습니다. delivery-ms가 실제로는 배송을 만들었을 수 있어, 같은 키 재확인 후 취소하는 것은 다음 개선입니다([[SYS-13 장애 대응 설계]] 8.1).
 
 ## 1.5 가격·공급업체 검증과 단가 스냅샷
 
 | 결정 | 내용 | 이유 |
 |---|---|---|
 | company-ms **내부 API**로 조회 | `GET /internal/v1/products/{productId}` (조회수·캐시 없음) | 공개 상세 API는 조회수를 올리고, 캐시된 옛 단가가 올 수 있음 |
-| 404는 그대로 전달 | 없거나 삭제된 상품 404 `PRODUCT_NOT_FOUND`, 소속 업체 삭제 404 `COMPANY_NOT_FOUND` | company-ms의 판단을 바꾸지 않음. 이력 저장 전이라 아무것도 남지 않음 |
+| 404는 그대로 전달 | 없거나 삭제된 상품 404 `PRODUCT_NOT_FOUND`, 소속 업체 삭제 404 `COMPANY_NOT_FOUND` | company-ms의 판단을 바꾸지 않음. 이력 선점 전이라 아무것도 남지 않음 |
 | `compareTo`로 비교 | `ProductInfo.isPricedAt` | `BigDecimal.equals`는 `1000`과 `1000.00`을 다르게 봄 |
 | 409 메시지에 현재 가격 | `상품 가격이 변경되었습니다. (요청: 900, 현재: 1000.00)` | 사용자가 새 가격을 바로 확인하고 다시 주문 |
 | 스냅샷 저장 | `unit_price_snapshot` = 조회한 단가, `total_amount` = 단가 × 수량 | 이후 상품 가격이 바뀌어도 과거 주문 금액 유지 |
@@ -141,7 +145,7 @@
 
 | 결정 | 내용 | 이유 |
 |---|---|---|
-| 이벤트로 분리 | Saga 마지막에 `OrderCompletedEvent` 발행, 리스너가 발송 | `OrderService`가 Slack을 모름. 알림을 바꿔도 Saga 코드는 그대로 |
+| 이벤트로 분리 | 확정 트랜잭션(`OrderCreateTxService.complete`)에서 `OrderCompletedEvent` 발행, 리스너가 발송 | Saga 코드가 Slack을 모름. 알림을 바꿔도 Saga 코드는 그대로 |
 | `@TransactionalEventListener(AFTER_COMMIT)` | 주문 `COMPLETED`가 **커밋된 뒤에만** 발송 | 커밋 전에 보내면 롤백·FAILED 주문에도 알림이 감 |
 | slackId 조회도 알림 스레드에서 | `send(ref, Supplier)`라 Supplier 안의 user-ms 호출이 발송 스레드에서 실행 | 응답 스레드가 user-ms를 기다리지 않음 |
 | 조회 실패 = 멘션 없이 발송 | user-ms 404·5xx·타임아웃은 `Optional.empty()` | 멘션보다 알림 자체가 중요 |
@@ -149,7 +153,7 @@
 | 이벤트에는 엔티티가 아니라 값만 | `OrderCompletedEvent`는 ID·수량·요청사항 유무만 담은 record | 커밋 후 다른 스레드에서 쓰이므로 영속성 컨텍스트가 닫힌 엔티티(지연 로딩 위험)를 넘기지 않음 |
 | 실패해도 주문 영향 없음 | Webhook URL이 없으면 NoOp, 실패는 WARN 로그만, 재시도 없음 | NTF-02 결정 |
 
-메시지 항목: 주문 ID, 상품 ID, 수량, 배송 ID, 요청사항 있음/없음, 주문자 멘션. 상품명·업체명·허브명은 원격 조회가 늘어 이번 범위에서 제외했습니다(1.10).
+메시지 항목: 주문 ID, 상품 ID, 수량, 배송 ID, 요청사항 있음/없음, 주문자 멘션. 상품명·업체명·허브명은 원격 조회가 늘어 이번 범위에서 제외했습니다(다음 개선).
 
 ## 1.8 트러블슈팅
 
@@ -157,15 +161,16 @@
 
 - **현상**: 재고 부족으로 주문이 실패하면 `FAILED` 주문과 이력이 남아야 하는데 테이블이 비어 있었습니다.
 - **원인**: `@Transactional`은 런타임 예외가 나면 트랜잭션 전체를 롤백합니다. `catch`에서 `order.fail()`·`history.fail()`을 해도 마지막에 예외를 다시 던지므로 함께 롤백됐습니다.
-- **해결**: `noRollbackFor = BusinessException.class`. 업무 실패는 상태를 기록한 채 커밋하고, 예상 못 한 예외(500)는 그대로 롤백합니다.
-- **검증**: `stub` 프로필 없이 실행해 hub-ms 연결 실패(503)를 일부러 내고, DB에서 `FAILED` 주문과 `responseCode=503` 이력이 남는 것을 확인했습니다.
+- **1차 해결**: `noRollbackFor = BusinessException.class`로 업무 실패는 상태를 기록한 채 커밋했습니다. `stub` 프로필 없이 실행해 hub-ms 연결 실패(503)를 일부러 내고, DB에 `FAILED` 주문과 `responseCode=503` 이력이 남는 것을 확인했습니다.
+- **현재**: 트랜잭션을 나눈 뒤(#78)에는 실패 기록이 **별도 트랜잭션**(`OrderCreateTxService.fail`)이라 롤백 규칙에 기대지 않고 항상 커밋됩니다.
+- **검증**: `OrderCreateTransactionBoundaryTest.failureIsCommitted` (H2, 배송 실패 시 `FAILED`가 커밋되는지).
 
 ### ② 재고 차감이 타임아웃되면 복원할 방법이 없었다 (#61)
 
 - **현상**: hub-ms 복원 API가 `originalOperationId`(원본 차감 작업 ID)를 요구하도록 계약이 확정됐습니다. 그런데 차감이 타임아웃되면 Order는 작업 ID를 받지 못합니다.
 - **위험**: 실제로는 차감됐는데 복원하지 못하면 재고가 영구히 줄어듭니다.
 - **해결**: 결과를 모르면 **같은 멱등 키로 차감을 다시 보내** hub-ms에 기록된 결과(작업 ID)를 받아 복원합니다(1.4). hub-ms가 같은 키에 처음 결과를 돌려준다는 계약(P2)에 기대는 방식입니다.
-- **검증**: `OrderServiceTest.createOrderRestoresStockWhenDecreaseResultUnknown`. 첫 차감은 503, 두 번째(같은 키)는 성공 결과를 주도록 연속 스텁(`willThrow().willReturn()`)하고, 복원 명령에 확인된 작업 ID가 담겼는지 검증합니다.
+- **검증**: `OrderCreateFacadeTest.createOrderRestoresStockWhenDecreaseResultUnknown`. 첫 차감은 503, 두 번째(같은 키)는 성공 결과를 주도록 연속 스텁(`willThrow().willReturn()`)하고, 복원 명령에 확인된 작업 ID가 담겼는지 검증합니다.
 
 ### ③ 가격을 바꿔 보냈는데 `PRICE_CHANGED`가 아니라 `IDEMPOTENCY_KEY_CONFLICT`가 나왔다
 
@@ -176,7 +181,14 @@
 ### ④ 다른 서비스 없이 order-ms를 실행할 수 없었다
 
 - **현상**: hub·delivery·company가 아직 개발 중이라 order-ms만 띄우면 Feign 호출이 모두 503이었습니다.
-- **해결**: domain 포트마다 `@Profile("stub")` 가짜 구현(`StubHubClient` 등)을 두고, 실제 구현은 `@Profile("!stub")`. 코드 수정 없이 `--spring.profiles.active=stub`으로 컨트롤러 → DB까지 확인했습니다. DIP 덕분에 `OrderService`는 바뀌지 않습니다.
+- **해결**: domain 포트마다 `@Profile("stub")` 가짜 구현(`StubHubClient` 등)을 두고, 실제 구현은 `@Profile("!stub")`. 코드 수정 없이 `--spring.profiles.active=stub`으로 컨트롤러 → DB까지 확인했습니다. DIP 덕분에 Saga 코드는 바뀌지 않습니다.
+
+### ⑤ 같은 키로 동시에 보내면 재고가 두 번 빠질 수 있었다 (#78)
+
+- **현상**: 같은 `Idempotency-Key`로 요청 두 개가 거의 동시에 오면, 둘 다 "이전 이력 없음"을 보고 진행했습니다.
+- **원인**: 이력을 `save()`해도 JPA가 INSERT를 **커밋 시점까지 미뤄**, 유니크 제약 위반이 재고 차감·배송 생성이 끝난 뒤에야 터졌습니다. 진 쪽은 주문이 롤백돼도 이미 빠진 재고와 만든 배송은 남습니다. 커밋 시점 예외라 `catch`의 보상도 타지 않았습니다.
+- **해결**: 이력 선점을 별도 트랜잭션에서 `saveAndFlush`로 즉시 반영하고, 유니크 위반을 `DuplicateOrderRequestException`으로 바꿔 **원격 호출 전에** 거절합니다(1.3).
+- **검증**: `OrderCreateTransactionBoundaryTest.claimRejectsDuplicateKey`(실제 유니크 제약), `OrderCreateFacadeTest.createOrderStopsBeforeRemoteCallsWhenKeyTakenConcurrently`, 실서비스에서 같은 키 동시 20건 → 재고 1회만 차감.
 
 ## 1.9 그 밖의 설계 포인트
 
@@ -194,30 +206,28 @@
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant G as Gateway
-    participant S as OrderService
+    participant F as OrderCreateFacade
+    participant T as OrderCreateTxService
     participant P as company-ms
     participant H as hub-ms
     participant D as delivery-ms
-    participant DB as PostgreSQL
 
-    C->>G: POST /api/v1/orders (Idempotency-Key)
-    G->>S: X-User-Id, X-User-Role
-    S->>DB: 같은 키 이력 조회 (있으면 이전 결과 / 409)
-    S->>P: GET /internal/v1/products/{productId}
-    S->>S: 공급업체 확인(400) · 가격 확인(409)
-    S->>DB: 이력 IN_PROGRESS
-    S->>H: GET /api/v1/inventories?productId (충분한 허브 선택)
-    S->>DB: 주문 PROCESSING (단가 = 상품 단가)
-    S->>H: POST /internal/v1/inventories/decrease (order-{id}-decrease)
-    H-->>S: operationId
-    S->>D: POST /internal/v1/deliveries (order-{id}-delivery)
-    D-->>S: deliveryId
-    S->>S: 주문 COMPLETED(deliveryId, operationId) · 이력 SUCCEEDED(201)
-    S->>S: OrderCompletedEvent 발행
-    S->>DB: 커밋
-    S-->>C: 201 OrderResponse
+    C->>F: POST /api/v1/orders (Idempotency-Key, Gateway가 X-User-* 주입)
+    F->>T: findPreviousResult (있으면 이전 결과 / 409)
+    F->>P: GET /internal/v1/products/{productId}
+    F->>F: 공급업체 확인(400) · 가격 확인(409)
+    F->>T: ① claim: 이력 IN_PROGRESS saveAndFlush → 커밋 (중복이면 앞 요청 상태로 판단)
+    F->>H: GET /api/v1/inventories?productId (충분한 허브 선택)
+    F->>T: ② saveOrder: 주문 PROCESSING (단가 = 상품 단가) → 커밋
+    F->>H: POST /internal/v1/inventories/decrease (order-{id}-decrease)
+    H-->>F: operationId
+    F->>D: POST /internal/v1/deliveries (order-{id}-delivery)
+    D-->>F: deliveryId
+    F->>T: ③ complete: 주문 COMPLETED · 이력 SUCCEEDED(201) · OrderCompletedEvent → 커밋
+    F-->>C: 201 OrderResponse
 ```
+
+원격 호출(company·hub·delivery) 사이에는 열린 DB 트랜잭션이 없습니다.
 
 ## 2.2 주문 생성 (실패와 보상)
 
@@ -225,6 +235,7 @@ sequenceDiagram
 |---|---|---|---|---|
 | 같은 키 + 다른 내용 | 409 `IDEMPOTENCY_KEY_CONFLICT` | - | 기존 그대로 | - |
 | 같은 키, 이전 요청 진행 중·실패 | 409 `PREVIOUS_REQUEST_NOT_SUCCEEDED` | - | 기존 그대로 | - |
+| 같은 키 동시 요청 (선점 실패) | 앞 요청이 성공했으면 그 결과, 아니면 409 `PREVIOUS_REQUEST_NOT_SUCCEEDED` | - | 앞 요청 것만 | - |
 | 상품 없음·업체 삭제 | 404 `PRODUCT_NOT_FOUND` / `COMPANY_NOT_FOUND` | 없음 | 없음 | - |
 | 공급업체 불일치 | 400 `SUPPLIER_PRODUCT_MISMATCH` | 없음 | 없음 | - |
 | 가격 변경 | 409 `PRICE_CHANGED` | 없음 | 없음 | - |
@@ -232,21 +243,23 @@ sequenceDiagram
 | 차감 거절 (부족·재고 없음) | 409 `INSUFFICIENT_STOCK` | `FAILED` | `FAILED` | 안 함 |
 | 차감 결과 모름 (5xx·타임아웃) | 503 `INVENTORY_UNAVAILABLE` | `FAILED` | `FAILED` | 같은 키 재전송으로 확인 후 복원 |
 | 배송 생성 실패 | 503 `DELIVERY_FAILED` | `FAILED` | `FAILED` | 작업 ID로 복원 |
+| 배송 생성 후 확정 커밋 실패 | 원래 예외 (예: 500) | `FAILED` | `FAILED` | 배송 취소 → 복원 |
 
 ```mermaid
 sequenceDiagram
-    participant S as OrderService
+    participant F as OrderCreateFacade
+    participant T as OrderCreateTxService
     participant H as hub-ms
     participant D as delivery-ms
 
-    S->>H: 재고 차감
-    H-->>S: operationId
-    S->>D: 배송 생성
-    D--xS: 실패 (DELIVERY_FAILED)
-    S->>H: POST /internal/v1/inventories/restore (order-{id}-restore, originalOperationId)
-    Note over S,H: 복원 실패는 ERROR 로그만 남기고 원래 예외 유지
-    S->>S: 주문 FAILED · 이력 FAILED(503) → 커밋
-    S-->>S: 503 DELIVERY_FAILED 응답
+    F->>H: 재고 차감
+    H-->>F: operationId
+    F->>D: 배송 생성
+    D--xF: 실패 (DELIVERY_FAILED)
+    F->>H: POST /internal/v1/inventories/restore (order-{id}-restore, originalOperationId)
+    Note over F,H: 복원 실패는 ERROR 로그만 남기고 원래 예외 유지
+    F->>T: fail: 주문 FAILED · 이력 FAILED(503) → 커밋
+    F-->>F: 503 DELIVERY_FAILED 응답
 ```
 
 ## 2.3 주문 취소
@@ -283,7 +296,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant S as OrderService (요청 스레드)
+    participant S as OrderCreateTxService.complete (요청 스레드)
     participant L as OrderSlackNotificationListener
     participant N as SlackNotifier (알림 스레드)
     participant U as user-ms
@@ -312,7 +325,7 @@ order-ms ┄┄Feign┄┄▶ user-ms     GET  /internal/v1/users/{userId}      
 order-ms ┄┄HTTP┄┄┄▶ Slack       Incoming Webhook                             (주문 완료 알림, 커밋 후 비동기)
 ```
 
-실선은 주문 처리 중 동기 호출, 점선은 커밋 후 알림 스레드의 호출입니다. 원격 호출은 모두 common `RemoteCallTemplate`을 거쳐 4xx는 `RemoteBusinessException`(하위 코드 유지), 5xx·연결 실패는 503, 타임아웃은 504로 분류됩니다.
+실선은 주문 처리 중 동기 호출, 점선은 커밋 후 알림 스레드의 호출입니다. 재고 목록은 hub-ms에 내부 조회 API가 없어 공개 API(`/api/v1/inventories`)를 사용자 헤더와 함께 부릅니다(내부 API 전환 예정). 원격 호출은 모두 common `RemoteCallTemplate`을 거쳐 4xx는 `RemoteBusinessException`(하위 코드 유지), 5xx·연결 실패는 503, 타임아웃은 504로 분류됩니다.
 
 ---
 
@@ -328,14 +341,15 @@ presentation → application → domain ← infrastructure
 |---|---|---|
 | presentation | `presentation.controller` | `OrderController` |
 | | `presentation.dto` | `CreateOrderRequest`, `OrderResponse` |
-| application | `application.service` | `OrderService`(생성 Saga), `OrderQueryService`(`readOnly`), `OrderCancelService`, `OrderDeleteService` |
+| application | `application.service` | `OrderCreateFacade`(생성 Saga·보상, 트랜잭션 없음), `OrderCreateTxService`(생성의 짧은 트랜잭션), `OrderQueryService`(`readOnly`), `OrderCancelService`, `OrderDeleteService` |
 | | `application.dto` | `CreateOrderCommand`(요청 해시 계산), `OrderResult` |
 | | `application.event` | `OrderCompletedEvent`, `OrderSlackNotificationListener` |
 | domain | `domain.entity` | `Order`, `OrderHistory` |
 | | `domain.vo` | `OrderStatus`, `OrderOperationType`, `OrderOperationStatus` |
-| | `domain.repository` | 포트 `OrderRepository`, `OrderHistoryRepository` |
+| | `domain.repository` | 포트 `OrderRepository`, `OrderHistoryRepository`(`saveAndFlush`로 선점) |
+| | `domain.exception` | `DuplicateOrderRequestException` (같은 키 선점 실패) |
 | | `domain.client` | 포트 `HubClient`, `DeliveryClient`, `ProductClient`, `UserClient` + 명령·결과 record (`StockDecreaseCommand`, `StockRestoreCommand`, `StockOperationResult`, `InventoryInfo`, `CreateDeliveryCommand`, `DeliveryResult`, `ProductInfo`) |
-| infrastructure | `infrastructure.persistence` | `OrderRepositoryImpl`·`OrderJpaRepository`, `OrderHistoryRepositoryImpl`·`OrderHistoryJpaRepository` |
+| infrastructure | `infrastructure.persistence` | `OrderRepositoryImpl`·`OrderJpaRepository`, `OrderHistoryRepositoryImpl`(유니크 제약 `uk_order_histories_operation_key` 위반 → `DuplicateOrderRequestException`)·`OrderHistoryJpaRepository` |
 | | `infrastructure.client.{hub,delivery,product,user}` | `*ClientImpl`, `*FeignClient`, Feign 요청·응답 DTO |
 | | `infrastructure.client.stub` | `StubHubClient`, `StubDeliveryClient`, `StubProductClient`, `StubUserClient` |
 
@@ -416,7 +430,7 @@ stateDiagram-v2
 
 | Method · Path | 권한 | 처리 | 규칙 |
 |---|---|---|---|
-| POST `/api/v1/orders` | 로그인 | `OrderService.createOrder` | 201. `Idempotency-Key` 필수(120자 이하) |
+| POST `/api/v1/orders` | 로그인 | `OrderCreateFacade.createOrder` | 201. `Idempotency-Key` 필수(120자 이하) |
 | GET `/api/v1/orders/{orderId}` | 주문자·MASTER | `OrderQueryService.getOrder` | 200, 404·403 |
 | GET `/api/v1/orders` | 로그인 (MASTER 전체, 그 외 본인) | `OrderQueryService.getOrders` | 정렬 `createdAt`(기본 DESC)·`totalAmount` |
 | POST `/api/v1/orders/{orderId}/cancel` | 주문자·MASTER | `OrderCancelService.cancelOrder` | 200, 본문 없음 |
@@ -515,17 +529,21 @@ Content-Type: application/json
 | 계층 | 방식 | 테스트 |
 |---|---|---|
 | domain | 순수 단위 테스트 | `OrderTest`(13), `OrderHistoryTest`(5) |
-| application | Mockito (`@ExtendWith(MockitoExtension.class)`), 포트를 mock | `OrderServiceTest`(9), `OrderQueryServiceTest`(6), `OrderCancelServiceTest`(4), `OrderDeleteServiceTest`(2), `OrderSlackNotificationListenerTest`(2) |
+| application | Mockito (`@ExtendWith(MockitoExtension.class)`), 포트를 mock | `OrderCreateFacadeTest`(13), `OrderCreateTxServiceTest`(9), `OrderQueryServiceTest`(6), `OrderCancelServiceTest`(4), `OrderDeleteServiceTest`(2), `OrderSlackNotificationListenerTest`(2) |
+| 트랜잭션 경계 | `@SpringBootTest`(H2) + 원격 포트 `@MockitoBean` | `OrderCreateTransactionBoundaryTest`(3) |
+| infrastructure | Mockito | `OrderHistoryRepositoryImplTest`(2): 멱등키 유니크 위반만 `DuplicateOrderRequestException`으로 변환 |
 | 기동 | `@SpringBootTest` | `OrderMsApplicationTests`(1) |
 | 수동 | Postman (`stub` 프로필 + 실제 연동) | 생성·가격 변경·공급업체 불일치·같은 키 재요청·취소·삭제·403·404 |
 
 눈여겨볼 테스트:
 
-- `OrderServiceTest.createOrderRestoresStockWhenDecreaseResultUnknown`: 차감 503 → 같은 키 재전송 → 확인된 작업 ID로 복원 (트러블슈팅 ②).
-- `OrderServiceTest.createOrderRestoresStockWhenDeliveryFails`: 배송 실패 시 복원 후 주문·이력 `FAILED`, 응답 코드 503 기록.
-- `OrderServiceTest.createOrderFailsWhenStockDecreaseRejected`: 거절이 확실하면 복원하지 않음.
-- `OrderServiceTest.createOrderFailsWhenPriceChanged`·`...SupplierMismatch`: 이력·주문을 저장하지 않음 (`never()`).
-- `OrderServiceTest.createOrderFailsWhenPreviousRequestNotSucceeded`: `IN_PROGRESS`·`FAILED` 두 상태를 `@EnumSource`로.
+- `OrderCreateTransactionBoundaryTest.remoteCallsRunOutsideTransaction`: 원격 포트가 호출될 때 `TransactionSynchronizationManager.isActualTransactionActive()`가 false이고, 그 전에 이력 선점이 커밋돼 있음.
+- `OrderCreateTransactionBoundaryTest.claimRejectsDuplicateKey`: 실제 유니크 제약으로 같은 키 선점이 `DuplicateOrderRequestException` (트러블슈팅 ⑤).
+- `OrderCreateFacadeTest.createOrderStopsBeforeRemoteCallsWhenKeyTakenConcurrently`·`...ReturnsResultOfConcurrentWinner`: 선점 실패 시 재고·배송 호출 0번, 앞 요청 결과 또는 409.
+- `OrderCreateFacadeTest.createOrderRestoresStockWhenDecreaseResultUnknown`·`...SkipsRestoreWhenDecreaseConfirmedNotApplied`: 차감 결과 모름 → 같은 키 재전송 → 차감됐으면 복원, 안 됐으면 복원 안 함 (트러블슈팅 ②).
+- `OrderCreateFacadeTest.createOrderCompensatesWhenCompleteFails`: 확정 커밋 실패 시 배송 취소 → 재고 복원 → `FAILED`.
+- `OrderCreateFacadeTest.createOrderKeepsOriginalExceptionWhenCompensationFails`: 보상·실패 기록이 실패해도 원래 예외.
+- `OrderCreateFacadeTest.createOrderFailsWhenPriceChanged`·`...SupplierMismatch`: 이력을 선점하지 않음 (`never()`).
 - `OrderCancelServiceTest.cancelOrder`: `InOrder`로 배송 취소 → 재고 복원 순서 확인. 출발한 배송이면 복원 호출 0번.
 - `OrderSlackNotificationListenerTest`: `Supplier`를 실행해 메시지 항목과 멘션 확인, slackId가 없으면 멘션 없이.
 
