@@ -14,7 +14,7 @@
 | 공통 컬럼 | Audit 6개 (`created_at/by`, `updated_at/by`, `deleted_at/by`) |
 | 삭제 방식 | Soft Delete (조회 시 삭제 제외는 각 Repository에서 처리)         |
 
-> **Hub 반영 기준:** `feature/inventory-rejection` 작업본의 엔티티와 PostgreSQL 통합 테스트 생성 DDL(2026-10-20). Hub는 5개 테이블·61개 컬럼(Audit 포함)이며, 다른 서비스의 설계는 유지했습니다. 원본 draw.io·이미지는 이번 Markdown 변경과 별개입니다.
+> **반영 기준:** 각 서비스의 JPA 엔티티 코드(`dev`, 2026-10-21). 전체 12개 테이블·171개 컬럼(Audit 포함)이며, Hub는 5개 테이블·61개 컬럼입니다. enum 컬럼의 허용값 CHECK는 Hibernate가 자동으로 생성합니다. 아래 [원본 ERD 이미지](#5-원본-erd-이미지)도 같은 기준으로 갱신했습니다.
 
 ### 표기 규칙
 
@@ -77,6 +77,7 @@ flowchart LR
     inv_op -.-> inv_hist
     orders -.-> inv_op
     orders -.-> inv_hist
+    inv_op -.-> orders
 
     %% REF (서비스 간)
     products -.-> inventories
@@ -187,16 +188,17 @@ erDiagram
         NUMERIC total_amount "(15,2) CK >= 0"
         UUID delivery_id UK "REF p_deliveries, NULL"
         TEXT request_note "NULL"
-        VARCHAR order_status "(24) PROCESSING/COMPLETED/FAILED/CANCELLED"
+        VARCHAR order_status "(24) CK PROCESSING/COMPLETED/FAILED/CANCELED"
         UUID ordered_by "REF p_users"
+        UUID stock_operation_id "REF p_inventory_operations, NULL (취소 시 재고 복원)"
     }
     p_order_histories {
         UUID id PK
         UUID order_id FK "NULL (생성 전)"
-        VARCHAR operation_type UK "(32) UQ*(type,key)"
+        VARCHAR operation_type UK "(32) UQ*(type,key), CK CREATE/UPDATE/CANCEL"
         VARCHAR idempotency_key UK "(120) UQ*(type,key)"
         CHAR request_hash "(64)"
-        VARCHAR operation_status "(20) PROCESSING/SUCCEEDED/FAILED"
+        VARCHAR operation_status "(20) CK IN_PROGRESS/SUCCEEDED/FAILED"
         INTEGER response_code "NULL"
         INTEGER retry_count "DEFAULT 0"
         TEXT last_error "NULL"
@@ -206,7 +208,7 @@ erDiagram
     p_deliveries {
         UUID id PK
         UUID order_id UK "REF p_orders"
-        VARCHAR delivery_status "(24)"
+        VARCHAR delivery_status "(24) CK HUB_WAITING/HUB_MOVING/HUB_ARRIVED/DELIVERING/DELIVERED/CANCELED"
         UUID departure_hub_id "REF p_hubs"
         UUID arrival_hub_id "REF p_hubs"
         VARCHAR delivery_address "(255)"
@@ -216,20 +218,20 @@ erDiagram
         UUID requester_company_manager_id "REF p_users, 생성 시점"
         UUID supplier_company_id "REF p_companies (공급)"
         UUID supplier_company_manager_id "REF p_users, 생성 시점"
-        UUID delivery_manager_id "REF p_users, NULL"
+        UUID delivery_manager_id "REF p_users, NULL, 현재 구간 담당자"
     }
     p_delivery_routes {
         UUID id PK
         UUID delivery_id FK,UK "UQ*(delivery,sequence)"
-        INTEGER route_sequence UK "CK > 0"
-        VARCHAR route_type "(20) HUB_TO_HUB/HUB_TO_COMPANY"
+        INTEGER route_sequence UK "1부터"
+        VARCHAR route_type "(20) CK HUB_TO_HUB/HUB_TO_COMPANY"
         UUID departure_hub_id "REF p_hubs"
         UUID arrival_hub_id "REF p_hubs, 마지막 구간 NULL"
-        NUMERIC estimated_distance_km "(10,2) NULL"
+        NUMERIC estimated_distance_km "(10,2)"
         NUMERIC actual_distance_km "(10,2) NULL"
-        INTEGER estimated_duration_min "NULL"
+        INTEGER estimated_duration_min
         INTEGER actual_duration_min "NULL"
-        VARCHAR route_status "(24)"
+        VARCHAR route_status "(24) CK WAITING/MOVING/ARRIVED/CANCELED"
         UUID delivery_manager_id "REF p_users, NULL"
     }
 
@@ -249,6 +251,7 @@ erDiagram
     p_inventory_operations ||..o| p_inventory_histories : "작업별 최대 한 이력"
     p_orders |o..o{ p_inventory_operations : "order_id"
     p_orders |o..o{ p_inventory_histories : "order_id"
+    p_inventory_operations |o..o{ p_orders : "stock_operation_id"
     p_products ||..o{ p_inventories : "product_id"
     p_hubs ||..o{ p_companies : "관리 허브"
     p_users ||..o{ p_companies : "업체 관리자"
@@ -318,19 +321,24 @@ erDiagram
 | 테이블 | 역할 | 핵심 제약 |
 |---|---|---|
 | `p_orders` | 주문 + Saga 진행 상태 | `quantity > 0` · `delivery_id` UNIQUE · 상태 4종 CHECK |
-| `p_order_histories` | 주문 생성·취소 요청의 멱등성 기록 | UNIQUE(`operation_type`, `idempotency_key`) |
+| `p_order_histories` | 주문 생성·수정·취소 요청의 멱등성 기록 | UNIQUE(`operation_type`, `idempotency_key`) · 유형/상태 CHECK |
 
 - 1주문 = 1상품. 주문 당시 단가(`unit_price_snapshot`)와 총액(`total_amount = 단가 × 수량`)을 저장합니다.
-- `p_order_histories.order_id`는 주문이 만들어지기 전에는 NULL이고, `SUCCEEDED`가 되면 NOT NULL이어야 합니다.
+- 주문이 완료되면 `delivery_id`와 Hub의 재고 차감 작업 ID(`stock_operation_id`)를 저장합니다. COMPLETED이고 `stock_operation_id`가 있어야 취소(재고 복원)할 수 있습니다.
+- `p_order_histories.order_id`는 주문이 만들어지기 전에는 NULL이고, `SUCCEEDED`가 되면 값이 있어야 합니다. 이 규칙은 애플리케이션에서 지키며 DB CHECK는 없습니다.
 
 ### delivery — Delivery Service
 
 | 테이블 | 역할 | 핵심 제약 |
 |---|---|---|
-| `p_deliveries` | 주문 1건당 배송 1건 | `order_id` UNIQUE |
-| `p_delivery_routes` | 배송을 이루는 이동 구간 | UNIQUE(`delivery_id`, `route_sequence`) · 유형별 `arrival_hub_id` NULL 규칙 |
+| `p_deliveries` | 주문 1건당 배송 1건 | `order_id` UNIQUE · 상태 CHECK |
+| `p_delivery_routes` | 배송을 이루는 이동 구간 | UNIQUE(`delivery_id`, `route_sequence`) · 유형/상태 CHECK |
 
 - 구간 예시: `서울 허브 → 대전 허브`(HUB_TO_HUB) → `대전 → 부산`(HUB_TO_HUB) → `부산 허브 → 수령업체`(HUB_TO_COMPANY, `arrival_hub_id` NULL)
+- 같은 주문으로 배송을 다시 생성하면 `order_id` UNIQUE 위반을 409 `DELIVERY_ALREADY_EXISTS`로 반환합니다.
+- 요청·공급 업체와 각 업체 관리자 ID는 배송 생성 시점의 값을 저장하며, 이후 업체 관리자가 바뀌어도 갱신하지 않습니다.
+- 담당자는 구간마다 지정합니다(`p_delivery_routes.delivery_manager_id`). `p_deliveries.delivery_manager_id`는 현재 진행 구간의 담당자이며 HUB_ARRIVED로 바뀔 때 다음 구간 담당자로 바뀝니다.
+- 구간 유형별 `arrival_hub_id` NULL 규칙과 `route_sequence > 0`은 애플리케이션 규칙이며 DB CHECK는 없습니다. 실측 거리·시간의 0 이상 검증은 요청 DTO에서 합니다.
 
 ---
 
@@ -357,6 +365,7 @@ erDiagram
 | p_orders | product_id | p_products | REF | N:1 |
 | p_orders | delivery_id | p_deliveries | REF | 1:0..1 |
 | p_orders | ordered_by | p_users | REF | N:1 |
+| p_orders | stock_operation_id | p_inventory_operations | REF | N:0..1 |
 | p_order_histories | order_id | p_orders | FK | N:0..1 |
 | p_deliveries | order_id | p_orders | REF | 1:1 |
 | p_deliveries | departure_hub_id | p_hubs | REF | N:1 |
@@ -377,6 +386,4 @@ erDiagram
 
 ## 5. 원본 ERD 이미지
 
-원본 이미지에는 이번 Hub 변경이 반영되어 있지 않습니다. 현재 Hub 구현은 위 Mermaid와 테이블 명세를 기준으로 확인합니다.
-
-![ERD](../assets/3f72dc3e-logistics_msa_erd_named_primary_keys_staging-01_물류_MSA__전체_ERD.jpg)
+![ERD](../assets/logistics_msa_erd·전체_ERD.drawio.png)
