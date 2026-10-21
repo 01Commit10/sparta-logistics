@@ -103,10 +103,10 @@
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 주문 생성 | POST | `/orders` | 로그인 | requesterCompanyId, supplierCompanyId, productId, quantity, unitPrice, requestNote, Idempotency-Key(헤더) | 201 (동기 처리, COMPLETED). 공급업체 상품 아님 400 `SUPPLIER_PRODUCT_MISMATCH`, 단가 변경 409 `PRICE_CHANGED`, 재고 부족 409 `INSUFFICIENT_STOCK`, 같은 키 다른 내용 409 `IDEMPOTENCY_KEY_CONFLICT`, 같은 키 처리 중·실패 409 `PREVIOUS_REQUEST_NOT_SUCCEEDED`, 재고 확인 실패 503 `INVENTORY_UNAVAILABLE`, 배송 실패 503 `DELIVERY_FAILED`·`DELIVERY_UNAVAILABLE` |
+| 주문 생성 | POST | `/orders` | 로그인 | requesterCompanyId, supplierCompanyId, productId, quantity, unitPrice, requestNote, Idempotency-Key(헤더) | 201 (동기 처리, COMPLETED). 공급업체 상품 아님 400 `SUPPLIER_PRODUCT_MISMATCH`, 상품 없음 404 `PRODUCT_NOT_FOUND`, 단가 변경 409 `PRICE_CHANGED`, 재고 부족 409 `INSUFFICIENT_STOCK`, 같은 키 다른 내용 409 `IDEMPOTENCY_KEY_CONFLICT`, 같은 키 처리 중·실패 409 `PREVIOUS_REQUEST_NOT_SUCCEEDED`, 재고 확인 실패 503 `INVENTORY_UNAVAILABLE`, 배송 생성 실패 503 `DELIVERY_FAILED` |
 | 주문 목록 조회 | GET | `/orders` | 로그인 | 페이지. 정렬: createdAt·totalAmount. MASTER는 전체, 그 외는 본인 주문만 | 200 (페이지) |
 | 주문 상세 조회 | GET | `/orders/{orderId}` | 주문자·MASTER | orderId | 200. 없음 404 `ORDER_NOT_FOUND`, 권한 없음 403 |
-| 주문 취소 | POST | `/orders/{orderId}/cancel` | 주문자·MASTER | orderId (본문 없음) | 200 (주문, 상태 CANCELED). 완료 주문이 아니면 409 `ORDER_NOT_CANCELLABLE`, 배송 출발 후면 409 `DELIVERY_NOT_CANCELABLE` |
+| 주문 취소 | POST | `/orders/{orderId}/cancel` | 주문자·MASTER | orderId (본문 없음) | 200 (주문, 상태 CANCELED). 완료 주문이 아니면 409 `ORDER_NOT_CANCELLABLE`, 배송 출발 후면 409 `DELIVERY_NOT_CANCELABLE`, 배송 서비스 장애 503 `DELIVERY_UNAVAILABLE` |
 | 주문 삭제 | DELETE | `/orders/{orderId}` | MASTER | orderId (논리 삭제) | 204. 취소·실패 주문이 아니면 409 `ORDER_NOT_DELETABLE` |
 | 주문 처리 기록 조회 | GET | `/orders/{orderId}/histories` | 주문 관계자 | orderId | 200 (미구현, 후속 설계) |
 
