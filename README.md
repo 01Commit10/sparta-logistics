@@ -81,7 +81,7 @@
 
 
 - 외부 요청은 모두 Gateway를 거쳐 서비스로 갑니다.
-- 서비스끼리는 Feign으로 호출합니다. 그림에는 주문 흐름(Order → Hub 재고 차감, Order → Delivery 배송 생성)만 그렸고, 전체 호출 관계는 아래 4.2 표에 있습니다.
+- 서비스끼리는 Feign으로 호출합니다. 그림에는 주문 흐름(Order → Hub 재고 차감, Order → Company 상품 정보 호출, Order → Delivery 배송 생성, Order → User 슬랙 알림 발송)만 그렸고, 전체 호출 관계는 아래 4.2 표에 있습니다.
 
 ### 4.2 모듈
 
