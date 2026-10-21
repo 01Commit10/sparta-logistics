@@ -5,6 +5,7 @@ import com.common.exception.InventoryErrorCode;
 import com.common.exception.OrderErrorCode;
 import com.order.application.dto.CreateOrderCommand;
 import com.order.application.dto.OrderResult;
+import com.order.application.event.OrderCompletedEvent;
 import com.order.domain.client.*;
 import com.order.domain.entity.Order;
 import com.order.domain.entity.OrderHistory;
@@ -13,6 +14,7 @@ import com.order.domain.repository.OrderRepository;
 import com.order.domain.vo.OrderOperationType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ public class OrderService {
     private final OrderHistoryRepository orderHistoryRepository;
     private final HubClient hubClient;
     private final DeliveryClient deliveryClient;
+    private final ApplicationEventPublisher eventPublisher;
 
     // BusinessException으로 실패하면 롤백하지 않고 FAILED 상태를 커밋한다
     @Transactional(noRollbackFor = BusinessException.class)
@@ -90,6 +93,7 @@ public class OrderService {
             // 6. 주문 COMPLETED + 이력 SUCCEEDED
             order.complete(delivery.deliveryId(), decreaseOperationId);
             history.succeed(201);
+            eventPublisher.publishEvent(OrderCompletedEvent.from(order));
             return OrderResult.from(order);
         } catch (RuntimeException e) {
             // 보상: 재고가 빠졌을 수 있으면 복원 → 주문·이력 FAILED → 원래 예외 그대로 던짐
@@ -161,5 +165,7 @@ public class OrderService {
                 "재고가 부족하여 주문할 수 없습니다."
         );
     }
+
+
 
 }

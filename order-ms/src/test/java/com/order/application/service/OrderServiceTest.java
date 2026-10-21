@@ -5,6 +5,7 @@ import com.common.exception.InventoryErrorCode;
 import com.common.exception.OrderErrorCode;
 import com.order.application.dto.CreateOrderCommand;
 import com.order.application.dto.OrderResult;
+import com.order.application.event.OrderCompletedEvent;
 import com.order.domain.client.*;
 import com.order.domain.entity.Order;
 import com.order.domain.entity.OrderHistory;
@@ -22,6 +23,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -51,6 +53,9 @@ class OrderServiceTest {
 
     @Mock
     private DeliveryClient deliveryClient;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private OrderService orderService;
@@ -127,6 +132,9 @@ class OrderServiceTest {
         ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
         then(orderHistoryRepository).should().save(historyCaptor.capture());
 
+        // then: Slack Event
+        then(eventPublisher).should().publishEvent(any(OrderCompletedEvent.class));
+
         OrderHistory history = historyCaptor.getValue();
         assertThat(history.getOperationStatus()).isEqualTo(OrderOperationStatus.SUCCEEDED);
         assertThat(history.getResponseCode()).isEqualTo(201);
@@ -135,7 +143,7 @@ class OrderServiceTest {
         // assert가 여러 개지만 전부 "정상 흐름이 끝까지 갔다"는 한 개념을 확인하므로 한 테스트로 묶음
     }
 
-    // 재요청해도 재고가 두번 빠지지 않게 그대로 반환
+    // 재요청재요청해도 재고가 두번 빠지지 않게 그대로 반환
     // 타임아웃으로 클라가 재시도 해도 재고가 두번 빠지지 않게 막는 기능
     // command.requestHash()로 꺼내둬서 테스트에서 service와 똑같은 해시로 이력 생성 가능
     @Test
@@ -169,6 +177,7 @@ class OrderServiceTest {
         then(deliveryClient).shouldHaveNoInteractions();
         then(orderRepository).shouldHaveNoInteractions();
         then(orderHistoryRepository).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any(OrderCompletedEvent.class));
     }
 
     @ParameterizedTest
@@ -194,6 +203,7 @@ class OrderServiceTest {
         then(deliveryClient).shouldHaveNoInteractions();
         then(orderRepository).shouldHaveNoInteractions();
         then(orderHistoryRepository).should(never()).save(any());
+        then(eventPublisher).should(never()).publishEvent(any(OrderCompletedEvent.class));
     }
 
     @Test
@@ -213,6 +223,7 @@ class OrderServiceTest {
         then(hubClient).should(times(2)).decreaseStock(new StockDecreaseCommand(ORDER_ID, HUB_ID, PRODUCT_ID, 3));
         then(hubClient).should().restoreStock(new StockRestoreCommand(ORDER_ID, DECREASE_OPERATION_ID));
         then(deliveryClient).shouldHaveNoInteractions();
+        then(eventPublisher).should(never()).publishEvent(any(OrderCompletedEvent.class));
         assertFailed(503);
     }
 
@@ -233,6 +244,7 @@ class OrderServiceTest {
         then(deliveryClient).shouldHaveNoInteractions();
         then(hubClient).should(never()).decreaseStock(any());
         then(hubClient).should(never()).restoreStock(any());
+        then(eventPublisher).should(never()).publishEvent(any(OrderCompletedEvent.class));
 
         ArgumentCaptor<OrderHistory> historyCaptor = ArgumentCaptor.forClass(OrderHistory.class);
         then(orderHistoryRepository).should().save(historyCaptor.capture());
@@ -269,6 +281,7 @@ class OrderServiceTest {
         // then: 차감이 안 됐으니 배송도, 복원도 없음
         then(deliveryClient).shouldHaveNoInteractions();
         then(hubClient).should(never()).restoreStock(any());
+        then(eventPublisher).should(never()).publishEvent(any(OrderCompletedEvent.class));
     }
 
     @Test
@@ -288,6 +301,7 @@ class OrderServiceTest {
 
         // then: 빠진 재고 복원
         then(hubClient).should().restoreStock(new StockRestoreCommand(ORDER_ID, DECREASE_OPERATION_ID));
+        then(eventPublisher).should(never()).publishEvent(any(OrderCompletedEvent.class));
         assertFailed(503);
     }
 
