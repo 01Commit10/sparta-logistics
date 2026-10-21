@@ -43,9 +43,9 @@
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 허브 목록 조회 | GET | `/hubs` | 로그인 | 페이지 조건 | 200 |
+| 허브 목록 조회 | GET | `/hubs` | 로그인 | name(선택), sort(createdAt·name, asc·desc) | 200 (목록, 페이지 없음: id, name, address) |
 | 허브 상세 조회 | GET | `/hubs/{hubId}` | 로그인 | hubId | 200 |
-| 허브 정보 수정 | PATCH | `/hubs/{hubId}` | MASTER | name, address | 200 |
+| 허브 정보 수정 | PATCH | `/hubs/{hubId}` | MASTER | name, address | 200 (미구현, 후속 설계) |
 
 *허브는 사전 정의된 17개를 사용하므로 일반 생성·삭제 API는 제외했습니다.*
 
@@ -53,17 +53,18 @@
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 허브 경로 목록 | GET | `/hub-routes` | 로그인 | 출발·도착 허브 | 200 |
-| 허브 경로 상세 | GET | `/hub-routes/{routeId}` | 로그인 | routeId | 200 |
-| 허브 경로 등록 | POST | `/hub-routes` | MASTER | 출발·도착 허브, 거리, 시간 | 201 |
-| 허브 경로 수정 | PATCH | `/hub-routes/{routeId}` | MASTER | 거리, 소요시간 | 200 |
-| 허브 경로 삭제 | DELETE | `/hub-routes/{routeId}` | MASTER | routeId | 204 |
+| 허브 경로 목록 | GET | `/hub-routes` | 로그인 | - | 200 (전체 목록, 페이지 없음) |
+| 허브 경로 상세 | GET | `/hub-routes/{routeId}` | 로그인 | routeId | 200 (id, fromHubId, toHubId, distanceKm, durationMin) |
+| 출발·도착 허브로 경로 조회 | GET | `/hub-routes/fromtosearch` | 로그인 | fromHubId, toHubId | 200, 없으면 404 `RESOURCE_NOT_FOUND` |
+| 허브 경로 등록 | POST | `/hub-routes` | MASTER | 출발·도착 허브, 거리, 시간 | 201 (미구현, 후속 설계) |
+| 허브 경로 수정 | PATCH | `/hub-routes/{routeId}` | MASTER | 거리, 소요시간 | 200 (미구현, 후속 설계) |
+| 허브 경로 삭제 | DELETE | `/hub-routes/{routeId}` | MASTER | routeId | 204 (미구현, 후속 설계) |
 
 ## Inventory
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 재고 목록 조회 | GET | `/inventories` | 관리자·허브담당 | hubId, productId | 200 |
+| 재고 목록 조회 | GET | `/inventories` | 로그인 | hubId, productId (둘 다 선택) | 200 (목록, 페이지 없음: id, hubId, productId, quantity) |
 | 재고 상세 조회 | GET | `/inventories/{inventoryId}` | 관리자·허브담당 | inventoryId | 200 |
 | 재고 신규 등록 | POST | `/inventories` | MASTER·상품 소유 업체 매니저 | hubId, productId, initialQuantity | 201 |
 | 재고 수량 증가 | POST | `/inventories/{inventoryId}/increase` | 관리자·허브담당 | quantity, Idempotency-Key | 200 |
@@ -102,11 +103,12 @@
 
 | 기능 | Method | Endpoint | 권한 | 요청 | 응답 |
 |---|---|---|---|---|---|
-| 주문 생성 | POST | `/orders` | 로그인·소속확인 | 업체, 상품, 수량, 단가(`unitPrice`), 요청사항, Idempotency-Key | 201 (동기 처리, COMPLETED). 단가 변경 409 `PRICE_CHANGED`, 재고 부족 409, 같은 키 다른 내용 409 `IDEMPOTENCY_KEY_CONFLICT`, 같은 키 처리 중·실패 409 `PREVIOUS_REQUEST_NOT_SUCCEEDED`, 배송 실패 503 |
-| 주문 목록 조회 | GET | `/orders` | 로그인 | status, companyId | 200 |
-| 주문 상세 조회 | GET | `/orders/{orderId}` | 주문 관계자 | orderId | 200 |
-| 주문 취소 | POST | `/orders/{orderId}/cancel` | 주문권한자·MASTER | 사유, Idempotency-Key | 202 |
-| 주문 처리 기록 조회 | GET | `/orders/{orderId}/histories` | 주문 관계자 | orderId | 200 |
+| 주문 생성 | POST | `/orders` | 로그인 | requesterCompanyId, supplierCompanyId, productId, quantity, unitPrice, requestNote, Idempotency-Key(헤더) | 201 (동기 처리, COMPLETED). 공급업체 상품 아님 400 `SUPPLIER_PRODUCT_MISMATCH`, 단가 변경 409 `PRICE_CHANGED`, 재고 부족 409 `INSUFFICIENT_STOCK`, 같은 키 다른 내용 409 `IDEMPOTENCY_KEY_CONFLICT`, 같은 키 처리 중·실패 409 `PREVIOUS_REQUEST_NOT_SUCCEEDED`, 재고 확인 실패 503 `INVENTORY_UNAVAILABLE`, 배송 실패 503 `DELIVERY_FAILED`·`DELIVERY_UNAVAILABLE` |
+| 주문 목록 조회 | GET | `/orders` | 로그인 | 페이지. 정렬: createdAt·totalAmount. MASTER는 전체, 그 외는 본인 주문만 | 200 (페이지) |
+| 주문 상세 조회 | GET | `/orders/{orderId}` | 주문자·MASTER | orderId | 200. 없음 404 `ORDER_NOT_FOUND`, 권한 없음 403 |
+| 주문 취소 | POST | `/orders/{orderId}/cancel` | 주문자·MASTER | orderId (본문 없음) | 200 (주문, 상태 CANCELED). 완료 주문이 아니면 409 `ORDER_NOT_CANCELLABLE`, 배송 출발 후면 409 `DELIVERY_NOT_CANCELABLE` |
+| 주문 삭제 | DELETE | `/orders/{orderId}` | MASTER | orderId (논리 삭제) | 204. 취소·실패 주문이 아니면 409 `ORDER_NOT_DELETABLE` |
+| 주문 처리 기록 조회 | GET | `/orders/{orderId}/histories` | 주문 관계자 | orderId | 200 (미구현, 후속 설계) |
 
 *주문 생성 시 Company Service에서 상품 단가를 확인하여* *`unit_price_snapshot`**에 저장하고, 주문 수량을 기준으로* *`total_amount`**를 계산합니다. 주문 조회 응답에는 주문 당시 단가와 총금액을 포함합니다. 주문 생성은 Saga를 시작하며, 재고 차감과 배송 생성이 완료될 때까지* *`PROCESSING`* *상태를 유지합니다. 처리는 동기로 끝나므로 응답 시점의 주문은* *`COMPLETED`**입니다(실패하면 오류 응답, 주문은* *`FAILED`**). 흐름은 [[07 서비스 정책]] 7장을 봅니다.*
 
@@ -117,7 +119,7 @@
 | 배송 목록 조회 | GET | `/deliveries` | 관리자·관계자 | 상태·담당자 검색 | 200 |
 | 배송 상세 조회 | GET | `/deliveries/{deliveryId}` | 관리자·관계자 | deliveryId | 200 |
 | 주문별 배송 조회 | GET | `/deliveries/by-order/{orderId}` | 관리자·관계자 | orderId | 200 |
-| 배송담당자 배정 | PATCH | `/deliveries/{deliveryId}/manager` | 관리자·배정권한자 | routeType, deliveryManagerId | 200 |
+| 배송담당자 배정 | PATCH | `/deliveries/{deliveryId}/manager` | MASTER | routeType, deliveryManagerId | 200 |
 | 배송 상태 변경 | PATCH | `/deliveries/{deliveryId}/status` | 담당배송자·MASTER | status | 200 |
 
 *배송 생성은 Order Service가 호출하는 내부 API로 관리합니다.*
@@ -137,19 +139,19 @@
 
 | 기능 | Method | Endpoint | 호출 목적 |
 |---|---|---|---|
-| 사용자 검증 | GET | `/users/{userId}` | 사용자·배송담당자 확인. 응답: id, name, role, isDeliveryManager, slackId, active. 삭제된 사용자는 404 |
+| 사용자 검증 | GET | `/users/{userId}` | 사용자·배송담당자 확인. 응답: id, name, role, isDeliveryManager, slackId, active, organizationType, organizationId. 삭제된 사용자는 404 |
 | 배송담당자 무작위 배정 | GET | `/users/delivery-managers/random?departureHubId={id}&arrivalHubId={id}` | 배송 생성 시 허브별 담당자 1명씩. 200(departureManagerId, arrivalManagerId: 담당자 사용자 ID 문자열). 후보 없으면 404 `DELIVERY_MANAGER_NOT_FOUND`(메시지에 출발지/도착지), 파라미터 누락·형식 오류 400 |
 | 허브 검증 | GET | `/hubs/{hubId}` | 활성 허브면 200(id, name, address), 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
 | 상품 검증 | GET | `/products/{productId}` | 상품·공급업체 확인. 응답: id, companyId, name, unitPrice. 없거나 삭제된 상품은 404 `PRODUCT_NOT_FOUND`, 소속 업체가 삭제됐으면 404 `COMPANY_NOT_FOUND`. 조회수는 올리지 않음 |
 | 업체 검증 | GET | `/companies/{companyId}` | 업체·관리 허브 확인. 응답: id, name, address, hubId, managerUserId. 없거나 삭제된 업체는 404 `COMPANY_NOT_FOUND` |
-| 재고 차감 | POST | `/inventories/decrease` | 주문 시 원자적 재고 차감. 성공 200, 수량 부족 409 `INSUFFICIENT_STOCK`, 대상 없음·논리 삭제 404 `INVENTORY_NOT_FOUND`. 업무 거절도 Operation 저장 |
+| 재고 차감 | POST | `/inventories/decrease` | Header: Idempotency-Key, JSON: orderId, hubId, productId, quantity. 주문 시 원자적 재고 차감. 성공 200(operationId, orderId, status, inventoryId, changedQuantity, remainingQuantity), 수량 부족 409 `INSUFFICIENT_STOCK`, 대상 없음·논리 삭제 404 `INVENTORY_NOT_FOUND`, 같은 키 다른 내용 409 `IDEMPOTENCY_CONFLICT`. 업무 거절도 Operation 저장 |
 | 재고 복원 | POST | `/inventories/restore` | Header: Idempotency-Key, JSON: originalOperationId. 성공한 원본 차감 수량으로 한 번만 복원. 같은 키는 결과 재응답, 다른 키로 이미 복원된 원본은 409 INVENTORY_ALREADY_RESTORED |
 | 상품 재고 정리 | DELETE | `/inventories/products/{productId}` | 상품의 모든 허브 재고를 논리 삭제. 없음·이미 삭제도 204, 수량·Operation·History 보존 |
 | 허브 경로 조회 | GET | `/hub-routes?departureHubId={id}&arrivalHubId={id}` | 200(id, departureHubId, arrivalHubId, distanceKm, durationMin). 없거나 삭제됐으면 404 RESOURCE_NOT_FOUND |
-| 배송 생성 | POST | `/deliveries` | 주문에 연결된 배송 생성 |
-| 배송 취소 | POST | `/deliveries/{deliveryId}/cancel` | 주문 취소 시 배송·구간 취소 (Saga 보상) |
-| 주문 완료 처리 | POST | `/orders/{orderId}/complete` | Saga 완료 상태 반영 |
-| 주문 실패 처리 | POST | `/orders/{orderId}/fail` | Saga 실패 상태 반영 |
+| 배송 생성 | POST | `/deliveries` | 주문에 연결된 배송 생성. JSON: orderId, departureHubId, requesterCompanyId, supplierCompanyId, recipientUserId. 201(id), 같은 주문이면 409 `DELIVERY_ALREADY_EXISTS` |
+| 배송 취소 | POST | `/deliveries/{deliveryId}/cancel` | 주문 취소 시 배송·구간 취소 (Saga 보상). 204, 출발 후면 409 `DELIVERY_NOT_CANCELABLE` |
+| 주문 완료 처리 | POST | `/orders/{orderId}/complete` | Saga 완료 상태 반영 (미구현) |
+| 주문 실패 처리 | POST | `/orders/{orderId}/fail` | Saga 실패 상태 반영 (미구현) |
 
 *내부 API는 일반 사용자에게 공개하지 않으며 서비스 간 인증이 필요합니다.*
 
