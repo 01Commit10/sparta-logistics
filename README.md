@@ -1,7 +1,7 @@
 # Sparta Logistics
 
 > 전국 17개 허브 센터를 거점으로 업체 간 주문을 받아, 허브를 거쳐 배송하는 **B2B 물류 관리·배송 시스템**입니다.
-> Spring Cloud 기반 MSA로 서비스를 나누고, Gateway 인증·인가, Eureka 서비스 발견, OpenFeign 서비스 간 통신, 서비스별 스키마 분리를 적용했습니다.
+> MSA로 서비스를 나누고, Gateway 인증·인가, Eureka 서비스 발견, OpenFeign 서비스 간 통신, 서비스별 스키마 분리를 적용했습니다.
 
 ## 목차
 
@@ -20,41 +20,47 @@
 
 ## 1. 프로젝트 목적
 
-| 항목 | 내용 |
+| 항&#8288;목 | 내용 |
 |---|---|
-| 주제 | 업체(공급·수령) 간 주문 → 허브 재고 차감 → 허브 간 이동(P2P) → 업체 배송까지 관리하는 물류 플랫폼 |
-| 목표 | ① Spring Cloud 기반 MSA로 서비스 경계와 데이터 소유권을 나눈다 ② OpenFeign으로 서비스 간 API를 연동하고, 실패 시 보상(롤백)으로 데이터 정합성을 지킨다 ③ Gateway 한 곳에서 인증·인가를 처리한다 |
-| 기간 | 2026-10-13 ~ 2026-10-21 |
+| 주&#8288;제 | 업체 간 B2B 주문부터 허브 재고 차감, 허브 간 이동, 최종 업체 배송까지 한 흐름으로 관리하는 물류 플랫폼 |
+| 목&#8288;표 | ① Spring Cloud 기반 MSA로 서비스 경계와 데이터 소유권을 나눈다<br>② OpenFeign으로 서비스 간 API를 연동하고, 실패 시 보상(롤백)으로 데이터 정합성을 지킨다<br>③ 각 서비스를 4계층(표현 → 응용 → 도메인 ← 인프라)으로 나누고, 도메인이 외부 기술에 의존하지 않게 한다<br>④ 서비스별 단위·통합 테스트와 E2E 스크립트로 기능과 실패 시나리오를 검증한다<br>⑤ 하위 서비스가 느리거나 실패해도 타임아웃과 보상으로 장애가 번지지 않게 한다<br>⭐ ⑥ **대규모 트래픽에 대비한 구조를 설계하고, 부하 테스트로 병목을 측정·개선한다** |
+| 기&#8288;간 | 2026-10-13 ~ 2026-10-21 |
 
 **주요 도메인**
 
-- **사용자**: 역할은 `MASTER`(관리자)·`USER`(일반) 2단계. 배송담당자는 역할이 아니라 `isDeliveryManager` 속성으로 부여합니다.
-- **허브**: 전국 17개 허브와 허브 간 P2P 이동 경로, 허브별 상품 재고와 변동 이력.
-- **업체·상품**: 업체는 관리 허브에 속하고, 상품은 업체에 속합니다.
-- **주문**: 공급 업체 → 수령 업체 주문. 재고 차감·배송 생성을 조정(Saga)하고 실패하면 보상합니다.
-- **배송**: 주문 1건당 배송 1건, 허브 간 구간(`HUB_TO_HUB`)과 최종 배송 구간(`HUB_TO_COMPANY`)으로 나눠 기록합니다.
+| 도&#8288;메&#8288;인 | 서비스 | 역할 |
+|---|---|---|
+| 사&#8288;용&#8288;자 | `user-ms` | 회원가입·로그인, 토큰 발급, 사용자 관리 |
+| 허&#8288;브 | `hub-ms` | 허브·허브 간 경로 관리, 재고 차감·복원 |
+| 업&#8288;체·&#8288;상&#8288;품 | `company-ms` | 업체·상품 관리 |
+| 주&#8288;문 | `order-ms` | 주문 생성·취소, 실패 시 재고 복원 |
+| 배&#8288;송 | `delivery-ms` | 배송·구간 생성, 배송 상태·담당자 관리 |
+| 공&#8288;통 | `gateway-edge`<br>`eureka-registry`<br>`common` | 외부 요청 단일 진입점, JWT 인증·관리자 경로 인가, 라우팅<br>서비스 등록·발견<br>공통 엔티티·감사, 공통 예외·응답, 로그인 사용자 전달, 서비스 간 호출 오류 처리, Slack 알림 |
 
 ## 2. 팀원 역할분담
 
-| 이름 | 담당 | 주요 작업 |
-|---|---|---|
-| 대진 | User/Auth Service, Gateway, 공통(인증·장애 대응·알림) | 회원·인증 API, JWT 발급·재발급·로그아웃(Redis 토큰 상태), Gateway 라우팅·JWT 인증·경로 인가·타임아웃·Circuit Breaker, common 인증 헤더(`@CurrentUser`)·Feign 장애 대응·Slack 알림 |
-| 이찬 | Hub/Inventory Service | 허브 17개·P2P 경로 시드, 허브·경로 조회, 재고 등록·차감·복원(조건부 UPDATE, 멱등성) |
-| 권우 | Company/Product Service, 공통 인프라 | 업체·상품 API, 프로젝트 골격, Eureka, Docker Compose, common(`BaseEntity`·공통 응답·예외) |
-| 다울 | Order Service | 주문 생성 Saga, 실패 보상·주문 취소, 주문 완료 Slack 알림 연동 |
-| 영은 | Delivery Service | 배송·구간 자동 생성, 배송 상태 전이, 배송담당자 확인 |
+| 이름 | GitHub | 담당 | 주요 작업 |
+|---|---|---|---|
+| 대진 | [@dd-jiny](https://github.com/dd-jiny) | 사용자, 공통(게이트웨이), 성능 개선 설계 | • 회원·인증 API, 관리자 사용자 관리 API<br>• Gateway 인증·인가·라우팅<br>• 공통 인증 헤더·Slack 알림<br>• 부하 테스트로 병목 분석, 서비스별 성능 개선 방향 설계 |
+| 이찬 | [@ijustsea](https://github.com/ijustsea) | 허브 | • 허브·허브 간 경로 API<br>• 재고 등록·차감·복원 API<br>• 재고 조회·차감 Redis 적용<br>• 허브 조회 Caffeine 캐시 적용<br>• 재고 차감 동시성 제어 |
+| 권우 | [@KWON-WOO](https://github.com/KWON-WOO) | 업체·상품, 공통(유레카) | • 프로젝트 초기 구성·인프라 설정<br>• 공통 엔티티·예외 처리<br>• 업체·상품 API<br>• 상품 조회 레이어드 캐시(설정으로 선택) |
+| 다울 | [@shindawull](https://github.com/shindawull) | 주문 | • 주문 생성·조회·취소·삭제 API<br>• 주문 실패 시 재고 복원(보상)<br>• 주문 트랜잭션 분리로 커넥션 풀 고갈 완화 |
+| 영은 | [@alreadysolved](https://github.com/alreadysolved) | 배송 | • 배송·배송 구간 생성<br>• 배송 상태·담당자 관리 API<br>• 배송 생성 외부 호출을 트랜잭션 밖으로 분리해 주문 생성 병목 해소 |
 
 ## 3. 기술 스택
 
 | 분류 | 기술 |
 |---|---|
 | Language | Java 21 |
-| Framework | Spring Boot 3.5.16, Spring Data JPA, Validation, spring-security-crypto(BCrypt) |
-| MSA | Spring Cloud 2025.0.3 — Gateway(WebFlux), Netflix Eureka, OpenFeign, LoadBalancer, Resilience4j |
-| Auth | JWT (jjwt 0.12.6), Redis(Refresh Token·로그아웃·토큰 무효화 상태) |
-| Database | PostgreSQL 18 (컨테이너 1개, 서비스별 스키마 5개), Redis 7.4 |
-| Build / Infra | Gradle 멀티 모듈, Docker, Docker Compose |
-| Test | JUnit 5, Mockito, H2, WireMock, Testcontainers, Postman |
+| Framework | Spring Boot 3.5.16, Spring Data JPA, Validation, Spring Security Crypto(BCrypt) |
+| MSA | Spring Cloud 2025.0.3 (Gateway, Eureka, OpenFeign, LoadBalancer) |
+| Resilience | Resilience4j Circuit Breaker·Retry 도입 후 제거, 타임아웃·오류 분류로 대체 |
+| Auth | JWT(jjwt 0.12.6), Redis 토큰 상태 관리 |
+| Database | PostgreSQL 18(서비스별 스키마 5개) |
+| Cache | Redis 7.4, Caffeine (상품 조회 캐시는 설정으로 선택: `none`·`redis`·`layered`) |
+| Build / Infra | Gradle 멀티 모듈, Docker Compose |
+| Test | JUnit 5, Mockito, H2, Testcontainers, WireMock, ArchUnit, k6, Postman |
+| Monitoring | Spring Boot Actuator, Prometheus |
 | Notification | Slack Incoming Webhook |
 | Collaboration | Git, GitHub |
 
@@ -63,64 +69,66 @@
 ### 4.1 아키텍처
 
 ```mermaid
-flowchart TB
+flowchart LR
     client([Client])
-    slack[[Slack Webhook]]
+    gateway["Gateway<br/>인증 · 인가 · 라우팅"]
 
-    gateway["gateway-edge :19090<br/>JWT 인증 · 경로 인가 · 라우팅<br/>Timeout · Circuit Breaker"]
-    eureka["eureka-registry :8761<br/>Service Discovery"]
-    redis[("Redis<br/>토큰 상태")]
-
-    subgraph services["Business Services"]
-        direction LR
-        user["user-ms :19095<br/>회원 · 인증"]
-        hub["hub-ms :19093<br/>허브 · 경로 · 재고"]
-        company["company-ms :19091<br/>업체 · 상품"]
-        order["order-ms :19094<br/>주문 · Saga"]
-        delivery["delivery-ms :19092<br/>배송 · 구간"]
+    subgraph services["Domain Services"]
+        direction TB
+        user["<b>User</b><br/>회원 · 인증"]
+        company["<b>Company</b><br/>업체 · 상품"]
+        hub["<b>Hub</b><br/>허브 · 경로 · 재고"]
+        order["<b>Order</b><br/>주문"]
+        delivery["<b>Delivery</b><br/>배송 · 구간"]
     end
 
-    subgraph db["PostgreSQL (1 container · 5 schemas)"]
-        direction LR
-        s_auth[(auth)]
-        s_hub[(hub)]
-        s_company[(company)]
-        s_orders[(orders)]
-        s_delivery[(delivery)]
-    end
+    eureka["Eureka"]
+    redis[("Redis")]
+    db[("PostgreSQL<br/>서비스별 스키마")]
 
-    client --> gateway
-    gateway -- "lb://서비스명" --> services
-    gateway -. "로그아웃 여부 확인" .-> redis
-    user -. "Refresh Token 저장" .-> redis
-    gateway & services -. "등록 · 조회" .-> eureka
+    client --> gateway --> services
+    order -- Feign --> hub & delivery
+    services -.-> eureka
+    services --- db
+    gateway & services -.-> redis
 
-    order -- "Feign" --> company & hub & delivery
-    delivery -- "Feign" --> hub & user
-
-    user --> s_auth
-    hub --> s_hub
-    company --> s_company
-    order --> s_orders
-    delivery --> s_delivery
-
-    order -. "주문 완료 알림" .-> slack
+    classDef edge fill:#6366F1,stroke:#4F46E5,stroke-width:2px,color:#fff
+    classDef svc fill:#14B8A6,stroke:#0D9488,stroke-width:2px,color:#fff
+    classDef core fill:#F59E0B,stroke:#D97706,stroke-width:2px,color:#fff
+    classDef infra fill:#64748B,stroke:#475569,stroke-width:2px,color:#fff
+    class client,gateway edge
+    class user,company,hub,delivery svc
+    class order core
+    class eureka,redis,db infra
+    style services fill:transparent,stroke:#14B8A6,stroke-width:2px,stroke-dasharray:5 5
+    linkStyle default stroke:#94A3B8,stroke-width:2px
 ```
+
+- 외부 요청은 모두 Gateway를 거쳐 서비스로 갑니다.
+- 서비스끼리는 Feign으로 호출합니다. 그림에는 주문 흐름(Order → Hub 재고 차감, Order → Delivery 배송 생성)만 그렸고, 전체 호출 관계는 아래 4.2 표에 있습니다.
 
 ### 4.2 모듈
 
-| 모듈 | 포트 | 역할 | 스키마 |
-|---|---|---|---|
-| `eureka-registry` | 8761 | 서비스 등록·발견 | - |
-| `gateway-edge` | 19090 | 외부 요청 단일 진입점. JWT 검증, MASTER 경로 인가, `X-User-*` 헤더 주입, 라우트별 타임아웃·Circuit Breaker | - |
-| `user-ms` | 19095 | 회원가입·로그인·토큰, 내 정보, MASTER 사용자 관리, 사용자 검증 내부 API | `auth` |
-| `hub-ms` | 19093 | 허브 17개, 허브 간 경로, 재고·재고 변동 이력 | `hub` |
-| `company-ms` | 19091 | 업체, 상품 | `company` |
-| `order-ms` | 19094 | 주문 생성·취소, Saga 조정, Slack 알림 호출 | `orders` |
-| `delivery-ms` | 19092 | 배송, 배송 구간(경로) | `delivery` |
-| `common` | - | `BaseEntity`·감사(Audit), 공통 오류 응답, `@CurrentUser`·Feign 사용자 헤더 전달, Feign 장애 대응(`RemoteCallTemplate`), `SlackNotifier` | - |
+**인프라 · 공통**
 
-각 서비스는 **4계층(presentation → application → domain ← infrastructure)** 구조이며, 다른 서비스의 데이터는 DB 외래키 없이 **UUID 참조 + Feign API**로만 확인합니다.
+| 모듈 | 포트 | 역할 |
+|---|---|---|
+| `eureka-registry` | 8761 | 서비스 등록·발견 |
+| `gateway-edge` | 19090 | 외부 요청 진입점 (관리 포트 19190) |
+| `common` | - | 도메인 서비스·Gateway가 쓰는 공통 라이브러리 |
+
+**도메인 서비스**
+
+| 모듈 | 포트 | 스키마 | Feign 호출 (용도) |
+|---|---|---|---|
+| `company-ms` | 19091 | `company` | hub-ms (허브 확인, 상품 재고 삭제)<br>user-ms (업체 관리자 확인) |
+| `delivery-ms` | 19092 | `delivery` | company-ms (업체·도착 허브 조회)<br>hub-ms (허브 간 경로 조회)<br>user-ms (배송담당자 배정, 수령인 조회) |
+| `hub-ms` | 19093 | `hub` | company-ms (상품·업체 확인) |
+| `order-ms` | 19094 | `orders` | hub-ms (재고 조회·차감·복원)<br>delivery-ms (배송 생성·취소) |
+| `user-ms` | 19095 | `auth` | - |
+
+- 각 서비스는 **4계층(presentation → application → domain ← infrastructure)** 구조입니다.
+- 다른 서비스의 데이터는 DB 외래키 없이 **UUID 참조와 Feign 내부 API**로만 확인합니다.
 
 ### 4.3 Gateway 라우팅
 
@@ -132,55 +140,38 @@ flowchart TB
 | `/api/v1/orders/**` | `order-ms` |
 | `/api/v1/deliveries/**`, `/api/v1/delivery-routes/**` | `delivery-ms` |
 
-- 공개 경로(토큰 불필요): `POST /api/v1/auth/signup`, `login`, `reissue`, `GET /api/v1/auth/check-username`. 그 밖의 `/api/v1/**`는 로그인이 필요합니다.
-- `/internal/**`는 Gateway에서 404로 차단합니다. 내부 API는 서비스끼리 Feign으로만 호출합니다.
+- **공개 경로**: `POST /api/v1/auth/signup`·`login`·`reissue`, `GET /api/v1/auth/check-username`. 그 밖의 `/api/v1/**`는 로그인이 필요합니다.
+- **내부 API 차단**: `/internal/**`는 Gateway에서 404로 막고, 서비스끼리 Feign으로만 호출합니다.
+- **경로 전달**: 경로를 자르지 않고(StripPrefix 없음) 그대로 서비스에 넘깁니다.
 - MASTER 전용 경로와 헤더 규약은 [Gateway·인증 가이드](<docs/guide/01 Gateway·인증 가이드.md>)를 참고합니다.
 
-**Gateway가 하는 일 (요청 순서)**
-
-| 단계 | 내용 | 실패 응답 |
-|---|---|---|
-| 경로 정규화 | `;`·`%2f`·`..` 등 해석이 갈리는 경로 거부, `/internal/**` 차단 | 400 `INVALID_INPUT`, 404 `RESOURCE_NOT_FOUND` |
-| 요청 ID | `X-Request-Id`가 없거나 형식이 틀리면 새 UUID. 서비스·응답·접근 로그에 같은 값 | - |
-| 인증 | JWT 서명·만료·`typ` 검증, Redis로 로그아웃·무효화 확인 (Redis 장애 시 거부) | 401 `TOKEN_*`, 503 `AUTH_UNAVAILABLE` |
-| 인가 | MASTER 전용 경로, 비밀번호 변경이 필요한 계정은 일부 API만 | 403 `ACCESS_DENIED`, 403 `PASSWORD_CHANGE_REQUIRED` |
-| 헤더 | 외부 `X-User-*`·`X-Token-*`를 지우고 토큰 값으로 다시 넣음 | - |
-| 라우팅 | Eureka + 로드밸런서. 연결 2초, 응답 5초(주문 15초) | 503 `SERVICE_UNAVAILABLE`, 504 `SERVICE_TIMEOUT` |
-| Circuit Breaker | 서비스별 1개. 연결 실패·타임아웃만 실패로 세고, 열리면 하위로 보내지 않음 | 503 `SERVICE_UNAVAILABLE` |
-
-- 운영 확인: 서비스 포트(19090)에는 헬스체크용 `/livez`·`/readyz`만 있고, 헬스 상세·라우트·회로 상태는 **관리 포트 19190**(`GW_MANAGEMENT_PORT`)의 `/actuator/health`·`/actuator/gateway/routes`·`/actuator/circuitbreakers`에서 봅니다. 관리 포트는 외부에 공개하지 않습니다.
+운영 확인용 Actuator(`/actuator/health`, `/actuator/gateway/routes`)는 외부에 열지 않는 **관리 포트 19190**에만 둡니다.
 
 ## 5. 실행 방법
 
-> 현재 Docker Compose에는 **PostgreSQL·Redis만** 정의되어 있습니다. 애플리케이션(Eureka·Gateway·서비스)은 Gradle `bootRun`이나 IntelliJ로 로컬에서 띄웁니다. 애플리케이션 컨테이너화는 진행 중입니다.
+> Docker Compose로 **PostgreSQL·Redis**를 띄우고, 애플리케이션은 Gradle `bootRun`(또는 IntelliJ)으로 로컬에서 실행합니다.
 
-```mermaid
-flowchart LR
-    A["1. 사전 준비"] --> B["2. 프로젝트 받기"] --> C["3. .env 작성"] --> D["4. 인프라 기동<br/>PostgreSQL · Redis"] --> E["5. Eureka"] --> F["6. 도메인 서비스"] --> G["7. Gateway"] --> H["8. 기동 확인"]
-```
+**순서**: 사전 준비 → `.env` 작성 → 인프라 기동 → Eureka → 도메인 서비스 → Gateway → 기동 확인
 
 ### 5.1 사전 준비
 
 | 항목 | 버전 | 확인 |
 |---|---|---|
-| Docker Desktop | Compose v2 포함 | `docker info`가 오류 없이 출력 |
-| JDK | 21 | `java -version` (없으면 Gradle toolchain이 내려받음) |
+| Docker Desktop | Compose v2 포함 | `docker info` |
+| JDK | 21 | `java -version` |
 | Git | - | `git --version` |
 | openssl | - | `.env` 비밀값 생성용 |
-| Python 3 (선택) | - | 개발용 토큰 스크립트 `scripts/dev-token.py`를 쓸 때만 |
-
-### 5.2 프로젝트 받기
 
 ```bash
 git clone https://github.com/01Commit10/sparta-logistics.git
 cd sparta-logistics
 git switch dev
 
-# 실행 권한이 빠진 채 저장된 파일 두 개에 권한 부여 (안 하면 DB 초기화·gradlew 실행 실패)
+# 실행 권한이 빠진 채 저장된 파일 (안 하면 DB 초기화·gradlew 실행 실패)
 chmod +x gradlew docker/postgres/init/01-init-service-accounts.sh
 ```
 
-### 5.3 환경 변수 (`.env`)
+### 5.2 환경 변수 (`.env`)
 
 ```bash
 cp .env.example .env
@@ -189,15 +180,15 @@ cp .env.example .env
 루트 `.env`를 아래처럼 채웁니다. **Git에 올리지 않습니다.**
 
 ```properties
-# ── PostgreSQL ──
+# PostgreSQL
 DB_NAME=sparta_logistics
 DB_PORT=5432
 DDL=update
 SHOW_SQL=false
-DB_USER=sparta_admin              # Postgres 관리자 (컨테이너 초기화용, 서비스는 사용 안 함)
+DB_USER=sparta_admin              # 컨테이너 관리자 계정 (서비스는 사용 안 함)
 DB_PASSWORD=<임의 값>
 
-# 서비스별 DB 계정 (각 서비스는 자기 스키마만 접근 가능)
+# 서비스별 DB 계정 (각자 자기 스키마만 접근)
 AUTH_DB_USER=auth_svc
 AUTH_DB_PASSWORD=<임의 값>
 HUB_DB_USER=hub_svc
@@ -209,200 +200,281 @@ ORDER_DB_PASSWORD=<임의 값>
 DELIVERY_DB_USER=delivery_svc
 DELIVERY_DB_PASSWORD=<임의 값>
 
-# ── Redis ──
+# Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=<openssl rand -hex 24>
 
-# ── JWT (Gateway·user-ms가 같은 값을 읽음) ──
+# JWT (Gateway·user-ms 공용)
 JWT_SECRET_KEY=<openssl rand -base64 32>
 
-# ── 초기 MASTER (user-ms 첫 기동 시 1회 생성) — .env.example에 없으니 직접 추가 ──
+# 초기 MASTER (.env.example에 없으니 직접 추가)
 MASTER_USERNAME=master01          # 4~10자 소문자·숫자
-MASTER_PASSWORD=<비밀번호>         # 8~15자, 대·소문자·숫자·특수문자 모두 포함
+MASTER_PASSWORD=<비밀번호>         # 8~15자, 대·소문자·숫자·특수문자 포함
 MASTER_NAME=관리자
 MASTER_SLACK_ID=<Slack 멤버 ID>
 
-# ── Slack 알림 (선택, 비워 두면 알림을 보내지 않음) ──
+# Slack 알림 (선택, 비우면 보내지 않음)
 SLACK_WEBHOOK_URL=
 ```
 
-- 모든 애플리케이션이 실행 위치의 `.env`와 상위 폴더의 `../.env`를 **파일로** 읽습니다(`spring.config.import`). 루트에서 `./gradlew`로 실행하든, IntelliJ에서 모듈 폴더 기준으로 실행하든 루트 `.env` 하나면 됩니다.
-- **`.env`를 환경 변수로 넣지 마세요**(IntelliJ EnvFile, `set -a; . ./.env`, Compose `env_file`). 환경 변수 `DB_PASSWORD`가 서비스의 `db.password`를 덮어써서 서비스가 관리자 비밀번호로 접속하다 실패합니다.
-- `DB_*` 값을 바꿨다면 `./pgdata`를 지우고 DB를 다시 만들어야 합니다. 초기화 스크립트는 처음 한 번만 실행됩니다.
+- 모든 애플리케이션이 `.env`와 `../.env`를 **파일로** 읽습니다. 루트 `.env` 하나면 됩니다.
+- `.env`를 **환경 변수로 주입하지 마세요**(IntelliJ EnvFile, `set -a; . ./.env` 등). `DB_PASSWORD`가 서비스 DB 비밀번호를 덮어써 접속에 실패합니다.
+- `DB_*` 값을 바꿨다면 `./pgdata`를 지우고 다시 기동합니다. DB 초기화 스크립트는 처음 한 번만 실행됩니다.
 
-### 5.4 인프라 기동 (PostgreSQL · Redis)
+### 5.3 인프라 기동
 
 ```bash
 docker compose up -d
-docker compose ps        # postgres, redis 둘 다 (healthy) 확인
+docker compose ps        # postgres, redis 모두 (healthy)
 ```
 
-- 처음 기동할 때 `docker/postgres/init/01-init-service-accounts.sh`가 스키마 5개(`auth`, `hub`, `company`, `orders`, `delivery`)와 서비스 계정을 만듭니다. 각 계정은 자기 스키마만 쓸 수 있습니다.
-- 데이터는 `./pgdata`, `./redisdata`에 남아 재기동해도 유지됩니다.
+- 처음 기동할 때 스키마 5개(`auth`, `hub`, `company`, `orders`, `delivery`)와 서비스별 DB 계정이 만들어집니다.
 - 테이블은 각 서비스가 기동할 때 JPA(`DDL=update`)로 만듭니다.
+- 데이터는 `./pgdata`, `./redisdata`에 남습니다.
 
-### 5.5 애플리케이션 기동
+### 5.4 애플리케이션 기동
 
-**순서: Eureka → 도메인 서비스 → Gateway.** 터미널을 나눠 각각 실행합니다.
+**Eureka → 도메인 서비스 → Gateway** 순서로, 터미널을 나눠 실행합니다.
 
 ```bash
-# 터미널 1
-./gradlew :eureka-registry:bootRun
+./gradlew :eureka-registry:bootRun     # 1
 
-# 터미널 2~ (필요한 서비스만 띄워도 됨, 서로 순서 무관)
-./gradlew :user-ms:bootRun
+./gradlew :user-ms:bootRun             # 2 (도메인 서비스끼리는 순서 무관)
 ./gradlew :hub-ms:bootRun
 ./gradlew :company-ms:bootRun
 ./gradlew :order-ms:bootRun
 ./gradlew :delivery-ms:bootRun
 
-# 마지막 터미널
-./gradlew :gateway-edge:bootRun
+./gradlew :gateway-edge:bootRun        # 3
 ```
 
-| 순서 | 모듈 | 포트 | 실행 클래스 (IntelliJ) | 기동 시 하는 일 |
-|---|---|---|---|---|
-| 1 | `eureka-registry` | 8761 | `EurekaRegistryApplication` | 서비스 등록소 |
-| 2 | `user-ms` | 19095 | `UserMsApplication` | `.env`의 `MASTER_*`로 초기 MASTER 1명 생성 (이미 있으면 건너뜀) |
-| 2 | `hub-ms` | 19093 | `HubMsApplication` | 허브 17개 시드 입력 (이미 있으면 건너뜀) |
-| 2 | `company-ms` | 19091 | `CompanyMsApplication` | - |
-| 2 | `order-ms` | 19094 | `OrderMsApplication` | - |
-| 2 | `delivery-ms` | 19092 | `DeliveryMsApplication` | - |
-| 3 | `gateway-edge` | **19090** | `GatewayEdgeApplication` | 외부 요청 진입점 |
+| 모듈 | 포트 | 실행 클래스 (IntelliJ) | 기동 시 초기 데이터 |
+|---|---|---|---|
+| `eureka-registry` | 8761 | `EurekaRegistryApplication` | - |
+| `user-ms` | 19095 | `UserMsApplication` | 초기 MASTER 1명(`.env`), 시연용 사용자 38명(배송담당자 34명 포함, 비밀번호 `Seed1234!`) |
+| `hub-ms` | 19093 | `HubMsApplication` | 허브 17개, 허브 간 경로 272개 |
+| `company-ms` | 19091 | `CompanyMsApplication` | - |
+| `order-ms` | 19094 | `OrderMsApplication` | - |
+| `delivery-ms` | 19092 | `DeliveryMsApplication` | - |
+| `gateway-edge` | 19090 | `GatewayEdgeApplication` | - |
 
-- `./gradlew: permission denied`가 나오면 5.2의 `chmod`를 했는지 확인하거나 `sh ./gradlew ...`로 실행합니다.
-- **Redis는 필수입니다.** Gateway는 보호 경로마다 Redis로 로그아웃 여부를 확인하므로 Redis가 없으면 503 `AUTH_UNAVAILABLE`을 반환합니다.
-- Gateway를 거쳐 서비스를 호출하려면 그 서비스가 Eureka에 등록돼 있어야 합니다. 띄우지 않은 서비스로 가는 요청은 503 `SERVICE_UNAVAILABLE`입니다.
+- 초기 데이터는 이미 있으면 건너뜁니다. 시연용 사용자를 넣지 않으려면 `.env`에 `USER_SEED_MODE=never`를 둡니다.
+- **Redis는 필수입니다.** Gateway가 요청마다 Redis로 로그아웃 여부를 확인하므로, Redis가 없으면 503 `AUTH_UNAVAILABLE`입니다.
 
-### 5.6 기동 확인
+### 5.5 기동 확인
 
 | 확인 | 주소 | 기대 결과 |
 |---|---|---|
-| Eureka 대시보드 | http://localhost:8761 | 띄운 서비스가 모두 `UP` |
-| Gateway 헬스 | http://localhost:19090/livez · 상세는 http://localhost:19190/actuator/health (관리 포트) | `UP`. 관리 포트 헬스는 Redis·Eureka 포함 (Redis가 꺼지면 `DOWN`), `/livez`·`/readyz`는 Redis와 무관 |
-| user-ms 헬스 | http://localhost:19095/actuator/health | `UP` (DB·Redis 포함) |
-| 초기 MASTER | user-ms 로그 | `[InitialMaster] 초기 MASTER를 생성했습니다. username=…` |
+| Eureka | http://localhost:8761 | 띄운 서비스가 모두 `UP` |
+| Gateway | http://localhost:19090/livez | `UP` |
+| Gateway 상세 | http://localhost:19190/actuator/health | `UP` (Redis·Eureka 포함) |
 
 ```bash
-# 1) 로그인 → Access Token 꺼내기 (공개 경로)
+# 1) 로그인 → Access Token
 TOKEN=$(curl -s localhost:19090/api/v1/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"<MASTER_USERNAME>","password":"<MASTER_PASSWORD>"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
 
-# 2) 토큰으로 Gateway 경유 호출
-curl -s localhost:19090/api/v1/users/me -H "Authorization: Bearer $TOKEN"   # 내 정보
-curl -s localhost:19090/api/v1/hubs     -H "Authorization: Bearer $TOKEN"   # 허브 목록 (hub-ms)
+# 2) Gateway 경유 호출
+curl -s localhost:19090/api/v1/users/me -H "Authorization: Bearer $TOKEN"
+curl -s localhost:19090/api/v1/hubs     -H "Authorization: Bearer $TOKEN"
 ```
 
-- 서비스를 띄운 직후 몇 초 동안은 Gateway가 아직 Eureka에서 서비스를 못 받아 503이 날 수 있습니다. 5~30초 기다린 뒤 다시 시도합니다.
-- Postman으로 확인하는 방법은 [Postman Gateway 테스트 가이드](<docs/Common/Postman Gateway 테스트 가이드.md>)를 참고합니다.
+서비스를 띄운 직후 5~30초는 Gateway가 Eureka에서 서비스를 아직 못 받아 503이 날 수 있습니다. Postman 컬렉션은 `docs/postman/`에 있고, 사용법은 [Postman Gateway 테스트 가이드](<docs/Common/Postman Gateway 테스트 가이드.md>)를 참고합니다.
 
-### 5.7 종료 · 초기화
+### 5.6 종료 · 초기화
 
 ```bash
 # bootRun 터미널은 Ctrl+C
-docker compose stop                 # 컨테이너만 멈춤 (데이터 유지)
-docker compose down                 # 컨테이너 삭제 (pgdata·redisdata는 유지)
-docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로 (.env의 DB 값을 바꿨을 때)
+docker compose stop                              # 컨테이너만 멈춤 (데이터 유지)
+docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
 ```
 
-### 5.8 자주 만나는 문제
+### 5.7 자주 만나는 문제
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
-| Postgres 컨테이너가 바로 종료, 로그에 `Permission denied` | init 스크립트 실행 권한 없음 | 5.2의 `chmod` 후 `rm -rf pgdata && docker compose up -d` |
-| 서비스 기동 실패 `password authentication failed` | `.env`의 DB 값과 `pgdata`에 만들어진 계정이 다름, 또는 `.env`를 환경 변수로 주입함 | `docker compose down && rm -rf pgdata` 후 다시 기동 / `.env`는 파일로만 사용 |
-| Gateway 보호 경로가 전부 503 `AUTH_UNAVAILABLE` | Redis 미기동 또는 `REDIS_PASSWORD` 불일치 | `docker compose up -d redis`, `.env` 확인 후 Gateway 재기동 |
-| Gateway 경유만 503 `SERVICE_UNAVAILABLE`, 서비스 직접 호출은 200 | Gateway가 아직 Eureka에서 서비스를 못 받아옴 | 5~30초 대기, Eureka 대시보드에서 등록 확인 |
-| 방금 받은 토큰인데 401 `TOKEN_INVALID` | Gateway와 user-ms가 다른 `JWT_SECRET_KEY`를 읽음 | 같은 루트 `.env` 사용, 값을 바꿨다면 둘 다 재기동 |
-| 30분 뒤 401 `TOKEN_EXPIRED` | Access Token 만료(30분) | `POST /api/v1/auth/reissue` 또는 다시 로그인 |
-| 로그인이 안 되고 로그에 `MASTER_* 환경 변수가 비어 있어` | `.env`에 `MASTER_*` 없음 | 5.3의 `MASTER_*` 추가 후 user-ms 재기동 |
+| Postgres 컨테이너가 바로 종료 (`Permission denied`) | init 스크립트 실행 권한 없음 | 5.1의 `chmod` 후 `rm -rf pgdata && docker compose up -d` |
+| `password authentication failed` | `.env`와 `pgdata`의 계정 불일치, 또는 `.env`를 환경 변수로 주입 | `docker compose down && rm -rf pgdata` 후 재기동 |
+| 보호 경로가 모두 503 `AUTH_UNAVAILABLE` | Redis 미기동 또는 `REDIS_PASSWORD` 불일치 | Redis 기동, `.env` 확인 후 Gateway 재기동 |
+| Gateway 경유만 503 `SERVICE_UNAVAILABLE` | Gateway가 아직 Eureka에서 서비스를 못 받음 | 5~30초 대기, Eureka 대시보드 확인 |
+| 방금 받은 토큰이 401 `TOKEN_INVALID` | Gateway와 user-ms의 `JWT_SECRET_KEY`가 다름 | 같은 `.env` 사용, 둘 다 재기동 |
 
-더 자세한 내용은 [로컬 실행·라우팅 확인 가이드](<docs/Common/로컬 실행·라우팅 확인 가이드.md>)에 있습니다.
+자세한 내용은 [로컬 실행·라우팅 확인 가이드](<docs/Common/로컬 실행·라우팅 확인 가이드.md>)에 있습니다.
 
-### 5.9 테스트
+### 5.8 테스트
 
 ```bash
-./gradlew :gateway-edge:test
-./gradlew :user-ms:test                       # H2 사용, Docker 불필요
-./gradlew :common:test
+./gradlew :user-ms:test                       # 모듈별 실행 권장
 ./gradlew :user-ms:test -PincludeContainer    # Docker가 필요한 테스트 포함 (Testcontainers)
 ```
 
-테스트는 **모듈별로** 실행하는 것을 권장합니다.
+테스트는 `test` 프로필로 동작하므로 Gradle로 실행합니다. IntelliJ 기본 실행기로 돌리면 프로필이 빠져 실패할 수 있습니다.
 
 ## 6. ERD
 
-- DBMS: PostgreSQL 단일 컨테이너, 서비스별 스키마 5개(`auth`, `hub`, `company`, `orders`, `delivery`), 서비스마다 자기 스키마만 접근 가능한 DB 계정 사용
-- 모든 테이블 PK는 `UUID`, Audit 컬럼 6개(`created/updated/deleted_at·by`), Soft Delete
-- 실선은 같은 스키마 안의 FK, 점선은 다른 서비스의 UUID 논리 참조(DB FK 없음, API로 검증)
+| 항목 | 내용 |
+|---|---|
+| DBMS | PostgreSQL 단일 컨테이너, 서비스별 스키마 5개(`auth`, `hub`, `company`, `orders`, `delivery`) |
+| 테이블 | 12개 |
+| 기본키 | 모든 테이블 `UUID` |
+| 공통 컬럼 | Audit 6개(`created/updated/deleted_at·by`), Soft Delete |
+| 서비스 간 참조 | DB 외래키 없이 UUID만 저장하고, Feign API로 존재를 확인 |
+
+실선은 같은 스키마 안의 외래키(FK), 점선은 UUID 논리 참조(DB FK 없음)입니다.
 
 ```mermaid
 flowchart LR
     subgraph AUTH["auth · user-ms"]
         users[p_users]
     end
+
     subgraph HUB["hub · hub-ms"]
         hubs[p_hubs]
         hub_routes[p_hub_routes]
         inventories[p_inventories]
-        inv_mv[p_inventory_movements]
+        inv_op[p_inventory_operations]
+        inv_hist[p_inventory_histories]
     end
+
     subgraph COMPANY["company · company-ms"]
         companies[p_companies]
         products[p_products]
     end
+
     subgraph ORDERS["orders · order-ms"]
         orders[p_orders]
         order_hist[p_order_histories]
     end
+
     subgraph DELIVERY["delivery · delivery-ms"]
         deliveries[p_deliveries]
         dlv_routes[p_delivery_routes]
-        dlv_hist[p_delivery_histories]
     end
 
-    hubs --> hub_routes
-    hubs --> inventories
-    inventories --> inv_mv
     companies --> products
     orders --> order_hist
     deliveries --> dlv_routes
-    deliveries --> dlv_hist
+
+    hubs -.-> hub_routes & inventories
+    inventories -.-> inv_op -.-> inv_hist
 
     products -.-> inventories
-    orders -.-> inv_mv
     hubs -.-> companies
     users -.-> companies
     companies -.-> orders
     products -.-> orders
-    users -.-> orders
+    orders -.-> inv_op
     orders -.-> deliveries
     hubs -.-> deliveries
     users -.-> deliveries
-    hubs -.-> dlv_routes
-    users -.-> dlv_routes
-    orders -.-> dlv_hist
+
+    classDef t fill:#F8FAFC,stroke:#64748B,color:#1E293B
+    class users,hubs,hub_routes,inventories,inv_op,inv_hist,companies,products,orders,order_hist,deliveries,dlv_routes t
+    style AUTH fill:transparent,stroke:#6366F1,stroke-width:2px
+    style HUB fill:transparent,stroke:#14B8A6,stroke-width:2px
+    style COMPANY fill:transparent,stroke:#0EA5E9,stroke-width:2px
+    style ORDERS fill:transparent,stroke:#F59E0B,stroke-width:2px
+    style DELIVERY fill:transparent,stroke:#EC4899,stroke-width:2px
 ```
 
-컬럼까지 포함한 전체 ERD는 [ERD](<docs/design/05 ERD.md>), 컬럼별 상세는 [테이블 명세서](<docs/design/06 테이블 명세서.md>)를 참고합니다.
+| 스키마 | 테이블 | 설명 |
+|---|---|---|
+| `auth` | `p_users` | 사용자, 역할(MASTER·USER), 배송담당자 여부, 소속(HUB·COMPANY·HQ) |
+| `hub` | `p_hubs`, `p_hub_routes` | 허브 17개, 허브 간 P2P 경로(출발·도착 쌍마다 1건) |
+| | `p_inventories` | 허브별 상품 재고 (허브·상품 쌍마다 1건) |
+| | `p_inventory_operations`, `p_inventory_histories` | 재고 차감·복원 작업(멱등 키), 재고 변경 이력 |
+| `company` | `p_companies`, `p_products` | 업체(관리 허브 소속), 업체별 상품 |
+| `orders` | `p_orders`, `p_order_histories` | 주문, 주문 처리 이력(멱등 키) |
+| `delivery` | `p_deliveries`, `p_delivery_routes` | 배송(주문 1건당 1건), 배송 구간(`HUB_TO_HUB`·`HUB_TO_COMPANY`) |
 
-![전체 ERD](<docs/assets/3f72dc3e-logistics_msa_erd_named_primary_keys_staging-01_물류_MSA__전체_ERD.jpg>)
+컬럼까지 포함한 전체 ERD는 [ERD 문서](<docs/design/05 ERD.md>), 컬럼별 상세는 [테이블 명세서](<docs/design/06 테이블 명세서.md>)를 참고합니다.
 
 ## 7. API
 
-전체 명세는 [API 명세서](<docs/design/04 API 명세서.md>)에 있습니다. 외부 API는 `/api/v1/**`, 서비스 간 내부 API는 `/internal/v1/**`입니다.
+- 외부 API는 `/api/v1/**`이고 모두 Gateway(`:19090`)를 거칩니다. 서비스 간 내부 API(`/internal/v1/**`)는 외부에서 호출할 수 없습니다.
+- 전체 명세(요청·응답·오류 코드, 내부 API 포함)는 [API 명세서](<docs/design/04 API 명세서.md>)에 있습니다.
+- 바로 호출해 보려면 Postman 컬렉션 `docs/postman/sparta-logistics-gateway.postman_collection.json`을 가져옵니다. 사용법은 [Postman Gateway 테스트 가이드](<docs/Common/Postman Gateway 테스트 가이드.md>)에 있습니다.
 
-| 도메인 | 주요 API |
-|---|---|
-| Auth | 회원가입, ID 중복 확인, 로그인, 토큰 재발급, 로그아웃 |
-| User | 내 정보 조회·수정, 비밀번호 변경, 탈퇴 / (MASTER) 사용자 생성·목록·상세·수정·역할 변경·배송담당자 지정·비활성화·재활성화·비밀번호 초기화 |
-| Hub · Hub Route · Inventory | 허브·경로 조회·관리, 재고 등록·조회, 재고 변동 이력 |
-| Company · Product | 업체·상품 등록·조회·수정·삭제 |
-| Order | 주문 생성·조회·취소·삭제 |
-| Delivery · Delivery Route | 배송·구간 조회, 배송 상태 변경 |
-| Internal (Feign) | 사용자 검증, 허브·업체·상품 검증, 재고 차감·복원, 허브 경로 조회, 배송 생성·취소 |
+**권한 표기**: 공개(토큰 불필요) · 로그인(USER 이상) · MASTER(관리자) · 업체 관리자 / 배송담당자 / 본인 / 관계자(주문·배송에 연결된 사용자)는 서비스가 데이터를 보고 판단합니다.
+
+<details>
+<summary><b>Auth · User</b> (user-ms)</summary>
+
+| Method | Path | 권한 | 설명 |
+|---|---|---|---|
+| POST | `/api/v1/auth/signup` | 공개 | 회원가입 |
+| GET | `/api/v1/auth/check-username` | 공개 | ID 중복 확인 |
+| POST | `/api/v1/auth/login` | 공개 | 로그인, 토큰 발급 |
+| POST | `/api/v1/auth/reissue` | 공개 | 토큰 재발급 |
+| POST | `/api/v1/auth/logout` | 로그인 | 로그아웃 |
+| GET · PATCH · DELETE | `/api/v1/users/me` | 로그인 | 내 정보 조회·수정, 탈퇴 |
+| PATCH | `/api/v1/users/me/password` | 로그인 | 비밀번호 변경 |
+| POST · GET | `/api/v1/users` | MASTER | 사용자 생성, 목록·검색 |
+| GET · PATCH · DELETE | `/api/v1/users/{userId}` | MASTER | 사용자 상세·수정·비활성화 |
+| PATCH | `/api/v1/users/{userId}/role` | MASTER | 역할 변경 |
+| PATCH | `/api/v1/users/{userId}/delivery-manager` | MASTER | 배송담당자 지정 |
+| PATCH | `/api/v1/users/{userId}/organization` | MASTER | 소속 연결 |
+| POST | `/api/v1/users/{userId}/password-reset` | MASTER | 비밀번호 초기화 |
+| POST | `/api/v1/users/{userId}/restore` | MASTER | 재활성화 |
+
+</details>
+
+<details>
+<summary><b>Hub · Hub Route · Inventory</b> (hub-ms)</summary>
+
+| Method | Path | 권한 | 설명 |
+|---|---|---|---|
+| GET | `/api/v1/hubs`, `/api/v1/hubs/{hubId}` | 로그인 | 허브 목록·상세 |
+| GET | `/api/v1/hub-routes`, `/api/v1/hub-routes/{routeId}` | 로그인 | 허브 간 경로 목록·상세 |
+| GET | `/api/v1/hub-routes/fromtosearch` | 로그인 | 출발·도착 허브로 경로 검색 |
+| GET | `/api/v1/inventories` | 로그인 | 재고 조회 (허브·상품 조건) |
+| POST | `/api/v1/inventories` | MASTER·업체 관리자 | 재고 등록 |
+
+</details>
+
+<details>
+<summary><b>Company · Product</b> (company-ms)</summary>
+
+| Method | Path | 권한 | 설명 |
+|---|---|---|---|
+| POST | `/api/v1/companies` | MASTER | 업체 등록 |
+| GET | `/api/v1/companies`, `/api/v1/companies/{companyId}` | 로그인 | 업체 목록·상세 |
+| PATCH | `/api/v1/companies/{companyId}` | MASTER·업체 관리자 | 업체 수정 |
+| DELETE | `/api/v1/companies/{companyId}` | MASTER | 업체 삭제 |
+| POST | `/api/v1/companies/{companyId}/products` | MASTER·업체 관리자 | 상품 등록 |
+| GET | `/api/v1/companies/{companyId}/products` | 로그인 | 업체별 상품 목록 |
+| GET | `/api/v1/products`, `/api/v1/products/{productId}` | 로그인 | 상품 검색·상세 |
+| PATCH · DELETE | `/api/v1/products/{productId}` | MASTER·업체 관리자 | 상품 수정·삭제 |
+
+</details>
+
+<details>
+<summary><b>Order</b> (order-ms)</summary>
+
+| Method | Path | 권한 | 설명 |
+|---|---|---|---|
+| POST | `/api/v1/orders` | 로그인 | 주문 생성 (재고 차감 → 배송 생성) |
+| GET | `/api/v1/orders`, `/api/v1/orders/{orderId}` | 본인·MASTER | 주문 목록·상세 |
+| POST | `/api/v1/orders/{orderId}/cancel` | 본인·MASTER | 주문 취소 (배송 취소 → 재고 복원) |
+| DELETE | `/api/v1/orders/{orderId}` | MASTER | 주문 삭제 |
+
+</details>
+
+<details>
+<summary><b>Delivery · Delivery Route</b> (delivery-ms)</summary>
+
+| Method | Path | 권한 | 설명 |
+|---|---|---|---|
+| GET | `/api/v1/deliveries`, `/api/v1/deliveries/{deliveryId}` | 관계자·MASTER | 배송 목록·상세 |
+| GET | `/api/v1/deliveries/by-order/{orderId}` | 관계자·MASTER | 주문으로 배송 조회 |
+| GET | `/api/v1/deliveries/{deliveryId}/routes` | 관계자·MASTER | 배송 구간 조회 |
+| PATCH | `/api/v1/deliveries/{deliveryId}/status` | MASTER·배송담당자 | 배송 상태 변경 |
+| PATCH | `/api/v1/deliveries/{deliveryId}/manager` | MASTER | 배송담당자 변경 |
+| PATCH | `/api/v1/delivery-routes/{routeId}/metrics` | MASTER·구간 담당자 | 구간 실측 거리·시간 입력 |
+
+</details>
 
 **오류 응답 형식** (Gateway·서비스 공통)
 
@@ -432,6 +504,17 @@ sequenceDiagram
     S->>S: @CurrentUser로 사용자 확인, 소유권 검사
 ```
 
+**Gateway 요청 처리 순서**
+
+| 단계 | 내용 | 실패 응답 |
+|---|---|---|
+| 경로 정규화 | `;`·`%2f`·`..` 등 해석이 갈리는 경로 거부, `/internal/**` 차단 | 400 `INVALID_INPUT`, 404 `RESOURCE_NOT_FOUND` |
+| 요청 ID | `X-Request-Id`가 없거나 형식이 틀리면 새로 발급 | - |
+| 인증 | JWT 서명·만료 검증, Redis로 로그아웃 여부 확인 | 401 `TOKEN_*`, 503 `AUTH_UNAVAILABLE` |
+| 인가 | MASTER 전용 경로, 비밀번호 변경이 필요한 계정 제한 | 403 `ACCESS_DENIED`, 403 `PASSWORD_CHANGE_REQUIRED` |
+| 헤더 | 외부에서 온 `X-User-*`를 지우고 토큰 값으로 다시 넣음 | - |
+| 라우팅 | Eureka + 로드밸런서로 서비스 전달 | 503 `SERVICE_UNAVAILABLE`, 504 `SERVICE_TIMEOUT` |
+
 - **401은 Gateway, 403(소유권)은 서비스**가 판단합니다. 역할 단위(MASTER 전용) 인가는 Gateway에서 처리합니다.
 - 클라이언트가 보낸 `X-User-*` 헤더는 Gateway가 지우고 다시 넣어, 헤더 위조를 막습니다.
 - Access Token 30분, Refresh Token은 Redis에 저장하고 재발급 시 교체(Rotation)합니다. 로그아웃·비밀번호 변경·탈퇴 시 이전 토큰은 `TOKEN_REVOKED`가 됩니다.
@@ -455,8 +538,8 @@ flowchart LR
 
 ### 8.3 장애 대응
 
-- **Gateway**: 라우트별 타임아웃과 서비스별 Circuit Breaker. 하위 서비스 장애 시 503 `SERVICE_UNAVAILABLE`로 빠르게 응답합니다.
-- **Feign (common)**: 공통 타임아웃·Circuit Breaker, 실패를 예외 3종(호출 실패·상대 거절·결과 모름)으로 나눠 Saga에서 처리 방식을 고를 수 있게 했습니다.
+- **Gateway**: 연결 2초, 응답 5초(주문 15초) 타임아웃. 하위 서비스가 응답하지 않으면 504 `SERVICE_TIMEOUT`, 연결할 수 없으면 503 `SERVICE_UNAVAILABLE`로 응답합니다.
+- **Feign (common)**: 공통 타임아웃, 실패를 예외 3종(호출 실패·상대 거절·결과 모름)으로 나눠 Saga에서 처리 방식을 고를 수 있게 했습니다.
 - **Slack 알림**: 알림 실패가 주문 처리에 영향을 주지 않으며, Webhook URL이 없으면 알림을 보내지 않습니다(NoOp).
 
 ## 9. 구현 현황
