@@ -8,7 +8,7 @@ import java.util.UUID;
 
 @FeignClient(name = "hub-ms")
 public interface HubFeignClient {
-    @GetMapping("/api/v1/inventories")
+    @GetMapping("/internal/v1/inventories")
     List<InventoryFeignResponse> getInventories(@RequestParam("productId") UUID productId);
 
     @PostMapping("/internal/v1/inventories/decrease")
