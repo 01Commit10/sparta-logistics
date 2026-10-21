@@ -8,7 +8,7 @@ import com.order.application.dto.OrderResult;
 import com.order.application.service.OrderCancelService;
 import com.order.application.service.OrderDeleteService;
 import com.order.application.service.OrderQueryService;
-import com.order.application.service.OrderService;
+import com.order.application.service.OrderCreateFacade;
 import com.order.presentation.dto.CreateOrderRequest;
 import com.order.presentation.dto.OrderResponse;
 import jakarta.validation.Valid;
@@ -27,7 +27,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
 public class OrderController {
-    private final OrderService orderService;
+    private final OrderCreateFacade orderCreateFacade;
     private final OrderQueryService orderQueryService;
     private final OrderCancelService orderCancelService;
     private final OrderDeleteService orderDeleteService;
@@ -41,7 +41,7 @@ public class OrderController {
             @RequestHeader("Idempotency-Key") @NotNull @Size(max = 120) String idempotencyKey,
             @Valid @RequestBody CreateOrderRequest request) {
 
-        OrderResult result = orderService.createOrder(request.toCommand(authUser.id(), idempotencyKey));
+        OrderResult result = orderCreateFacade.createOrder(request.toCommand(authUser.id(), idempotencyKey));
         return ResponseEntity.status(HttpStatus.CREATED).body(OrderResponse.from(result));
     }
 
