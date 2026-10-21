@@ -39,13 +39,23 @@
 
 ## 2. 팀원 역할분담
 
-| 이름 | GitHub | 담당 | 주요 작업 |
-|---|---|---|---|
-| 대진 | [@dd-jiny](https://github.com/dd-jiny) | 사용자, 공통(게이트웨이), 성능 개선 설계 | • 회원·인증 API, 관리자 사용자 관리 API<br>• Gateway 인증·인가·라우팅<br>• 공통 인증 헤더·Slack 알림<br>• 부하 테스트로 병목 분석, 서비스별 성능 개선 방향 설계 |
-| 이찬 | [@ijustsea](https://github.com/ijustsea) | 허브 | • 허브·허브 간 경로 API<br>• 재고 등록·차감·복원 API<br>• 재고 조회·차감 Redis 적용<br>• 허브 조회 Caffeine 캐시 적용<br>• 재고 차감 동시성 제어 |
-| 권우 | [@KWON-WOO](https://github.com/KWON-WOO) | 업체·상품, 공통(유레카) | • 프로젝트 초기 구성·인프라 설정<br>• 공통 엔티티·예외 처리<br>• 업체·상품 API<br>• 상품 조회 레이어드 캐시(설정으로 선택) |
-| 다울 | [@shindawull](https://github.com/shindawull) | 주문 | • 주문 생성·조회·취소·삭제 API<br>• 주문 실패 시 재고 복원(보상)<br>• 주문 트랜잭션 분리로 커넥션 풀 고갈 완화 |
-| 영은 | [@alreadysolved](https://github.com/alreadysolved) | 배송 | • 배송·배송 구간 생성<br>• 배송 상태·담당자 관리 API<br>• 배송 생성 외부 호출을 트랜잭션 밖으로 분리해 주문 생성 병목 해소 |
+<table>
+  <tr>
+    <td align="center" width="160"><a href="https://github.com/dd-jiny"><img src="https://github.com/dd-jiny.png?size=200" width="100" alt="dd-jiny"><br><b>대진</b></a><br>사용자 · 공통</td>
+    <td align="center" width="160"><a href="https://github.com/ijustsea"><img src="https://github.com/ijustsea.png?size=200" width="100" alt="ijustsea"><br><b>이찬</b></a><br>허브</td>
+    <td align="center" width="160"><a href="https://github.com/KWON-WOO"><img src="https://github.com/KWON-WOO.png?size=200" width="100" alt="KWON-WOO"><br><b>권우</b></a><br>업체 · 상품</td>
+    <td align="center" width="160"><a href="https://github.com/shindawull"><img src="https://github.com/shindawull.png?size=200" width="100" alt="shindawull"><br><b>다울</b></a><br>주문</td>
+    <td align="center" width="160"><a href="https://github.com/alreadysolved"><img src="https://github.com/alreadysolved.png?size=200" width="100" alt="alreadysolved"><br><b>영은</b></a><br>배송</td>
+  </tr>
+</table>
+
+| 이름 | 담당 | 주요 작업 |
+|---|---|---|
+| 대진 | 사용자, 공통(게이트웨이), 성능 개선 설계 | • 회원·인증 API, 관리자 사용자 관리 API<br>• Gateway 인증·인가·라우팅<br>• 공통 인증 헤더·Slack 알림<br>• 부하 테스트로 병목 분석, 서비스별 성능 개선 방향 설계 |
+| 이찬 | 허브 | • 허브·허브 간 경로 API<br>• 재고 등록·차감·복원 API<br>• 재고 조회·차감 Redis 적용<br>• 허브 조회 Caffeine 캐시 적용<br>• 재고 차감 동시성 제어 |
+| 권우 | 업체·상품, 공통(유레카) | • 프로젝트 초기 구성·인프라 설정<br>• 공통 엔티티·예외 처리<br>• 업체·상품 API<br>• 상품 조회 레이어드 캐시(설정으로 선택) |
+| 다울 | 주문 | • 주문 생성·조회·취소·삭제 API<br>• 주문 실패 시 재고 복원(보상)<br>• 주문 트랜잭션 분리로 커넥션 풀 고갈 완화 |
+| 영은 | 배송 | • 배송·배송 구간 생성<br>• 배송 상태·담당자 관리 API<br>• 배송 생성 외부 호출을 트랜잭션 밖으로 분리해 주문 생성 병목 해소 |
 
 ## 3. 기술 스택
 
