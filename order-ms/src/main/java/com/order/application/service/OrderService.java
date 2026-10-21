@@ -31,6 +31,7 @@ public class OrderService {
     private final HubClient hubClient;
     private final DeliveryClient deliveryClient;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProductClient productClient;
 
     // BusinessException으로 실패하면 롤백하지 않고 FAILED 상태를 커밋한다
     @Transactional(noRollbackFor = BusinessException.class)
@@ -40,6 +41,21 @@ public class OrderService {
                 .findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, command.idempotencyKey());
         if (previous.isPresent()) {
             return returnPreviousResult(previous.get(), command);
+        }
+
+        // 상품 조회
+        ProductInfo product = productClient.getProduct(command.productId());
+
+        // 공급업체 확인 [공급업체 확인]
+        if (!product.isSuppliedBy(command.supplierCompanyId())) {
+            throw new BusinessException(OrderErrorCode.SUPPLIER_PRODUCT_MISMATCH);
+        }
+
+        // 가격 확인: 사용자가 본 가격과 현재 상품 가격이 다르면 거절 → 최신 가격 확인 후 다시 주문
+        if (!product.isPricedAt(command.unitPrice())) {
+            throw new BusinessException(OrderErrorCode.PRICE_CHANGED,
+                    "상품 가격이 변경되었습니다. (요청: %s, 현재: %s)"
+                            .formatted(command.unitPrice().toPlainString(), product.unitPrice().toPlainString()));
         }
 
         // 1. 이력 IN_PROCESSING 저장 ← 번호표: 중복 차단 + 이후 모든 성공/실패를 기록할 자리 확보
@@ -61,7 +77,7 @@ public class OrderService {
                     command.supplierCompanyId(),
                     command.productId(),
                     command.quantity(),
-                    command.unitPrice(),
+                    product.unitPrice(),          // command.unitPrice() → product.unitPrice()
                     command.requestNote(),
                     command.orderedBy()
             ));
@@ -165,7 +181,6 @@ public class OrderService {
                 "재고가 부족하여 주문할 수 없습니다."
         );
     }
-
 
 
 }
