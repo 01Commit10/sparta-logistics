@@ -77,7 +77,7 @@
 
 ### 4.1 아키텍처
 
-<img src="docs/assets/흐름도.png" alt="아키텍처" width="1350">
+<img src="docs/assets/흐름도.png" alt="아키텍처" width="100%">
 
 
 - 외부 요청은 모두 Gateway를 거쳐 서비스로 갑니다.
@@ -153,7 +153,7 @@ chmod +x gradlew docker/postgres/init/01-init-service-accounts.sh
 <details>
   <summary>5-2. 환경 변수</summary>
 
-  ```bash
+```bash
 cp .env.example .env
 ```
 
@@ -205,9 +205,9 @@ SLACK_WEBHOOK_URL=
 </details>
 
 <details>
-  <summary>5-3. 인프라 가동</summary>
+  <summary>5-3. 인프라 기동</summary>
   
-  ```bash
+```bash
 docker compose up -d
 docker compose ps        # postgres, redis 모두 (healthy)
 ```
@@ -219,9 +219,9 @@ docker compose ps        # postgres, redis 모두 (healthy)
 </details>
 
 <details>
-  <summary>5-4. 어플리케이션 기동</summary>
+  <summary>5-4. 애플리케이션 기동</summary>
   
-  **Eureka → 도메인 서비스 → Gateway** 순서로, 터미널을 나눠 실행합니다.
+**Eureka → 도메인 서비스 → Gateway** 순서로, 터미널을 나눠 실행합니다.
 
 ```bash
 ./gradlew :eureka-registry:bootRun     # 1
@@ -253,7 +253,7 @@ docker compose ps        # postgres, redis 모두 (healthy)
 <details>
   <summary>5-5. 기동 확인</summary>
 
-  | 확인 | 주소 | 기대 결과 |
+| 확인 | 주소 | 기대 결과 |
 |---|---|---|
 | Eureka | http://localhost:8761 | 띄운 서비스가 모두 `UP` |
 | Gateway | http://localhost:19090/livez | `UP` |
@@ -277,7 +277,7 @@ curl -s localhost:19090/api/v1/hubs     -H "Authorization: Bearer $TOKEN"
 <details>
   <summary>5-6. 종료 · 초기화</summary>
 
-  ```bash
+```bash
 # bootRun 터미널은 Ctrl+C
 docker compose stop                              # 컨테이너만 멈춤 (데이터 유지)
 docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
@@ -288,7 +288,7 @@ docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
 <details>
   <summary>5-7. 자주 만나는 문제</summary>
   
-  | 증상 | 원인 | 해결 |
+| 증상 | 원인 | 해결 |
 |---|---|---|
 | Postgres 컨테이너가 바로 종료 (`Permission denied`) | init 스크립트 실행 권한 없음 | 5.1의 `chmod` 후 `rm -rf pgdata && docker compose up -d` |
 | `password authentication failed` | `.env`와 `pgdata`의 계정 불일치, 또는 `.env`를 환경 변수로 주입 | `docker compose down && rm -rf pgdata` 후 재기동 |
@@ -303,7 +303,7 @@ docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
 <details>
   <summary>5-8. 테스트</summary>
   
-  ```bash
+```bash
 ./gradlew :user-ms:test                       # 모듈별 실행 권장
 ./gradlew :user-ms:test -PincludeContainer    # Docker가 필요한 테스트 포함 (Testcontainers)
 ```
@@ -316,8 +316,8 @@ docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
 
 <details>
   <summary>ERD 이미지</summary>
-   <br>                                                                                                      
-  <img src="docs/assets/logistics_msa_erd·전체_ERD.drawio.png" alt="전체 ERD" width="1000"> 
+   <br>
+  <img src="docs/assets/logistics_msa_erd·전체_ERD.drawio.png" alt="전체 ERD" width="100%"> 
 </details>
 
 | 항목 | 내용 |
