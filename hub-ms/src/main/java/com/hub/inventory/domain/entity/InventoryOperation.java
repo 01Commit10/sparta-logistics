@@ -48,6 +48,11 @@ public class InventoryOperation extends BaseEntity {
     )
     private String idempotencyKey;
 
+    // Redis Stream 재전달 시 작업자·작업 시각까지 같은 원본 이벤트인지 검증한다. 동기 JPA 작업은 null.
+    @Column(name="event_payload_hash",length=64,updatable=false)
+    private String eventPayloadHash;
+
+
     @Column(name = "original_operation_id", updatable = false)
     private UUID originalOperationId;
 

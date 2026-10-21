@@ -9,12 +9,12 @@
 |---|--------------------------------------------------------------|
 | DBMS | PostgreSQL (단일 컨테이너, 서비스별 스키마 분리)                            |
 | 스키마 | `auth`, `hub`, `company`, `orders`, `delivery` (5개)          |
-| 테이블 | 12개 (Hub 5개)                                               |
-| 기본키 | 모든 테이블 `id UUID`                                             |
-| 공통 컬럼 | Audit 6개 (`created_at/by`, `updated_at/by`, `deleted_at/by`) |
-| 삭제 방식 | Soft Delete (조회 시 삭제 제외는 각 Repository에서 처리)         |
+| 테이블 | 13개 (Hub 6개)                                               |
+| 기본키 | 업무 테이블 `id UUID`, Hub 체크포인트는 `pipeline VARCHAR(40)` |
+| 공통 컬럼 | 업무 테이블 Audit 6개 (`created_at/by`, `updated_at/by`, `deleted_at/by`), 체크포인트는 제외 |
+| 삭제 방식 | 업무 데이터 Soft Delete (조회 시 삭제 제외는 각 Repository에서 처리), 체크포인트는 제외 |
 
-> **반영 기준:** 각 서비스의 JPA 엔티티 코드(`dev`, 2026-10-21). 전체 12개 테이블·171개 컬럼(Audit 포함)이며, Hub는 5개 테이블·61개 컬럼입니다. enum 컬럼의 허용값 CHECK는 Hibernate가 자동으로 생성합니다. 아래 [원본 ERD 이미지](#5-원본-erd-이미지)도 같은 기준으로 갱신했습니다.
+> **반영 기준:** 각 서비스의 JPA 엔티티 코드(`dev`, 2026-10-21)에 Hub의 Redis Streams 작업본을 반영했습니다. 전체 13개 테이블·177개 컬럼(Audit 포함)이며, Hub는 6개 테이블·67개 컬럼입니다. enum 컬럼의 허용값 CHECK는 Hibernate가 자동으로 생성합니다. 아래 [원본 ERD 이미지](#5-원본-erd-이미지)는 Redis 확장 전 기준이며, 최신 Hub 스키마는 이 문서의 Mermaid와 테이블 명세서를 참고합니다.
 
 ### 표기 규칙
 
@@ -45,6 +45,7 @@ flowchart LR
         inventories[p_inventories]
         inv_op[p_inventory_operations]
         inv_hist[p_inventory_histories]
+        inv_checkpoint[p_inventory_stream_checkpoints]
     end
 
     subgraph COMPANY["company · Company/Product Service"]
@@ -98,7 +99,7 @@ flowchart LR
 
 ## 2. 전체 ERD
 
-Audit 공통 컬럼 6개는 모든 테이블에 동일하게 있으므로 다이어그램에서는 생략했습니다.
+업무 테이블의 Audit 공통 컬럼 6개는 다이어그램에서 생략했습니다. Hub의 기술용 `p_inventory_stream_checkpoints`는 Audit 컬럼 없이 아래 5개 컬럼만 사용합니다.
 
 ```mermaid
 erDiagram
@@ -146,6 +147,7 @@ erDiagram
         VARCHAR operation_type "(20) CK INCREASE/DECREASE/RESTORE"
         VARCHAR operation_status "(20) CK SUCCEEDED/REJECTED"
         VARCHAR rejection_reason "(40) NULL, CK INSUFFICIENT_STOCK/INVENTORY_NOT_FOUND"
+        VARCHAR event_payload_hash "(64) NULL, Stream 이벤트 검증용 SHA-256"
         INTEGER requested_quantity
         UUID inventory_id "REF p_inventories, NULL"
         INTEGER remaining_quantity "NULL"
@@ -158,6 +160,13 @@ erDiagram
         VARCHAR change_type "(20) CK INCREASE/DECREASE/RESTORE"
         INTEGER stock_change "CK != 0"
         INTEGER stock_after "CK >= 0"
+    }
+    p_inventory_stream_checkpoints {
+        VARCHAR pipeline PK "(40) 파이프라인 식별자"
+        UUID epoch "현재 처리 세대"
+        UUID recovery_epoch "복구할 새 세대, NULL"
+        BIGINT last_sequence "DB에 커밋한 마지막 순번"
+        VARCHAR last_stream_id "(40) 마지막 Stream 메시지 ID"
     }
 
     %% ───────── company ─────────
@@ -296,14 +305,16 @@ erDiagram
 | `p_inventories` | 허브별 상품 현재 재고 | UNIQUE(`hub_id`, `product_id`) · `quantity >= 0` |
 | `p_inventory_operations` | 재고 변경 요청·처리 결과·거절 사유·복원 원본 기록 | `idempotency_key` UNIQUE(120자) · `original_operation_id` UNIQUE(NULL 허용) · 유형/상태/사유 값 CHECK |
 | `p_inventory_histories` | 실제 반영된 수량 변경을 작업·주문과 연결 | `operation_id` UNIQUE · `stock_change <> 0` · `stock_after >= 0` |
+| `p_inventory_stream_checkpoints` | Redis Consumer의 DB 반영 위치·복구 세대 기록 | `pipeline` PK · 재고/Operation/History와 같은 트랜잭션으로 갱신 |
 
-- 정상 차감 흐름: **조건부 UPDATE → 변경 후 재고 조회 → SUCCEEDED Operation 저장 → History 저장 → 커밋**. 세 테이블의 변경은 하나의 응용 서비스 트랜잭션으로 묶이며 이력 저장 실패 시 모두 롤백됩니다.
-- 차감 업무 거절은 **REJECTED Operation만 저장·커밋**하고 History를 만들지 않습니다. 수량 부족은 `INSUFFICIENT_STOCK`으로 409, 대상 없음·논리 삭제는 `INVENTORY_NOT_FOUND`로 404를 반환합니다. HTTP 오류 변환은 서비스 트랜잭션 커밋 후 컨트롤러에서 수행합니다.
+- 기본 PostgreSQL 모드의 정상 차감 흐름은 **조건부 UPDATE → 변경 후 재고 조회 → SUCCEEDED Operation 저장 → History 저장 → 커밋 → 응답**입니다. 세 업무 테이블의 변경은 같은 트랜잭션이며 이력 저장 실패 시 모두 롤백됩니다.
+- Redis 모드(`inventory.stock.mode=redis-streams`)는 **Lua 재고·결과·Stream 기록 → 응답 → Consumer의 DB 반영**입니다. Consumer는 추가 수집 대기 없이 읽은 최대 500건을 처리하며, 재고·Operation·History·체크포인트를 함께 커밋한 뒤 ACK·Stream 정리를 합니다. `event_payload_hash`로 재전달 이벤트의 내용 변경도 확인합니다.
+- 차감 업무 거절은 REJECTED Operation만 남기고 History를 만들지 않습니다. 수량 부족은 409 `INSUFFICIENT_STOCK`, 대상 없음·논리 삭제는 404 `INVENTORY_NOT_FOUND`입니다. PostgreSQL 모드는 거절 기록 커밋 후 응답하고, Redis 모드는 결과·이벤트 기록 후 응답하여 DB 저장은 Consumer가 수행합니다.
 - Inventory는 현재 값, Operation은 요청·결과·거절 사유, History는 실제 증감 내역을 담당합니다. 정상 차감은 Operation 1건·History 1건, 업무 거절은 Operation 1건·History 0건을 남깁니다.
 - 성공의 거절 사유는 NULL입니다. 수량 부족은 재고 ID·수량을 기록하고, 대상 없음은 두 값을 NULL로 기록합니다. 이 조합은 엔티티 팩토리에서 검증하며 DB의 컬럼 간 CHECK로 구현한 것은 아닙니다.
 - **구현 범위:** 재고 등록·조건 조회, 차감 성공·거절 저장, 같은 키의 결과 재응답·내용 충돌, 원본 차감 기준 복원과 중복 복원 방지. 증가·작업 결과 조회 API는 후속 구현입니다. 같은 주문을 다른 키로 차감하는 업무 중복 방지는 아직 없습니다.
-- 복원은 성공한 DECREASE의 재고 ID·수량을 사용하고, 복원 Operation에 원본 ID를 기록합니다. 재고 증가·RESTORE Operation·History는 함께 커밋됩니다. 복원 거절은 현재 별도 REJECTED Operation으로 저장하지 않습니다.
-- 중복 충돌은 롤백 후 새 트랜잭션에서 같은 키를 먼저 확인합니다. 복원의 재고 없음·정수 범위 초과도 기존 결과를 재확인하며, 키가 없으면 원본의 기존 복원을 확인한 후 원래 오류를 유지합니다.
+- 복원은 성공한 DECREASE의 재고 ID·수량을 사용하고, 복원 Operation에 원본 ID를 기록합니다. PostgreSQL에는 재고 증가·RESTORE Operation·History가 함께 커밋됩니다. Redis 모드는 아직 DB에 저장되지 않은 원본도 Redis 기록으로 복원할 수 있습니다. 복원 거절은 현재 별도 REJECTED Operation으로 저장하지 않습니다.
+- 기본 PostgreSQL 모드는 중복 충돌 시 롤백 후 새 트랜잭션에서 기존 결과를 확인합니다. Redis 모드는 Lua에서 같은 키·내용과 원본 복원 여부를 함께 검사합니다. 두 모드 모두 같은 키의 기존 결과를 재사용하고, 다른 내용은 충돌로 거절합니다.
 - Hub 내부 참조도 현재는 UUID 논리 참조이며 물리적 FK가 없습니다. 허브·상품 조합, 멱등성 키, 원본 차감 ID의 UNIQUE는 논리 삭제된 행도 포함합니다. 원본 차감 ID의 NULL은 여러 행에 허용됩니다.
 - **명칭 차이:** 최근 통합 설계의 `departure_hub_id/arrival_hub_id`와 달리 현재 Hub 코드·초기 데이터는 `from_hub_id/to_hub_id`입니다. 이 문서는 구현명을 사용하며, 명칭 통일 시 코드·SQL·API 계약의 영향 범위를 함께 검토해야 합니다.
 - 경로의 출발≠도착·거리/시간 비음수 CHECK는 현재 엔티티와 생성 DDL에 없으므로 구현된 DB 제약으로 표시하지 않았습니다.
