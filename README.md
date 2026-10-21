@@ -317,16 +317,16 @@ docker compose down && rm -rf pgdata redisdata   # DB·Redis를 처음 상태로
 <details>
   <summary>ERD 이미지</summary>
    <br>
-  <img src="docs/assets/logistics_msa_erd·전체_ERD.drawio.png" alt="전체 ERD" width="100%"> 
+  <img src="docs/assets/logistics_msa_erd전체ERD.drawio.png" alt="전체 ERD" width="100%"> 
 </details>
 
-| 항목 | 내용 |
-|---|---|
+| 항목 | 내용                                                                              |
+|---|---------------------------------------------------------------------------------|
 | DBMS | PostgreSQL 단일 컨테이너, 서비스별 스키마 5개(`auth`, `hub`, `company`, `orders`, `delivery`) |
-| 테이블 | 12개 |
-| 기본키 | 모든 테이블 `UUID` |
-| 공통 컬럼 | Audit 6개(`created/updated/deleted_at·by`), Soft Delete |
-| 서비스 간 참조 | DB 외래키 없이 UUID만 저장하고, Feign API로 존재를 확인 |
+| 테이블 | 13개 (Hub 6개, Redis 모드용 체크포인트 포함)                                                                             |
+| 기본키 | 모든 테이블 `UUID`                                                                   |
+| 공통 컬럼 | Audit 6개(`created/updated/deleted_at·by`), Soft Delete                          |
+| 서비스 간 참조 | DB 외래키 없이 UUID만 저장하고, Feign API로 존재를 확인                                         |
 
 실선은 같은 스키마 안의 외래키(FK), 점선은 UUID 논리 참조(DB FK 없음)입니다.
 

@@ -399,4 +399,4 @@ erDiagram
 
 ## 5. 원본 ERD 이미지
 
-![ERD](<../assets/logistics_msa_erd전체 ERD.drawio.png>)
+![ERD](<../assets/logistics_msa_erd전체ERD.drawio.png>)
