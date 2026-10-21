@@ -5,87 +5,67 @@ import com.common.exception.InventoryErrorCode;
 import com.common.exception.OrderErrorCode;
 import com.order.application.dto.CreateOrderCommand;
 import com.order.application.dto.OrderResult;
-import com.order.application.event.OrderCompletedEvent;
 import com.order.domain.client.*;
-import com.order.domain.entity.Order;
-import com.order.domain.entity.OrderHistory;
-import com.order.domain.repository.OrderHistoryRepository;
-import com.order.domain.repository.OrderRepository;
-import com.order.domain.vo.OrderOperationType;
+import com.order.domain.exception.DuplicateOrderRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * 주문 생성 Saga 흐름. 원격 호출(상품, 재고, 배송)과 보상만 맡고 트랜잭션을 열지 않는다.
+ * DB 작업은 OrderCreateTxService의 짧은 트랜잭션(선점 → 주문 저장 → 확정/실패 기록)으로 나눠,
+ * 원격 응답을 기다리는 동안 DB 커넥션을 잡지 않는다.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class OrderService {
+public class OrderCreateFacade {
 
-    private final OrderRepository orderRepository;
-    private final OrderHistoryRepository orderHistoryRepository;
+    private final OrderCreateTxService orderCreateTxService;
+    private final ProductClient productClient;
     private final HubClient hubClient;
     private final DeliveryClient deliveryClient;
-    private final ApplicationEventPublisher eventPublisher;
-    private final ProductClient productClient;
 
-    // BusinessException으로 실패하면 롤백하지 않고 FAILED 상태를 커밋한다
-    @Transactional(noRollbackFor = BusinessException.class)
     public OrderResult createOrder(CreateOrderCommand command) {
         // 0. 멱등성: 같은 키로 처리한 이력이 있으면 이전 결과 반환 또는 거절
-        Optional<OrderHistory> previous = orderHistoryRepository
-                .findByOperationTypeAndIdempotencyKey(OrderOperationType.CREATE, command.idempotencyKey());
+        Optional<OrderResult> previous = orderCreateTxService.findPreviousResult(command);
         if (previous.isPresent()) {
-            return returnPreviousResult(previous.get(), command);
+            return previous.get();
         }
 
-        // 상품 조회
+        // 상품 조회 + 공급업체·가격 확인
         ProductInfo product = productClient.getProduct(command.productId());
+        validateProduct(product, command);
 
-        // 공급업체 확인 [공급업체 확인]
-        if (!product.isSuppliedBy(command.supplierCompanyId())) {
-            throw new BusinessException(OrderErrorCode.SUPPLIER_PRODUCT_MISMATCH);
+        // ① 이력 IN_PROGRESS 선점 (바로 커밋) ← 번호표: 중복 차단 + 이후 모든 성공/실패를 기록할 자리 확보
+        UUID historyId;
+        try {
+            historyId = orderCreateTxService.claim(command);
+        } catch (DuplicateOrderRequestException e) {
+            // 같은 키가 동시에 먼저 선점됨: 선점 트랜잭션은 롤백됐으니 새 트랜잭션에서 앞 요청 상태로 판단 (성공이면 그 결과, 아니면 409)
+            log.warn("[주문 중복 요청] {}", e.getMessage());
+            return orderCreateTxService.findPreviousResult(command)
+                    .orElseThrow(() -> new BusinessException(OrderErrorCode.PREVIOUS_REQUEST_NOT_SUCCEEDED));
         }
 
-        // 가격 확인: 사용자가 본 가격과 현재 상품 가격이 다르면 거절 → 최신 가격 확인 후 다시 주문
-        if (!product.isPricedAt(command.unitPrice())) {
-            throw new BusinessException(OrderErrorCode.PRICE_CHANGED,
-                    "상품 가격이 변경되었습니다. (요청: %s, 현재: %s)"
-                            .formatted(command.unitPrice().toPlainString(), product.unitPrice().toPlainString()));
-        }
-
-        // 1. 이력 IN_PROCESSING 저장 ← 번호표: 중복 차단 + 이후 모든 성공/실패를 기록할 자리 확보
-        OrderHistory history = OrderHistory.create(
-                OrderOperationType.CREATE, command.idempotencyKey(), command.requestHash());
-        orderHistoryRepository.save(history);
-
-        Order order = null;
+        UUID orderId = null;
         boolean stockMayBeDecreased = false;            // 재고가 빠졌을 "가능성"이 있으면 true -> 실패 시 복원 대상
         StockDecreaseCommand decreaseCommand = null;    // 결과를 모를 때 같은 키로 다시 보내기 위해 보관
         UUID decreaseOperationId = null;                // 차감 성공 시 hub 작업 ID -> 복원에 필요
+        UUID deliveryId = null;                         // 배송을 만든 뒤 확정 저장이 실패하면 취소 대상
         try {
             // 2. 재고 조회 (차감 할 허브 선택)
             InventoryInfo inventoryInfo = selectInventory(command);
 
-            // 3. 주문 PROCESSING 저장 + 이력에 연결
-            order = orderRepository.save(Order.create(
-                    command.requesterCompanyId(),
-                    command.supplierCompanyId(),
-                    command.productId(),
-                    command.quantity(),
-                    product.unitPrice(),          // command.unitPrice() → product.unitPrice()
-                    command.requestNote(),
-                    command.orderedBy()
-            ));
-            history.linkOrder(order);
+            // ② 주문 PROCESSING 저장 + 이력에 연결
+            orderId = orderCreateTxService.saveOrder(command, product.unitPrice(), historyId);
 
             // 4. 재고 차감
             decreaseCommand = new StockDecreaseCommand(
-                    order.getId(), inventoryInfo.hubId(), command.productId(), command.quantity());
+                    orderId, inventoryInfo.hubId(), command.productId(), command.quantity());
             stockMayBeDecreased = true;
             StockOperationResult stock = hubClient.decreaseStock(decreaseCommand);
             if (!stock.succeeded()) {
@@ -98,29 +78,38 @@ public class OrderService {
             decreaseOperationId = stock.operationId();
 
             // 5. 배송 생성
-            DeliveryResult delivery = deliveryClient.createDelivery(new CreateDeliveryCommand(
-                    order.getId(),
+            deliveryId = deliveryClient.createDelivery(new CreateDeliveryCommand(
+                    orderId,
                     inventoryInfo.hubId(),
                     command.supplierCompanyId(),
                     command.requesterCompanyId(),
                     command.orderedBy()
-            ));
+            )).deliveryId();
 
-            // 6. 주문 COMPLETED + 이력 SUCCEEDED
-            order.complete(delivery.deliveryId(), decreaseOperationId);
-            history.succeed(201);
-            eventPublisher.publishEvent(OrderCompletedEvent.from(order));
-            return OrderResult.from(order);
+            // ③ 주문 COMPLETED + 이력 SUCCEEDED
+            return orderCreateTxService.complete(orderId, historyId, deliveryId, decreaseOperationId);
         } catch (RuntimeException e) {
-            // 보상: 재고가 빠졌을 수 있으면 복원 → 주문·이력 FAILED → 원래 예외 그대로 던짐
+            // 보상: 만든 배송 취소 → 빠졌을 수 있는 재고 복원 → ③ 주문·이력 FAILED → 원래 예외 그대로 던짐
+            if (deliveryId != null) {
+                cancelDeliverySafely(orderId, deliveryId);
+            }
             if (stockMayBeDecreased) {
                 restoreStockSafely(decreaseCommand, decreaseOperationId);
             }
-            if (order != null) {
-                order.fail();
-            }
-            history.fail(responseCodeOf(e), e.getMessage());
+            recordFailureSafely(orderId, historyId, e);
             throw e;
+        }
+    }
+
+    private void validateProduct(ProductInfo product, CreateOrderCommand command) {
+        if (!product.isSuppliedBy(command.supplierCompanyId())) {
+            throw new BusinessException(OrderErrorCode.SUPPLIER_PRODUCT_MISMATCH);
+        }
+        // 사용자가 본 가격과 현재 상품 가격이 다르면 거절 → 최신 가격 확인 후 다시 주문
+        if (!product.isPricedAt(command.unitPrice())) {
+            throw new BusinessException(OrderErrorCode.PRICE_CHANGED,
+                    "상품 가격이 변경되었습니다. (요청: %s, 현재: %s)"
+                            .formatted(command.unitPrice().toPlainString(), product.unitPrice().toPlainString()));
         }
     }
 
@@ -129,6 +118,15 @@ public class OrderService {
             return businessException.getErrorCode().getHttpStatus().value();
         }
         return 500;
+    }
+
+    // 배송 취소 실패가 원래 예외를 덮어쓰지 않도록 로그만 남긴다
+    private void cancelDeliverySafely(UUID orderId, UUID deliveryId) {
+        try {
+            deliveryClient.cancelDelivery(deliveryId);
+        } catch (RuntimeException cancelError) {
+            log.error("[주문 보상 실패] 배송 취소 실패 orderId={} deliveryId={}", orderId, deliveryId, cancelError);
+        }
     }
 
     /**
@@ -142,6 +140,7 @@ public class OrderService {
                     ? decreaseOperationId : confirmDecreaseOperationId(decreaseCommand);
             if (operationId == null) {
                 log.info("[주문 보상] 차감되지 않아 복원 불필요 orderId={}", orderId);
+                return;
             }
             hubClient.restoreStock(new StockRestoreCommand(orderId, operationId));
         } catch (RuntimeException restoreError) {
@@ -154,24 +153,20 @@ public class OrderService {
         return replay.succeeded() ? replay.operationId() : null;
     }
 
-    /**
-     * 같은 키의 이전 요청: 내용이 같고 성공했을 때만 이전 결과를 돌려준다.
-     */
-    private OrderResult returnPreviousResult(OrderHistory previousHistory, CreateOrderCommand command) {
-        if (!previousHistory.isSameReqeust(command.requestHash())) {
-            throw new BusinessException(OrderErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+    // 기록 실패가 원래 예외를 덮어쓰지 않도록 로그만 남긴다 (이력은 IN_PROGRESS로 남음)
+    private void recordFailureSafely(UUID orderId, UUID historyId, RuntimeException cause) {
+        try {
+            orderCreateTxService.fail(orderId, historyId, responseCodeOf(cause), cause.getMessage());
+        } catch (RuntimeException recordError) {
+            log.error("[주문 실패 기록 실패] historyId={} orderId={}", historyId, orderId, recordError);
         }
-        if (!previousHistory.isSucceeded()) {
-            throw new BusinessException(OrderErrorCode.PREVIOUS_REQUEST_NOT_SUCCEEDED);
-        }
-        return OrderResult.from(previousHistory.getOrder());
     }
 
     private InventoryInfo selectInventory(CreateOrderCommand command) {
         return hubClient.findInventories(command.productId()).stream()
                 .filter(inventoryInfo -> inventoryInfo.hasEnough(command.quantity()))
                 .findFirst()
-                .orElseThrow(OrderService::insufficientStockException);
+                .orElseThrow(OrderCreateFacade::insufficientStockException);
     }
 
     // 재고 부족 코드는 공통으로 사용하고, 주문 API의 기존 안내 메시지는 유지한다.
@@ -181,6 +176,4 @@ public class OrderService {
                 "재고가 부족하여 주문할 수 없습니다."
         );
     }
-
-
 }
