@@ -57,6 +57,9 @@ class OrderServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ProductClient productClient;
+
     @InjectMocks
     private OrderService orderService;
 
@@ -70,6 +73,7 @@ class OrderServiceTest {
     private static final UUID ORDER_ID = UUID.randomUUID();
     private static final UUID DELIVERY_ID = UUID.randomUUID();
     private static final UUID DECREASE_OPERATION_ID = UUID.randomUUID();
+    private static final BigDecimal PRODUCT_PRICE = new BigDecimal("1000");
 
     // 테스트마다 반복되는 주문 요청 생성
     private CreateOrderCommand createCommand(int quantity) {
@@ -89,6 +93,7 @@ class OrderServiceTest {
     @DisplayName("재고 조회, 차감, 배송 생성이 모두 성공하면 주문은 COMPLETED, 이력은 SUCCEEDED가 도니다")
     void createOrderSuccess() {
         // given
+        givenValidProduct(); // 상품 확인 통과하는 상품(각본)
         // ① 이력 저장
         given(orderHistoryRepository.save(any(OrderHistory.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
@@ -120,6 +125,7 @@ class OrderServiceTest {
         assertThat(result.orderId()).isEqualTo(ORDER_ID);
         assertThat(result.orderStatus()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(result.deliveryId()).isEqualTo(DELIVERY_ID);
+        assertThat(result.unitPriceSnapshot()).isEqualByComparingTo(PRODUCT_PRICE);
 
         // then: 재고 차감, 배송 생성이 올바른 값으로 호출됐는지
         then(hubClient).should().decreaseStock(
@@ -143,9 +149,11 @@ class OrderServiceTest {
         // assert가 여러 개지만 전부 "정상 흐름이 끝까지 갔다"는 한 개념을 확인하므로 한 테스트로 묶음
     }
 
-    // 재요청재요청해도 재고가 두번 빠지지 않게 그대로 반환
-    // 타임아웃으로 클라가 재시도 해도 재고가 두번 빠지지 않게 막는 기능
-    // command.requestHash()로 꺼내둬서 테스트에서 service와 똑같은 해시로 이력 생성 가능
+    /**
+     * 재요청재요청해도 재고가 두번 빠지지 않게 그대로 반환
+     * 타임아웃으로 클라가 재시도 해도 재고가 두번 빠지지 않게 막는 기능
+     * command.requestHash()로 꺼내둬서 테스트에서 service와 똑같은 해시로 이력 생성 가능
+     */
     @Test
     @DisplayName("같은 키로 이미 성공한 같은 요청이 다시 오면 재고·배송을 호출하지 않고 이전 결과를 반환한다")
     void createOrderReturnsPreviousResultWhenAlreadySucceeded() {
@@ -210,6 +218,8 @@ class OrderServiceTest {
     @DisplayName("재고 차감 중 결과를 모르면 같은 키로 다시 보내 차감 작업을 확인하고 복원한다.")
     void createOrderRestoresStockWhenDecreaseResultUnknown() {
         // given: 첫 차감은 타임아웃, 같은 키 재전송에서 hub가 이전 차감 결과를 돌려줌
+        given(productClient.getProduct(PRODUCT_ID))
+                .willReturn(new ProductInfo(PRODUCT_ID, SUPPLIER_COMPANY_ID, "테스트 상품", PRODUCT_PRICE));
         givenOrderSavedSuccessfully();
         given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
                 .willThrow(new BusinessException(OrderErrorCode.INVENTORY_UNAVAILABLE))
@@ -230,6 +240,7 @@ class OrderServiceTest {
     @Test
     @DisplayName("조회한 재고가 부족하면 공통 재고 부족 코드와 기존 주문 안내 메시지를 반환한다")
     void createOrderFailsWhenNoInventoryHasEnoughStock() {
+        givenValidProduct(); // 상품 확인 통과하는 상품(각본)
         given(orderHistoryRepository.save(any(OrderHistory.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
         given(hubClient.findInventories(PRODUCT_ID))
@@ -255,6 +266,8 @@ class OrderServiceTest {
     @Test
     @DisplayName("재고 차감이 재고 부족으로 거절되면 409 예외가 발생하고 주문과 이력은 FAILED가 된다")
     void createOrderFailsWhenStockDecreaseRejected() {
+        given(productClient.getProduct(PRODUCT_ID))
+                .willReturn(new ProductInfo(PRODUCT_ID, SUPPLIER_COMPANY_ID, "테스트 상품", PRODUCT_PRICE));
         // given: 주문 저장까지는 성공, 차감 단계에서 재고 부족으로 거절
         givenOrderSavedSuccessfully();
         given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
@@ -287,6 +300,8 @@ class OrderServiceTest {
     @Test
     @DisplayName("배송 생성이 실패하면 재고를 복원하고 503 예외가 발생하며 주문과 이력은 FAILED가 된다")
     void createOrderRestoresStockWhenDeliveryFails() {
+        given(productClient.getProduct(PRODUCT_ID))
+                .willReturn(new ProductInfo(PRODUCT_ID, SUPPLIER_COMPANY_ID, "테스트 상품", PRODUCT_PRICE));
         // given: 재고 차감까지 성공, 배송 생성 실패
         givenOrderSavedSuccessfully();
         given(hubClient.decreaseStock(any(StockDecreaseCommand.class)))
@@ -303,6 +318,43 @@ class OrderServiceTest {
         then(hubClient).should().restoreStock(new StockRestoreCommand(ORDER_ID, DECREASE_OPERATION_ID));
         then(eventPublisher).should(never()).publishEvent(any(OrderCompletedEvent.class));
         assertFailed(503);
+    }
+
+    @Test
+    @DisplayName("요청 단가와 현재 상품 단가가 다르면 409 예외가 발생하고 아무것도 저장하지 않는다")
+    void createOrderFailsWhenPriceChanged() {
+        given(productClient.getProduct(PRODUCT_ID))
+                .willReturn(new ProductInfo(PRODUCT_ID, SUPPLIER_COMPANY_ID, "테스트 상품", new BigDecimal("1500")));
+
+        assertThatThrownBy(() -> orderService.createOrder(createCommand(3)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.PRICE_CHANGED)
+                .hasMessageContaining("현재: 1500");
+
+        then(orderHistoryRepository).should(never()).save(any());
+        then(hubClient).shouldHaveNoInteractions();
+        then(eventPublisher).should(never()).publishEvent(any(OrderCompletedEvent.class));
+    }
+
+    // [공급업체 확인]
+    @Test
+    @DisplayName("상품의 업체와 요청한 공급업체가 다르면 400 예외가 발생하고 아무것도 저장하지 않는다")
+    void createOrderFailsWhenSupplierMismatch() {
+        given(productClient.getProduct(PRODUCT_ID))
+                .willReturn(new ProductInfo(PRODUCT_ID, UUID.randomUUID(), "다른 업체 상품", PRODUCT_PRICE));
+
+        assertThatThrownBy(() -> orderService.createOrder(createCommand(3)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", OrderErrorCode.SUPPLIER_PRODUCT_MISMATCH);
+
+        then(orderHistoryRepository).should(never()).save(any());
+        then(hubClient).shouldHaveNoInteractions();
+    }
+
+    // 상품 확인(공급업체·가격)을 통과하는 상품
+    private void givenValidProduct() {
+        given(productClient.getProduct(PRODUCT_ID))
+                .willReturn(new ProductInfo(PRODUCT_ID, SUPPLIER_COMPANY_ID, "테스트 상품", PRODUCT_PRICE));
     }
 
     // ①~③ 이력 저장, 재고 조회, 주문 저장 까지는 정상 진행되도록 각본 준비

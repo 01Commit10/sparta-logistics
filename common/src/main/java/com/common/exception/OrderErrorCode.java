@@ -14,6 +14,7 @@ public enum OrderErrorCode implements ErrorCode {
     // 400 - 입력 규칙 위반
     INVALID_QUANTITY(HttpStatus.BAD_REQUEST, "주문 수량은 1 이상 입력해주세요."),
     INVALID_UNIT_PRICE(HttpStatus.BAD_REQUEST, "주문 단가가 0원 이상인지 확인해주세요."),
+    SUPPLIER_PRODUCT_MISMATCH(HttpStatus.BAD_REQUEST, "요청한 공급업체의 상품이 아닙니다."),   // [공급업체 확인]
 
     // 403 - 권한 없음
 
@@ -27,6 +28,7 @@ public enum OrderErrorCode implements ErrorCode {
     PREVIOUS_REQUEST_NOT_SUCCEEDED(HttpStatus.CONFLICT, "같은 멱등키의 이전 요청이 처리 중이거나 실패했습니다."),
     ORDER_NOT_CANCELLABLE(HttpStatus.CONFLICT, "완료된 주문만 취소할 수 있습니다."),
     ORDER_NOT_DELETABLE(HttpStatus.CONFLICT, "취소되었거나 실패한 주문만 삭제할 수 있습니다."),
+    PRICE_CHANGED(HttpStatus.CONFLICT, "상품 가격이 변경되었습니다. 최신 가격을 확인한 뒤 다시 주문해 주세요."),
 
     // 503 - 서버가 일시적으로 요청을 처리할 수 없는 상태
     INVENTORY_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "재고 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."),
