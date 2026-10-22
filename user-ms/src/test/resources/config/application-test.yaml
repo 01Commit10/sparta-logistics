@@ -1,0 +1,12 @@
+# user-ms 전용 테스트 설정. common testFixtures의 classpath:application-test.yaml과 이름이 같아 config/ 아래에 둔다
+# (Spring Boot는 classpath:/config/를 classpath:/보다 나중에 읽어 같은 키를 덮어쓴다).
+
+# 테스트 전용 키 (운영 키 아님, .env의 JWT_SECRET_KEY를 덮어씀)
+jwt:
+  secret-key: dGVzdC1zZWNyZXQta2V5LWZvci11c2VyLW1zLXRva2VuLWlzc3VlciE=
+
+# 시드(db/seed/users.sql)는 넣지 않는다. 테스트가 사용자 수·목록을 직접 확인하므로. 시드 확인은 UserSeedPostgresTest
+spring:
+  sql:
+    init:
+      mode: never

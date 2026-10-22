@@ -1,0 +1,123 @@
+=== ① 인기 상품 TOP 10
+Limit (actual time=0.034..0.116 rows=10.00 loops=1)
+  Buffers: shared hit=33
+  ->  Nested Loop (actual time=0.033..0.113 rows=10.00 loops=1)
+        Buffers: shared hit=33
+        ->  Index Scan using idx_perf_products_view_count on p_products p (actual time=0.021..0.085 rows=10.00 loops=1)
+              Index Searches: 1
+              Buffers: shared hit=13
+        ->  Memoize (actual time=0.003..0.003 rows=1.00 loops=10)
+              Cache Key: p.company_id
+              Cache Mode: logical
+              Hits: 0  Misses: 10  Evictions: 0  Overflows: 0  Memory Usage: 2kB
+              Buffers: shared hit=20
+              ->  Index Scan using p_companies_pkey on p_companies c (actual time=0.002..0.002 rows=1.00 loops=10)
+                    Index Cond: (id = p.company_id)
+                    Filter: (deleted_at IS NULL)
+                    Index Searches: 10
+                    Buffers: shared hit=20
+Planning:
+  Buffers: shared hit=304
+Planning Time: 1.102 ms
+Execution Time: 0.144 ms
+=== ①-count 전체 건수 (페이지 응답 totalElements)
+Finalize Aggregate (actual time=60.601..62.743 rows=1.00 loops=1)
+  Buffers: shared hit=20237
+  ->  Gather (actual time=60.534..62.739 rows=3.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=20237
+        ->  Partial Aggregate (actual time=56.941..56.942 rows=1.00 loops=3)
+              Buffers: shared hit=20237
+              ->  Hash Join (actual time=0.088..47.890 rows=333350.00 loops=3)
+                    Hash Cond: (p.company_id = c.id)
+                    Buffers: shared hit=20237
+                    ->  Parallel Seq Scan on p_products p (actual time=0.008..24.201 rows=333350.00 loops=3)
+                          Filter: (deleted_at IS NULL)
+                          Buffers: shared hit=20228
+                    ->  Hash (actual time=0.073..0.073 rows=102.00 loops=3)
+                          Buckets: 1024  Batches: 1  Memory Usage: 13kB
+                          Buffers: shared hit=9
+                          ->  Seq Scan on p_companies c (actual time=0.054..0.064 rows=102.00 loops=3)
+                                Filter: (deleted_at IS NULL)
+                                Buffers: shared hit=9
+Planning:
+  Buffers: shared hit=6
+Planning Time: 0.071 ms
+Execution Time: 62.785 ms
+=== ② 상품 상세 (PK)
+Index Scan using p_products_pkey on p_products (actual time=40.858..42.650 rows=1.00 loops=1)
+  Index Cond: (id = (InitPlan 1).col1)
+  Index Searches: 1
+  Buffers: shared hit=20306
+  InitPlan 1
+    ->  Limit (actual time=40.830..42.622 rows=1.00 loops=1)
+          Buffers: shared hit=20302
+          ->  Gather Merge (actual time=40.829..42.620 rows=1.00 loops=1)
+                Workers Planned: 2
+                Workers Launched: 2
+                Buffers: shared hit=20302
+                ->  Sort (actual time=37.509..37.509 rows=1.00 loops=3)
+                      Sort Key: p_products_1.view_count DESC
+                      Sort Method: top-N heapsort  Memory: 25kB
+                      Buffers: shared hit=20302
+                      Worker 0:  Sort Method: top-N heapsort  Memory: 25kB
+                      Worker 1:  Sort Method: top-N heapsort  Memory: 25kB
+                      ->  Parallel Seq Scan on p_products p_products_1 (actual time=0.005..20.893 rows=333350.00 loops=3)
+                            Buffers: shared hit=20228
+Planning Time: 0.062 ms
+Execution Time: 42.686 ms
+=== ③ 이름 검색 (기본 정렬 createdAt desc, id)
+Limit (actual time=12.510..12.512 rows=10.00 loops=1)
+  Buffers: shared hit=2014
+  ->  Sort (actual time=12.510..12.511 rows=10.00 loops=1)
+        Sort Key: p.created_at DESC, p.id
+        Sort Method: top-N heapsort  Memory: 27kB
+        Buffers: shared hit=2014
+        ->  Hash Join (actual time=0.873..10.735 rows=25006.00 loops=1)
+              Hash Cond: (p.company_id = c.id)
+              Buffers: shared hit=2008
+              ->  Bitmap Heap Scan on p_products p (actual time=0.855..8.937 rows=25006.00 loops=1)
+                    Recheck Cond: (lower((name)::text) ~~ '%고등어%'::text)
+                    Filter: (deleted_at IS NULL)
+                    Heap Blocks: exact=1996
+                    Buffers: shared hit=2005
+                    ->  Bitmap Index Scan on idx_perf_products_name_trgm (actual time=0.741..0.742 rows=25006.00 loops=1)
+                          Index Cond: (lower((name)::text) ~~ '%고등어%'::text)
+                          Index Searches: 1
+                          Buffers: shared hit=9
+              ->  Hash (actual time=0.016..0.017 rows=102.00 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 13kB
+                    Buffers: shared hit=3
+                    ->  Seq Scan on p_companies c (actual time=0.004..0.010 rows=102.00 loops=1)
+                          Filter: (deleted_at IS NULL)
+                          Buffers: shared hit=3
+Planning:
+  Buffers: shared hit=17
+Planning Time: 0.315 ms
+Execution Time: 12.553 ms
+=== ③-count
+Aggregate (actual time=10.372..10.373 rows=1.00 loops=1)
+  Buffers: shared hit=2008
+  ->  Hash Join (actual time=0.832..9.756 rows=25006.00 loops=1)
+        Hash Cond: (p.company_id = c.id)
+        Buffers: shared hit=2008
+        ->  Bitmap Heap Scan on p_products p (actual time=0.817..8.100 rows=25006.00 loops=1)
+              Recheck Cond: (lower((name)::text) ~~ '%고등어%'::text)
+              Filter: (deleted_at IS NULL)
+              Heap Blocks: exact=1996
+              Buffers: shared hit=2005
+              ->  Bitmap Index Scan on idx_perf_products_name_trgm (actual time=0.716..0.716 rows=25006.00 loops=1)
+                    Index Cond: (lower((name)::text) ~~ '%고등어%'::text)
+                    Index Searches: 1
+                    Buffers: shared hit=9
+        ->  Hash (actual time=0.014..0.014 rows=102.00 loops=1)
+              Buckets: 1024  Batches: 1  Memory Usage: 13kB
+              Buffers: shared hit=3
+              ->  Seq Scan on p_companies c (actual time=0.003..0.008 rows=102.00 loops=1)
+                    Filter: (deleted_at IS NULL)
+                    Buffers: shared hit=3
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.080 ms
+Execution Time: 10.398 ms

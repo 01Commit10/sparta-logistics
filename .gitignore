@@ -41,3 +41,6 @@ out/
 
 ### postgreSQL 로컬 데이터 ***
 pgdata/
+
+### Redis 로컬 데이터 ###
+redisdata/

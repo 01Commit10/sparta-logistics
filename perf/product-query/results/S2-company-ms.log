@@ -1,0 +1,60 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-19T21:47:52.082+09:00  INFO 54767 --- [company-ms] [           main] com.company.CompanyMsApplication         : Starting CompanyMsApplication v0.0.1-SNAPSHOT using Java 21.0.12.1 with PID 54767 (/Users/kdj1031/Git/sparta-logistics/company-ms/build/libs/company-ms-0.0.1-SNAPSHOT.jar started by kdj1031 in /Users/kdj1031/Git/sparta-logistics)
+2026-10-19T21:47:52.083+09:00  INFO 54767 --- [company-ms] [           main] com.company.CompanyMsApplication         : The following 1 profile is active: "common"
+2026-10-19T21:47:52.483+09:00  INFO 54767 --- [company-ms] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-19T21:47:52.484+09:00  INFO 54767 --- [company-ms] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-19T21:47:52.547+09:00  INFO 54767 --- [company-ms] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 59 ms. Found 2 JPA repository interfaces.
+2026-10-19T21:47:52.552+09:00  INFO 54767 --- [company-ms] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-10-19T21:47:52.553+09:00  INFO 54767 --- [company-ms] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-10-19T21:47:52.558+09:00  INFO 54767 --- [company-ms] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.company.company.infrastructure.persistence.CompanyJpaRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-10-19T21:47:52.558+09:00  INFO 54767 --- [company-ms] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.company.product.infrastructure.persistence.ProductJpaRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-10-19T21:47:52.558+09:00  INFO 54767 --- [company-ms] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 2 ms. Found 0 Redis repository interfaces.
+2026-10-19T21:47:52.630+09:00  INFO 54767 --- [company-ms] [           main] o.s.cloud.context.scope.GenericScope     : BeanFactory id=50274e8d-6842-384e-bbe9-9c090733ee31
+2026-10-19T21:47:52.818+09:00  INFO 54767 --- [company-ms] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 19091 (http)
+2026-10-19T21:47:52.824+09:00  INFO 54767 --- [company-ms] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-19T21:47:52.824+09:00  INFO 54767 --- [company-ms] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.55]
+2026-10-19T21:47:52.835+09:00  INFO 54767 --- [company-ms] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-10-19T21:47:52.835+09:00  INFO 54767 --- [company-ms] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 736 ms
+2026-10-19T21:47:52.919+09:00  INFO 54767 --- [company-ms] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-19T21:47:52.933+09:00  INFO 54767 --- [company-ms] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.53.Final
+2026-10-19T21:47:52.944+09:00  INFO 54767 --- [company-ms] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-19T21:47:53.033+09:00  INFO 54767 --- [company-ms] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-19T21:47:53.043+09:00  INFO 54767 --- [company-ms] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-10-19T21:47:53.121+09:00  INFO 54767 --- [company-ms] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@5862dda4
+2026-10-19T21:47:53.122+09:00  INFO 54767 --- [company-ms] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-10-19T21:47:53.151+09:00  INFO 54767 --- [company-ms] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 18.6
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-19T21:47:53.456+09:00  INFO 54767 --- [company-ms] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-19T21:47:53.493+09:00  INFO 54767 --- [company-ms] [           main] t.s.e.i.AbstractInformationExtractorImpl : HHH000475: Cannot locate column information using identifier [lower((name)::text)]; ignoring index [idx_perf_products_name_trgm]
+2026-10-19T21:47:53.508+09:00  INFO 54767 --- [company-ms] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-19T21:47:53.641+09:00  INFO 54767 --- [company-ms] [           main] o.s.c.openfeign.FeignClientFactoryBean   : For 'user-ms' URL not provided. Will try picking an instance via load-balancing.
+2026-10-19T21:47:53.661+09:00  INFO 54767 --- [company-ms] [           main] o.s.c.openfeign.FeignClientFactoryBean   : For 'hub-ms' URL not provided. Will try picking an instance via load-balancing.
+2026-10-19T21:47:53.695+09:00  INFO 54767 --- [company-ms] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-10-19T21:47:53.902+09:00  INFO 54767 --- [company-ms] [           main] o.s.c.openfeign.FeignClientFactoryBean   : For 'hub-ms' URL not provided. Will try picking an instance via load-balancing.
+2026-10-19T21:47:54.223+09:00  INFO 54767 --- [company-ms] [           main] DiscoveryClientOptionalArgsConfiguration : Eureka HTTP Client uses RestTemplate.
+2026-10-19T21:47:54.241+09:00  INFO 54767 --- [company-ms] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-19T21:47:54.272+09:00  INFO 54767 --- [company-ms] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 19091 (http) with context path '/'
+2026-10-19T21:47:54.282+09:00  INFO 54767 --- [company-ms] [           main] com.company.CompanyMsApplication         : Started CompanyMsApplication in 2.407 seconds (process running for 2.618)
+2026-10-19T21:47:54.696+09:00  INFO 54767 --- [company-ms] [io-19091-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-19T21:47:54.696+09:00  INFO 54767 --- [company-ms] [io-19091-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-19T21:47:54.696+09:00  INFO 54767 --- [company-ms] [io-19091-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-10-19T21:50:04.460+09:00  INFO 54767 --- [company-ms] [ionShutdownHook] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2026-10-19T21:50:04.461+09:00  INFO 54767 --- [company-ms] [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2026-10-19T21:50:04.470+09:00  INFO 54767 --- [company-ms] [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-10-19T21:50:04.471+09:00  INFO 54767 --- [company-ms] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-10-19T21:50:04.472+09:00  INFO 54767 --- [company-ms] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.

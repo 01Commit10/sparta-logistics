@@ -1,0 +1,38 @@
+# 재고 차감 방식: redis-streams = Redis Lua + Streams, postgres = 기존 DB 방식
+# test 프로필(H2, Redis 없음)은 파일 맨 아래에서 postgres로 고정한다.
+inventory:
+  stock:
+    mode: redis-streams
+
+spring:
+  application:
+    name: hub-ms
+  profiles:
+    include: common
+
+  jpa:
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      mode: always
+      data-locations:
+        - classpath:db/seed/hubs.sql
+        - classpath:db/seed/hub_routes.sql
+
+server:
+  port: 19093
+
+db:
+  schema: hub
+  username: ${HUB_DB_USER}
+  password: ${HUB_DB_PASSWORD}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+inventory:
+  stock:
+    mode: postgres

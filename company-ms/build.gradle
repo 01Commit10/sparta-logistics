@@ -1,0 +1,20 @@
+description = 'company-ms'
+
+dependencies {
+    // 서비스 간 호출 (user-ms 사용자 검증, hub-ms 허브 검증). 타임아웃은 application-common.yaml 공통 설정을 따른다 (C02)
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    // 상품 조회 L1 캐시 (P01 실험: Caffeine + Redis 레이어드 캐시)
+    implementation 'com.github.ben-manes.caffeine:caffeine'
+
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.3.0'
+    testImplementation 'org.testcontainers:junit-jupiter'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        // Docker가 필요한 테스트는 -PincludeContainer 일 때만 실행
+        if (!project.hasProperty('includeContainer')) {
+            excludeTags 'container'
+        }
+    }
+}
